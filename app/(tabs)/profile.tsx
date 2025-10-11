@@ -9,10 +9,28 @@ import { useEffect, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 
 export default function ProfileScreen() {
-  const { user, signOut } = useAuth()
+  const { user, signOut, loading: authLoading } = useAuth()
   const [displayName, setDisplayName] = useState('')
   const [currency, setCurrency] = useState('EUR')
   const [loading, setLoading] = useState(false)
+
+  // Auth guard - redirect if not logged in
+  if (authLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ThemedText style={styles.loadingText}>Caricamento...</ThemedText>
+      </View>
+    )
+  }
+
+  if (!user) {
+    return (
+      <View style={styles.errorContainer}>
+        <ThemedText style={styles.errorText}>Accesso non autorizzato</ThemedText>
+        <ThemedText style={styles.errorSubtext}>Effettua il login per continuare</ThemedText>
+      </View>
+    )
+  }
 
   useEffect(() => {
     ;(async () => {
@@ -145,8 +163,26 @@ export default function ProfileScreen() {
       </Card>
 
       {/* Logout Button */}
-      <Pressable style={styles.logoutButton} onPress={signOut}>
-        <ThemedText style={styles.logoutButtonText}>🚪 Esci</ThemedText>
+      <Pressable 
+        style={styles.logoutButton} 
+        onPress={async () => {
+          try {
+            setLoading(true)
+            await signOut()
+            // The AuthContext should handle redirect automatically
+            console.log('[Profile] ✅ Logout completed, redirecting...')
+          } catch (error) {
+            console.error('[Profile] ❌ Logout failed:', error)
+            Alert.alert('Errore', 'Impossibile effettuare il logout. Riprova.')
+          } finally {
+            setLoading(false)
+          }
+        }}
+        disabled={loading}
+      >
+        <ThemedText style={styles.logoutButtonText}>
+          {loading ? '⏳ Uscita...' : '🚪 Esci'}
+        </ThemedText>
       </Pressable>
 
       {/* Footer */}
@@ -324,6 +360,37 @@ const styles = StyleSheet.create({
   footerCopyright: {
     fontSize: 11,
     opacity: 0.4,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0f',
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#E8EEF8',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0f',
+    paddingHorizontal: 32,
+  },
+  errorText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ef4444',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  errorSubtext: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#9ca3af',
+    textAlign: 'center',
   },
 })
 

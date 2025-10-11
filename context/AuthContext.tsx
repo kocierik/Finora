@@ -27,7 +27,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data.session?.user ?? null)
       setLoading(false)
     })()
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      console.log('[Auth] 🔄 Auth state changed:', event, newSession ? 'User logged in' : 'User logged out')
       setSession(newSession)
       setUser(newSession?.user ?? null)
     })
@@ -38,17 +39,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return { error: error?.message }
+    try {
+      console.log('[Auth] 🔐 Attempting sign in...')
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        console.log('[Auth] ❌ Sign in error:', error.message)
+        return { error: error.message }
+      }
+      console.log('[Auth] ✅ Sign in successful:', data.user?.email)
+      // Force state update
+      setSession(data.session)
+      setUser(data.user)
+      return { error: undefined }
+    } catch (error) {
+      console.log('[Auth] ❌ Sign in exception:', error)
+      return { error: 'Errore durante il login' }
+    }
   }, [])
 
   const signUp = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password })
-    return { error: error?.message }
+    try {
+      console.log('[Auth] 📝 Attempting sign up...')
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) {
+        console.log('[Auth] ❌ Sign up error:', error.message)
+        return { error: error.message }
+      }
+      console.log('[Auth] ✅ Sign up successful:', data.user?.email)
+      // Force state update
+      setSession(data.session)
+      setUser(data.user)
+      return { error: undefined }
+    } catch (error) {
+      console.log('[Auth] ❌ Sign up exception:', error)
+      return { error: 'Errore durante la registrazione' }
+    }
   }, [])
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut()
+    try {
+      console.log('[Auth] 🚪 Logging out user...')
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('[Auth] ❌ Logout error:', error.message)
+        throw error
+      }
+      console.log('[Auth] ✅ Logout successful')
+    } catch (error) {
+      console.error('[Auth] ❌ Logout failed:', error)
+      throw error
+    }
   }, [])
 
   const value = useMemo<AuthContextValue>(() => ({ user, session, loading, signIn, signUp, signOut }), [user, session, loading, signIn, signUp, signOut])

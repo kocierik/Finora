@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native'
 import { ThemedText } from '../themed-text'
 
 type LogoProps = {
-  size?: 'sm' | 'md' | 'lg' | 'xl'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'xxl'
   showText?: boolean
   variant?: 'default' | 'minimal' | 'glow'
 }
@@ -13,6 +13,7 @@ const sizeMap = {
   md: { container: 56, text: 18 },
   lg: { container: 72, text: 24 },
   xl: { container: 96, text: 32 },
+  xxl: { container: 120, text: 40 },
 }
 
 /**
@@ -65,20 +66,6 @@ export function Logo({ size = 'md', showText = false, variant = 'default' }: Log
           >
             F
           </ThemedText>
-
-          {/* Accent Dot (coin detail) */}
-          <View
-            style={[
-              styles.accentDot,
-              {
-                width: dimensions.container * 0.15,
-                height: dimensions.container * 0.15,
-                borderRadius: dimensions.container * 0.075,
-                top: dimensions.container * 0.25,
-                right: dimensions.container * 0.25,
-              },
-            ]}
-          />
         </LinearGradient>
 
         {/* Glow effect overlay */}

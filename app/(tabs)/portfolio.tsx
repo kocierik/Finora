@@ -11,13 +11,31 @@ import { Button, Dimensions, FlatList, StyleSheet, View } from 'react-native'
 import { PieChart } from 'react-native-chart-kit'
 
 export default function PortfolioScreen() {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const [busy, setBusy] = useState(false)
   const [lastCount, setLastCount] = useState<number | null>(null)
   const [stats, setStats] = useState<{ totalCost: number; totalMarket?: number; pnl?: number; pnlPct?: number } | null>(null)
   const [allocation, setAllocation] = useState<{ name: string; value: number }[]>([])
   const [holdings, setHoldings] = useState<Investment[]>([])
   const [totals, setTotals] = useState<{ invested: number; market: number; pnl: number; pnlPct: number } | null>(null)
+
+  // Auth guard - redirect if not logged in
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ThemedText style={styles.loadingText}>Caricamento...</ThemedText>
+      </View>
+    )
+  }
+
+  if (!user) {
+    return (
+      <View style={styles.errorContainer}>
+        <ThemedText style={styles.errorText}>Accesso non autorizzato</ThemedText>
+        <ThemedText style={styles.errorSubtext}>Effettua il login per continuare</ThemedText>
+      </View>
+    )
+  }
 
   async function computeTotals(inv: Investment[]) {
     if (!inv || inv.length === 0) {
@@ -242,6 +260,37 @@ export default function PortfolioScreen() {
 
 const styles = StyleSheet.create({
   container: { gap: 12, padding: 16 },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0f',
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#E8EEF8',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0f',
+    paddingHorizontal: 32,
+  },
+  errorText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ef4444',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  errorSubtext: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#9ca3af',
+    textAlign: 'center',
+  },
 })
 
 function sumNumbers(items: any[], keys: string[]) {

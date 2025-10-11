@@ -30,15 +30,18 @@ function RootNavigator() {
   // Always call hooks unconditionally - wallet listener handles user check internally
   useWalletListener()
   
+  console.log('[RootNavigator] 🔄 Auth state:', { user: !!user, loading })
+  
   if (loading) return null
   
   return (
-    <Stack>
-      {!user ? (
-        <Stack.Screen name="auth/index" options={{ headerShown: false }} />
-      ) : (
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      )}
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="auth/welcome" />
+      <Stack.Screen name="auth/login" />
+      <Stack.Screen name="auth/signup" />
+      <Stack.Screen name="auth/index" />
+      <Stack.Screen name="(tabs)" />
     </Stack>
   )
 }

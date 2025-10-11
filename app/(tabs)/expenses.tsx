@@ -10,8 +10,26 @@ import { useEffect, useState } from 'react'
 import { FlatList, StyleSheet, View } from 'react-native'
 
 export default function ExpensesScreen() {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const [items, setItems] = useState<Expense[]>([])
+
+  // Auth guard - redirect if not logged in
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ThemedText style={styles.loadingText}>Caricamento...</ThemedText>
+      </View>
+    )
+  }
+
+  if (!user) {
+    return (
+      <View style={styles.errorContainer}>
+        <ThemedText style={styles.errorText}>Accesso non autorizzato</ThemedText>
+        <ThemedText style={styles.errorSubtext}>Effettua il login per continuare</ThemedText>
+      </View>
+    )
+  }
 
   const fetchExpenses = async () => {
     if (!user) return
@@ -358,6 +376,37 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 13,
     opacity: 0.5,
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0f',
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#E8EEF8',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0f',
+    paddingHorizontal: 32,
+  },
+  errorText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ef4444',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  errorSubtext: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#9ca3af',
     textAlign: 'center',
   },
 })

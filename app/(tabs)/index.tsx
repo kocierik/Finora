@@ -29,11 +29,29 @@ function sameMonth(dateStr: string, year: number, monthIndex: number) {
 }
 
 export default function HomeScreen() {
-  const { user, signOut } = useAuth()
+  const { user, signOut, loading } = useAuth()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [portfolioPoints, setPortfolioPoints] = useState<{ x: string; y: number }[]>([])
   const [kpis, setKpis] = useState<{ totalInvested: number; totalMarket?: number; monthExpenses: number } | null>(null)
   const [hideBalances, setHideBalances] = useState(false)
+
+  // Auth guard - redirect if not logged in
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ThemedText style={styles.loadingText}>Caricamento...</ThemedText>
+      </View>
+    )
+  }
+
+  if (!user) {
+    return (
+      <View style={styles.errorContainer}>
+        <ThemedText style={styles.errorText}>Accesso non autorizzato</ThemedText>
+        <ThemedText style={styles.errorSubtext}>Effettua il login per continuare</ThemedText>
+      </View>
+    )
+  }
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -414,5 +432,36 @@ const styles = StyleSheet.create({
   },
   expenseBadgeText: {
     color: '#ef4444',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0f',
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#E8EEF8',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0f',
+    paddingHorizontal: 32,
+  },
+  errorText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ef4444',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  errorSubtext: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#9ca3af',
+    textAlign: 'center',
   },
 });
