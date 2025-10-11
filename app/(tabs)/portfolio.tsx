@@ -1,14 +1,15 @@
 import { ThemedText } from '@/components/themed-text'
-import { ThemedView } from '@/components/themed-view'
-import { Badge } from '@/components/ui/Badge'
-import { Card, KPI } from '@/components/ui/Card'
+import { Card } from '@/components/ui/Card'
+import { Logo } from '@/components/ui/Logo'
+import { Brand } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
-import { deleteAllInvestmentsForUser, fetchInvestments, parseInvestmentsFile, upsertInvestments } from '@/services/portfolio'
+import { fetchInvestments, parseInvestmentsFile, upsertInvestments } from '@/services/portfolio'
 import { Investment } from '@/types'
+import { useFocusEffect } from '@react-navigation/native'
 import * as DocumentPicker from 'expo-document-picker'
-import { useEffect, useState } from 'react'
-import { Button, Dimensions, FlatList, StyleSheet, View } from 'react-native'
-import { PieChart } from 'react-native-chart-kit'
+import { LinearGradient } from 'expo-linear-gradient'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 export default function PortfolioScreen() {
   const { user, loading } = useAuth()
@@ -18,6 +19,13 @@ export default function PortfolioScreen() {
   const [allocation, setAllocation] = useState<{ name: string; value: number }[]>([])
   const [holdings, setHoldings] = useState<Investment[]>([])
   const [totals, setTotals] = useState<{ invested: number; market: number; pnl: number; pnlPct: number } | null>(null)
+  const [hideBalances, setHideBalances] = useState(false)
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current
+  const slideAnim = useRef(new Animated.Value(30)).current
+  const scaleAnim1 = useRef(new Animated.Value(0.95)).current
+  const scaleAnim2 = useRef(new Animated.Value(0.95)).current
 
   // Auth guard - redirect if not logged in
   if (loading) {
@@ -96,199 +104,452 @@ export default function PortfolioScreen() {
     }
   }
 
-  useEffect(() => {
-    (async () => {
-      if (!user) return
+  const loadData = useCallback(async () => {
+    if (!user) return
+    try {
       const { data } = await fetchInvestments(user.id)
       setHoldings(data)
       await computeTotals(data)
-    })()
+    } catch (error) {
+      console.error('[Portfolio] Error loading data:', error)
+    }
   }, [user?.id])
 
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  // Focus effect to reload data when tab comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData()
+    }, [loadData])
+  )
+
+  // Entrance animations
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim1, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim2, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+    ]).start()
+  }, [])
+
   return (
-    <FlatList
-      data={[]}
-      ListHeaderComponent={
-        <ThemedView style={[styles.container, { paddingTop: 48 }]}> 
-          <ThemedText type="title">Portafoglio</ThemedText>
-          <ThemedText>Importa CSV/XLSX (ticker, quantity, average_price, purchase_date)</ThemedText>
-          {totals && (
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Card style={{ flex: 1 }}>
-                <KPI label="Totale investito" value={`€ ${totals.invested.toFixed(2)}`} />
-              </Card>
-              <Card style={{ flex: 1 }}>
-                <KPI label="Valore attuale" value={`€ ${totals.market.toFixed(2)}`} />
-              </Card>
-            </View>
-          )}
-          {totals && (
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Card style={{ flex: 1 }}>
-                <KPI label="Varianza" value={`€ ${totals.pnl.toFixed(2)}`} accent={totals.pnl >= 0 ? '#2a9d8f' : '#e76f51'} />
-              </Card>
-              <Card style={{ flex: 1 }}>
-                <KPI label="Varianza %" value={`${totals.pnlPct.toFixed(2)}%`} accent={totals.pnl >= 0 ? '#2a9d8f' : '#e76f51'} />
-              </Card>
-            </View>
-          )}
-          {stats && (
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Card style={{ flex: 1 }}>
-                <KPI label="PnL" value={`€ ${(stats.pnl ?? 0).toFixed(2)}`} accent={(stats.pnl ?? 0) >= 0 ? '#2a9d8f' : '#e76f51'} />
-              </Card>
-              <Card style={{ flex: 1 }}>
-                <KPI label="PnL %" value={`${(stats.pnlPct ?? 0).toFixed(2)}%`} accent={(stats.pnl ?? 0) >= 0 ? '#2a9d8f' : '#e76f51'} />
-              </Card>
-            </View>
-          )}
-          {holdings.length === 0 && (
-            <Button title={busy ? 'Import...' : 'Import CSV/XLSX'} onPress={onImport} disabled={busy} />
-          )}
-          {lastCount != null && <ThemedText>Importati: {lastCount}</ThemedText>}
-          {holdings.length > 0 && (
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Button title="Sostituisci portafoglio" onPress={async () => {
-                if (!user) return
-                setBusy(true)
-                try {
-                  const res = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true })
-                  if (res.canceled || !res.assets?.[0]?.uri) return
-                  const uri = res.assets[0].uri
-                  const items = await parseInvestmentsFile(uri, user.id)
-                  await deleteAllInvestmentsForUser(user.id)
-                  const { error } = await upsertInvestments(items)
-                  if (error) throw error
-                  const { data } = await fetchInvestments(user.id)
-                  setHoldings(data)
-                  setLastCount(items.length)
-                } catch (e: any) {
-                  alert(`Errore sostituzione: ${e?.message ?? 'sconosciuto'}`)
-                } finally {
-                  setBusy(false)
-                }
-              }} />
-              <Button title="Elimina tutto" onPress={async () => {
-                if (!user) return
-                setBusy(true)
-                try {
-                  const { error } = await deleteAllInvestmentsForUser(user.id)
-                  if (error) throw error
-                  setHoldings([])
-                  setStats(null)
-                  setAllocation([])
-                } catch (e: any) {
-                  alert(`Errore eliminazione: ${e?.message ?? 'sconosciuto'}`)
-                } finally {
-                  setBusy(false)
-                }
-              }} />
-            </View>
-          )}
-          {allocation.length > 0 && (
-            <Card style={{ marginTop: 12 }}>
-              <ThemedText type="defaultSemiBold" style={{ marginBottom: 8 }}>Allocazione per ticker</ThemedText>
-              <View style={{ height: 240 }}>
-                <PieChart
-                  data={allocation.map((a, i) => ({
-                    name: a.name,
-                    population: a.value,
-                    color: palette[i % palette.length],
-                    legendFontColor: '#bbb',
-                    legendFontSize: 12,
-                  }))}
-                  width={Dimensions.get('window').width - 48}
-                  height={220}
-                  accessor="population"
-                  backgroundColor="transparent"
-                  paddingLeft="16"
-                  absolute
-                  chartConfig={{
-                    backgroundGradientFrom: 'transparent',
-                    backgroundGradientTo: 'transparent',
-                    color: (o = 1) => `rgba(255,255,255,${o})`,
-                    labelColor: (o = 0.7) => `rgba(255,255,255,${o})`,
-                  }}
-                />
+    <View style={styles.container}>
+      {/* Background Gradient */}
+      <LinearGradient
+        colors={['#0a0a0f', '#141419', '#0f0f14']}
+        style={styles.backgroundGradient}
+      />
+      
+      <ScrollView 
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <Animated.View 
+          style={[
+            styles.header,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }]
+            }
+          ]}
+        >
+          <View style={styles.headerTop}>
+            <View style={styles.headerLeft}>
+              <Logo size="md" variant="glow" />
+              <View style={styles.headerText}>
+                <ThemedText style={styles.headerTitle}>Portafoglio</ThemedText>
+                <ThemedText style={styles.headerSubtitle}>Gestisci i tuoi investimenti</ThemedText>
               </View>
-            </Card>
-          )}
-          
-        </ThemedView>
-      }
-      renderItem={() => null}
-      ListFooterComponent={
-        holdings.length > 0 ? (
-          <View style={{ gap: 12, marginTop: 12 }}>
-            <ThemedText type="defaultSemiBold">Posizioni</ThemedText>
-            {holdings.map((h, i) => {
-              const invested = h.cost_value != null ? Number(h.cost_value) : (h.quantity || 0) * (h.average_price || 0)
-              const value = h.market_value_eur != null ? Number(h.market_value_eur) : (h.quantity || 0) * (h.average_price || 0)
-              const pnl = h.var_eur != null ? Number(h.var_eur) : (value - invested)
-              const pnlPct = h.var_pct != null ? Number(h.var_pct) : (invested > 0 ? (pnl / invested) * 100 : 0)
-              return (
-                <Card key={i}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <ThemedText type="defaultSemiBold">{h.ticker} {h.title ? `• ${h.title}` : ''}</ThemedText>
-                    <ThemedText style={{ opacity: 0.8 }}>{new Date(h.purchase_date).toLocaleDateString()}</ThemedText>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
-                    <Badge label={`Qty ${h.quantity}`} />
-                    <Badge label={`PM € ${h.average_price}`} />
-                    {h.isin && <Badge label={`ISIN ${h.isin}`} />}
-                    {h.market && <Badge label={`Mercato ${h.market}`} />}
-                    {h.instrument && <Badge label={`Strum. ${h.instrument}`} />}
-                    {h.currency && <Badge label={`Valuta ${h.currency}`} />}
-                    {h.fx_load != null && <Badge label={`Fx carico ${h.fx_load}`} />}
-                    <Badge label={`Val € ${value.toFixed(2)}`} />
-                    {h.market_price != null && <Badge label={`P. mercato € ${h.market_price}`} />}
-                    {h.market_fx != null && <Badge label={`Fx mercato ${h.market_fx}`} />}
-                    <Badge label={`Var € ${pnl.toFixed(2)}`} accent={pnl >= 0 ? '#2a9d8f' : '#e76f51'} />
-                    <Badge label={`Var % ${pnlPct.toFixed(2)}%`} accent={pnl >= 0 ? '#2a9d8f' : '#e76f51'} />
-                    {h.var_ccy != null && <Badge label={`Var in valuta ${h.var_ccy}`} />}
-                    {h.accrual_rateo != null && <Badge label={`Rateo ${h.accrual_rateo}`} />}
-                  </View>
-                </Card>
-              )
-            })}
+            </View>
+            <View style={styles.headerActions}>
+              <Pressable 
+                style={styles.hideButton}
+                onPress={() => setHideBalances(!hideBalances)}
+              >
+                <ThemedText style={styles.hideButtonText}>
+                  {hideBalances ? '👁️' : '🙈'}
+                </ThemedText>
+              </Pressable>
+              <Pressable 
+                style={styles.loadButton}
+                onPress={onImport}
+                disabled={busy}
+              >
+                <LinearGradient
+                  colors={busy ? [Brand.colors.text.tertiary, Brand.colors.text.muted] : [Brand.colors.primary.cyan, Brand.colors.primary.teal]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.loadButtonGradient}
+                >
+                  <ThemedText style={styles.loadButtonText}>
+                    {busy ? '⏳' : '📁'}
+                  </ThemedText>
+                </LinearGradient>
+              </Pressable>
+            </View>
           </View>
-        ) : null
-      }
-    />
+        </Animated.View>
+
+        {/* KPI Cards */}
+        {totals && (
+          <Animated.View 
+            style={[
+              styles.kpiContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim1 }]
+              }
+            ]}
+          >
+            <Pressable style={styles.kpiCard}>
+              <LinearGradient
+                colors={['rgba(6, 182, 212, 0.1)', 'rgba(20, 184, 166, 0.05)']}
+                style={styles.kpiGradient}
+              >
+                <ThemedText style={styles.kpiLabel}>Totale Investito</ThemedText>
+                <ThemedText style={styles.kpiValue}>
+                  {hideBalances ? '••••••' : `€${totals.invested.toFixed(2)}`}
+                </ThemedText>
+              </LinearGradient>
+            </Pressable>
+
+            <Pressable style={styles.kpiCard}>
+              <LinearGradient
+                colors={['rgba(20, 184, 166, 0.1)', 'rgba(6, 182, 212, 0.05)']}
+                style={styles.kpiGradient}
+              >
+                <ThemedText style={styles.kpiLabel}>Valore Attuale</ThemedText>
+                <ThemedText style={styles.kpiValue}>
+                  {hideBalances ? '••••••' : `€${totals.market.toFixed(2)}`}
+                </ThemedText>
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
+        )}
+
+        {totals && (
+          <Animated.View 
+            style={[
+              styles.kpiContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim2 }]
+              }
+            ]}
+          >
+            <Pressable style={styles.kpiCard}>
+              <LinearGradient
+                colors={totals.pnl >= 0 ? ['rgba(16, 185, 129, 0.1)', 'rgba(20, 184, 166, 0.05)'] : ['rgba(239, 68, 68, 0.1)', 'rgba(220, 38, 38, 0.05)']}
+                style={styles.kpiGradient}
+              >
+                <ThemedText style={styles.kpiLabel}>Varianza</ThemedText>
+                <ThemedText style={[styles.kpiValue, { color: totals.pnl >= 0 ? Brand.colors.semantic.success : Brand.colors.semantic.danger }]}>
+                  {hideBalances ? '••••••' : `€${totals.pnl.toFixed(2)}`}
+                </ThemedText>
+              </LinearGradient>
+            </Pressable>
+
+            <Pressable style={styles.kpiCard}>
+              <LinearGradient
+                colors={totals.pnl >= 0 ? ['rgba(16, 185, 129, 0.1)', 'rgba(20, 184, 166, 0.05)'] : ['rgba(239, 68, 68, 0.1)', 'rgba(220, 38, 38, 0.05)']}
+                style={styles.kpiGradient}
+              >
+                <ThemedText style={styles.kpiLabel}>Varianza %</ThemedText>
+                <ThemedText style={[styles.kpiValue, { color: totals.pnl >= 0 ? Brand.colors.semantic.success : Brand.colors.semantic.danger }]}>
+                  {hideBalances ? '••••••' : `${totals.pnlPct.toFixed(2)}%`}
+                </ThemedText>
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
+        )}
+
+        {/* Import Status */}
+        {lastCount != null && (
+          <Animated.View 
+            style={[
+              styles.statusSection,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
+          >
+            <Card style={styles.statusCard} glow="rgba(6, 182, 212, 0.1)">
+              <ThemedText style={styles.statusText}>
+                📊 Importati: {lastCount} investimenti
+              </ThemedText>
+            </Card>
+          </Animated.View>
+        )}
+      </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { gap: 12, padding: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: Brand.colors.background.deep,
+  },
+  backgroundGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  header: {
+    paddingTop: 60,
+    paddingHorizontal: 12,
+    paddingBottom: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  headerText: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Brand.colors.text.primary,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: Brand.colors.text.secondary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  hideButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hideButtonText: {
+    fontSize: 18,
+  },
+  loadButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: Brand.colors.glow.cyan,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  loadButtonGradient: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  kpiContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  kpiCard: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: Brand.colors.glow.cyan,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  kpiGradient: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  kpiLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Brand.colors.text.secondary,
+    marginBottom: 8,
+  },
+  kpiValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Brand.colors.text.primary,
+  },
+  statusSection: {
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  statusCard: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  statusText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Brand.colors.text.primary,
+  },
+  holdingsSection: {
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  holdingsCard: {
+    padding: 20,
+    marginBottom: 16,
+  },
+  holdingsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Brand.colors.text.primary,
+    marginBottom: 16,
+  },
+  holdingsActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+  },
+  dangerButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Brand.colors.text.primary,
+  },
+  dangerButtonText: {
+    color: Brand.colors.semantic.danger,
+  },
+  holdingsList: {
+    gap: 12,
+  },
+  holdingCard: {
+    padding: 16,
+  },
+  holdingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  holdingTicker: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Brand.colors.text.primary,
+  },
+  holdingDate: {
+    fontSize: 12,
+    color: Brand.colors.text.secondary,
+  },
+  holdingTitle: {
+    fontSize: 14,
+    color: Brand.colors.text.secondary,
+    marginBottom: 12,
+  },
+  holdingBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chartSection: {
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  chartCard: {
+    padding: 20,
+  },
+  chartTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Brand.colors.text.primary,
+    marginBottom: 16,
+  },
+  chartContainer: {
+    alignItems: 'center',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
   },
   loadingText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#E8EEF8',
+    color: Brand.colors.text.primary,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
     paddingHorizontal: 32,
   },
   errorText: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#ef4444',
+    color: Brand.colors.semantic.danger,
     textAlign: 'center',
     marginBottom: 12,
   },
   errorSubtext: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#9ca3af',
+    color: Brand.colors.text.secondary,
     textAlign: 'center',
   },
 })
