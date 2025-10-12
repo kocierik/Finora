@@ -13,6 +13,8 @@ export const Brand = {
       cyan: '#06b6d4',      // Main accent - trust & innovation
       teal: '#14b8a6',      // Secondary accent - growth
       magenta: '#d946ef',   // Tertiary accent - premium
+      orange: '#f59e0b',    // Warning accent - attention
+      yellow: '#eab308',    // Alert accent - caution
     },
     
     // Background Layers

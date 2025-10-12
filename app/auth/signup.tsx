@@ -82,7 +82,7 @@ export default function SignupScreen() {
 
     try {
       console.log('[Signup] 📝 Attempting signup...')
-      const { error } = await signUp(email.trim(), password)
+      const { error } = await signUp(email.trim(), password, name.trim())
       if (error) {
         console.log('[Signup] ❌ Signup error:', error)
         setErrors({ general: error })
@@ -153,13 +153,13 @@ export default function SignupScreen() {
         >
         {/* Name Field */}
         <View style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Full Name</ThemedText>
+          <ThemedText style={styles.inputLabel}>Nome</ThemedText>
           <View style={[styles.inputWrapper, errors.name && styles.inputError]}>
             <TextInput
               style={styles.input}
               value={name}
               onChangeText={setName}
-              placeholder="Enter your full name"
+              placeholder="Il tuo nome"
               placeholderTextColor={Brand.colors.text.tertiary}
               autoCapitalize="words"
               autoCorrect={false}

@@ -72,7 +72,13 @@ export function useWalletListener() {
         console.log('[WalletListener] 📱 Incoming notification (non-serializable)')
       }
       
-      // Filtra per Google Wallet
+      // Il headless task salva già le notifiche in memoria quando l'app è chiusa
+      // Quando l'app è aperta, le notifiche arrivano tramite DeviceEventEmitter
+      // e vengono già salvate dal headless task, quindi non duplichiamo
+      console.log('[WalletListener] ℹ️  Notification received via DeviceEventEmitter (app is open)')
+      console.log('[WalletListener] ℹ️  Headless task should have already saved this notification')
+      
+      // Filtra per Google Wallet per il salvataggio delle spese
       const pkg = payload?.packageName || payload?.package || payload?.app || ''
       console.log('[WalletListener] 🔍 Package name detected:', pkg)
       console.log('[WalletListener] 🔍 Checking if it contains "wallet" or "com.google.android.apps.wallet"...')
@@ -90,8 +96,8 @@ export function useWalletListener() {
       const isWallet = pkg && (pkg.includes('com.google.android.apps.wallet') || pkg.includes('wallet'))
       
       if (!isWallet) {
-        console.log('[WalletListener] ⏭️  Not a Google Wallet notification (package: ' + pkg + '), skipping save')
-        console.log('[WalletListener] ℹ️  But notification was successfully received!')
+        console.log('[WalletListener] ⏭️  Not a Google Wallet notification (package: ' + pkg + '), skipping expense save')
+        console.log('[WalletListener] ℹ️  Notification should be saved to memory by headless task!')
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
         return
       }
@@ -109,7 +115,8 @@ export function useWalletListener() {
       console.log('[WalletListener] 🔍 Parsed data:', parsed)
       
       if (!parsed.amount || !parsed.date) {
-        console.log('[WalletListener] ⚠️  Missing amount or date, skipping')
+        console.log('[WalletListener] ⚠️  Missing amount or date, skipping expense save')
+        console.log('[WalletListener] ℹ️  Notification should be saved to memory by headless task!')
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
         return
       }
@@ -137,6 +144,7 @@ export function useWalletListener() {
         console.log('[WalletListener] ✅ Expense saved successfully!')
       }
       
+      console.log('[WalletListener] ℹ️  Notification should be saved to memory by headless task!')
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
     }
 

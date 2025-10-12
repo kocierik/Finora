@@ -6,6 +6,7 @@ import { Brand } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { syncPendingExpenses } from '@/services/expense-sync'
+import { calculateActivityPercentage, getExpenseLevel, getExpenseLevelColor, getExpenseLevelText, loadExpenseThresholds, type ExpenseThresholds } from '@/services/expense-thresholds'
 import { deleteExpense } from '@/services/expenses'
 import { Expense } from '@/types'
 import { useFocusEffect } from '@react-navigation/native'
@@ -23,6 +24,9 @@ export default function ExpensesScreen() {
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [autoAssignedCount, setAutoAssignedCount] = useState(0)
   const [categoryUpdateTrigger, setCategoryUpdateTrigger] = useState(0)
+  const [expenseThresholds, setExpenseThresholds] = useState<ExpenseThresholds>({ moderate: 1000, high: 1500 })
+  const [allMonthItems, setAllMonthItems] = useState<Expense[]>([])
+  const [visibleTransactionsCount, setVisibleTransactionsCount] = useState(10)
   
   // Month navigation state
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0) // 0 = current month, -1 = previous, 1 = next
@@ -77,7 +81,6 @@ export default function ExpensesScreen() {
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(50) // Get more recent transactions
       
       const sortedItems = (data as Expense[])?.sort((a, b) => {
         // Sort by date descending, then by created_at descending
@@ -120,8 +123,48 @@ export default function ExpensesScreen() {
     }
   }, [user?.id])
 
+  const loadExpenseThresholdsData = useCallback(async () => {
+    try {
+      const thresholds = await loadExpenseThresholds()
+      setExpenseThresholds(thresholds)
+    } catch (error) {
+      console.log('[Expenses] ⚠️  Error loading expense thresholds:', error)
+    }
+  }, [])
+
+  const loadAllMonthItems = useCallback(async (year: number, month: number) => {
+    if (!user) return
+    
+    try {
+      // Calcola il range di date per il mese
+      const startDate = new Date(year, month, 1)
+      const endDate = new Date(year, month + 1, 0) // Ultimo giorno del mese
+      
+      const startDateStr = startDate.toISOString().split('T')[0]
+      const endDateStr = endDate.toISOString().split('T')[0]
+      
+      console.log(`[Expenses] 📅 Loading all items for ${year}-${month + 1} (${startDateStr} to ${endDateStr})`)
+      
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', startDateStr)
+        .lte('date', endDateStr)
+        .order('date', { ascending: false })
+      
+      if (error) throw error
+      
+      setAllMonthItems(data || [])
+      console.log(`[Expenses] ✅ Loaded ${data?.length || 0} items for month ${year}-${month + 1}`)
+    } catch (error: any) {
+      console.error('[Expenses] ❌ Error loading month items:', error)
+    }
+  }, [user?.id])
+
   useEffect(() => {
     fetchExpenses()
+    loadExpenseThresholdsData()
     
     // Entrance animations
     Animated.parallel([
@@ -163,7 +206,8 @@ export default function ExpensesScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchExpenses()
-    }, [fetchExpenses])
+      loadExpenseThresholdsData()
+    }, [fetchExpenses, loadExpenseThresholdsData])
   )
 
   // KPIs
@@ -181,6 +225,13 @@ export default function ExpensesScreen() {
   const deltaPct = prevTotal > 0 ? (delta / prevTotal) * 100 : 0
 
   const monthName = currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+
+  // Load all month items when month changes
+  useEffect(() => {
+    loadAllMonthItems(curYear, curMonth)
+    // Reset visible transactions count when month changes
+    setVisibleTransactionsCount(10)
+  }, [curYear, curMonth, loadAllMonthItems])
 
   // Filter items for selected month
   const selectedMonthItems = items.filter((e) => sameMonth(e.date, curYear, curMonth))
@@ -217,15 +268,25 @@ export default function ExpensesScreen() {
     { name: 'Entertainment', icon: '🎬', amount: 0, color: '#6b7280', percentage: 0 },
   ]
 
-  // Available categories for selection (same as spending categories)
-  const availableCategories = categories
+  // Main categories for selection (reduced set for better UX)
+  const mainCategories = [
+    { name: 'Other', icon: '📦', amount: 0, color: '#10b981', percentage: 0 },
+    { name: 'Transport', icon: '🚗', amount: 0, color: '#06b6d4', percentage: 0 },
+    { name: 'Grocery', icon: '🛒', amount: 0, color: '#8b5cf6', percentage: 0 },
+    { name: 'Shopping', icon: '🛍️', amount: 0, color: '#f59e0b', percentage: 0 },
+    { name: 'Night Life', icon: '🌃', amount: 0, color: '#ef4444', percentage: 0 },
+    { name: 'Travel', icon: '✈️', amount: 0, color: '#3b82f6', percentage: 0 },
+  ]
+
+  // Available categories for selection (main categories only)
+  const availableCategories = mainCategories
 
   // Calculate category spending from real data - use useMemo to make it reactive
   const categoryTotals = useMemo(() => {
-    console.log('Recalculating categoryTotals with items:', items.length)
+    console.log('Recalculating categoryTotals with allMonthItems:', allMonthItems.length)
     
-    // Debug: show all items with their categories
-    const currentMonthItems = items.filter(e => sameMonth(e.date, curYear, curMonth))
+    // Use allMonthItems which already contains all items for the selected month
+    const currentMonthItems = allMonthItems
     console.log('Current month items:', currentMonthItems.length)
     console.log('All current month items:', currentMonthItems.map(e => ({ 
       merchant: e.merchant, 
@@ -235,8 +296,7 @@ export default function ExpensesScreen() {
     })))
     
     return categories.map(cat => {
-      const categoryItems = items.filter(e => 
-        sameMonth(e.date, curYear, curMonth) && 
+      const categoryItems = allMonthItems.filter(e => 
         e.category && 
         e.category.toLowerCase() === cat.name.toLowerCase()
       )
@@ -248,14 +308,14 @@ export default function ExpensesScreen() {
         categoryItems: categoryItems.length,
         amount,
         percentage,
-        allItems: items.length,
+        allItems: allMonthItems.length,
         monthTotal,
         sampleItems: categoryItems.slice(0, 2).map(e => ({ merchant: e.merchant, category: e.category, amount: e.amount }))
       })
       
       return { ...cat, amount, percentage }
     }).sort((a, b) => b.amount - a.amount)
-  }, [items, curYear, curMonth, monthTotal, categoryUpdateTrigger])
+  }, [allMonthItems, monthTotal, categoryUpdateTrigger])
 
   const onRefresh = useCallback(() => {
     fetchExpenses()
@@ -610,13 +670,7 @@ export default function ExpensesScreen() {
             }
           ]}
         >
-          <View style={styles.headerTop}>
-            <View style={styles.headerLeft}>
-              <ThemedText style={styles.headerTitle}>Spese</ThemedText>
-              <ThemedText style={styles.headerSubtitle}>{monthName}</ThemedText>
-          </View>
-         
-            </View>
+      
         </Animated.View>
 
         {/* Auto-assignment notification */}
@@ -630,13 +684,13 @@ export default function ExpensesScreen() {
               }
             ]}
           >
-            <Card style={styles.autoAssignCard} glow="rgba(16, 185, 129, 0.2)">
+            <Card variant="subtle" style={styles.autoAssignCard}>
               <View style={styles.autoAssignContent}>
                 <ThemedText style={styles.autoAssignIcon}>✨</ThemedText>
                 <ThemedText style={styles.autoAssignText}>
                   Assegnate automaticamente {autoAssignedCount} categorie
                 </ThemedText>
-              </View>
+          </View>
             </Card>
           </Animated.View>
         )}
@@ -672,7 +726,7 @@ export default function ExpensesScreen() {
                 onPressIn={() => Animated.spring(scaleAnim1, { toValue: 0.99, useNativeDriver: true }).start()}
                 onPressOut={() => Animated.spring(scaleAnim1, { toValue: 1, useNativeDriver: true }).start()}
               >
-                <Card style={styles.summaryCard} glow="rgba(6, 182, 212, 0.08)">
+                <Card variant="elevated" style={styles.summaryCard}>
                   {/* Minimal Background */}
                   <View style={styles.summaryBackground} />
                   
@@ -712,8 +766,8 @@ export default function ExpensesScreen() {
                       <View style={styles.monthTextContainer}>
                         <ThemedText style={styles.summaryMonthText}>
                           {monthName}
-                        </ThemedText>
-                      </View>
+                </ThemedText>
+                </View>
                     </Pressable>
                     
                     <Pressable 
@@ -729,8 +783,8 @@ export default function ExpensesScreen() {
                         selectedMonthOffset >= 0 && styles.summaryNavIconDisabled
                       ]}>›</ThemedText>
                     </Pressable>
-                  </View>
-                  
+              </View>
+            
                   {/* Header Section */}
                   <View style={styles.summaryHeader}>
                     <View style={styles.summaryHeaderLeft}>
@@ -745,9 +799,9 @@ export default function ExpensesScreen() {
                         <ThemedText style={styles.summaryTitle}>Spese Mensili</ThemedText>
                         <ThemedText style={styles.summarySubtitle}>{monthName}</ThemedText>
                       </View>
-                    </View>
-                  </View>
-
+              </View>
+            </View>
+            
                   {/* Main Content */}
                   <View style={styles.summaryContent}>
                     {/* Total Amount */}
@@ -771,15 +825,15 @@ export default function ExpensesScreen() {
                     <View style={styles.summaryStats}>
                       <View style={styles.summaryStatItem}>
                         <View style={[styles.summaryStatBadge, { 
-                          borderColor: delta >= 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)',
-                        }]}>
+                borderColor: delta >= 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)',
+              }]}>
                           <ThemedText style={[styles.summaryStatIcon, { color: delta >= 0 ? '#ef4444' : '#10b981' }]}>
                             {delta >= 0 ? '↗' : '↘'}
                           </ThemedText>
                           <ThemedText style={[styles.summaryStatValue, { color: delta >= 0 ? '#ef4444' : '#10b981' }]}>
                             {delta >= 0 ? '+' : ''}{deltaPct.toFixed(1)}%
-                          </ThemedText>
-                        </View>
+                </ThemedText>
+              </View>
                         <ThemedText style={styles.summaryStatLabel}>vs mese scorso</ThemedText>
                       </View>
 
@@ -788,8 +842,8 @@ export default function ExpensesScreen() {
                           <ThemedText style={styles.summaryStatIcon}>📊</ThemedText>
                           <ThemedText style={styles.summaryStatValue}>
                             {items.filter((e) => sameMonth(e.date, curYear, curMonth)).length}
-                          </ThemedText>
-                        </View>
+              </ThemedText>
+            </View>
                         <ThemedText style={styles.summaryStatLabel}>transazioni</ThemedText>
                       </View>
                     </View>
@@ -798,22 +852,21 @@ export default function ExpensesScreen() {
                 <View style={styles.summaryActivity}>
                   <View style={styles.summaryActivityBar}>
                     <Animated.View style={[styles.summaryActivityFill, { 
-                      width: `${Math.min(100, (monthTotal / 2000) * 100)}%`,
-                      backgroundColor: monthTotal > 1500 ? '#ef4444' : monthTotal > 1000 ? '#f59e0b' : '#10b981',
+                      width: `${calculateActivityPercentage(monthTotal, expenseThresholds)}%`,
+                      backgroundColor: getExpenseLevelColor(getExpenseLevel(monthTotal, expenseThresholds)),
                       opacity: isTransitioning ? 0.6 : 1,
                     }]} />
-                  </View>
+              </View>
                   <ThemedText style={[
                     styles.summaryActivityText,
                     isTransitioning && styles.summaryActivityTextTransitioning
                   ]}>
                     {isTransitioning ? 'Aggiornamento...' : 
-                     monthTotal > 1500 ? 'Spesa elevata' : 
-                     monthTotal > 1000 ? 'Spesa moderata' : 'Spesa contenuta'}
-                  </ThemedText>
+                     getExpenseLevelText(getExpenseLevel(monthTotal, expenseThresholds))}
+              </ThemedText>
                 </View>
                   </View>
-                </Card>
+            </Card>
               </Pressable>
             </Animated.View>
           </PanGestureHandler>
@@ -833,7 +886,7 @@ export default function ExpensesScreen() {
           <View style={styles.sectionHeader}>
             <ThemedText style={styles.sectionTitle}>Categorie di spesa</ThemedText>
             <ThemedText style={styles.sectionSubtitle}>Distribuzione mensile</ThemedText>
-          </View>
+              </View>
 
           <View style={styles.categoriesGrid}>
             {categoryTotals.slice(0, 6).map((category, index) => (
@@ -871,7 +924,7 @@ export default function ExpensesScreen() {
                     <ThemedText style={styles.categoryName}>{category.name}</ThemedText>
                     <ThemedText style={styles.categoryAmount}>
                       € {category.amount.toFixed(0)}
-                    </ThemedText>
+              </ThemedText>
                     <View style={styles.progressContainer}>
                       <View style={[styles.progressBar, { backgroundColor: `${category.color}20` }]}>
                         <Animated.View 
@@ -883,7 +936,7 @@ export default function ExpensesScreen() {
                             }
                           ]} 
                         />
-                      </View>
+          </View>
                       <ThemedText style={styles.progressText}>
                         {category.percentage.toFixed(0)}%
                       </ThemedText>
@@ -905,7 +958,7 @@ export default function ExpensesScreen() {
             }
           ]}
         >
-          <Card style={styles.chartCard} glow="rgba(139, 92, 246, 0.1)">
+          <Card variant="default" style={styles.chartCard}>
             <View style={styles.chartHeader}>
               <View style={styles.chartIcon}>
                 <ThemedText style={styles.chartIconText}>📊</ThemedText>
@@ -913,7 +966,7 @@ export default function ExpensesScreen() {
               <ThemedText style={styles.chartTitle}>Distribuzione per categoria</ThemedText>
             </View>
             <View style={styles.chartContainer}>
-              <ExpensesPie items={items} selectedYear={curYear} selectedMonth={curMonth} />
+              <ExpensesPie items={allMonthItems} selectedYear={curYear} selectedMonth={curMonth} />
             </View>
           </Card>
         </Animated.View>
@@ -953,7 +1006,7 @@ export default function ExpensesScreen() {
           
           {selectedMonthItems.length > 0 ? (
             <View style={styles.transactionsList}>
-              {selectedMonthItems.slice(0, 15).map((item, index) => (
+              {selectedMonthItems.slice(0, visibleTransactionsCount).map((item, index) => (
                 <Animated.View
                   key={item.id ?? index}
                   style={[
@@ -979,7 +1032,7 @@ export default function ExpensesScreen() {
                       Animated.spring(scaleAnim1, { toValue: 1, useNativeDriver: true }).start()
                     }}
                   >
-                    <Card style={styles.transactionCard}>
+                    <Card variant="subtle" style={styles.transactionCard}>
                       <View style={styles.transactionContent}>
                         <View style={styles.transactionLeft}>
                           <View style={styles.transactionIcon}>
@@ -1063,9 +1116,35 @@ export default function ExpensesScreen() {
                   </Pressable>
                 </Animated.View>
               ))}
+              
+              {/* Expand/Collapse Button */}
+              {selectedMonthItems.length > visibleTransactionsCount && (
+                <Pressable
+                  style={styles.expandButton}
+                  onPress={() => {
+                    const newCount = Math.min(visibleTransactionsCount + 10, selectedMonthItems.length)
+                    setVisibleTransactionsCount(newCount)
+                  }}
+                >
+                  <ThemedText style={styles.expandButtonText}>
+                    Mostra altre {Math.min(10, selectedMonthItems.length - visibleTransactionsCount)} transazioni
+                  </ThemedText>
+                </Pressable>
+              )}
+              
+              {visibleTransactionsCount > 10 && (
+                <Pressable
+                  style={styles.collapseButton}
+                  onPress={() => setVisibleTransactionsCount(10)}
+                >
+                  <ThemedText style={styles.collapseButtonText}>
+                    Mostra meno
+                  </ThemedText>
+                </Pressable>
+              )}
             </View>
           ) : (
-        <Card style={styles.emptyCard}>
+        <Card variant="subtle" style={styles.emptyCard}>
           <ThemedText style={styles.emptyText}>Nessuna spesa registrata</ThemedText>
           <ThemedText style={styles.emptySubtext}>
             Le spese da Google Wallet verranno aggiunte automaticamente
@@ -1084,7 +1163,7 @@ export default function ExpensesScreen() {
       >
         <View style={styles.modalOverlay}>
           <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}>
-            <Card style={styles.modalCard} glow="rgba(6, 182, 212, 0.2)">
+            <Card variant="elevated" style={styles.modalCard}>
               <LinearGradient
                 colors={['rgba(6, 182, 212, 0.12)', 'rgba(20, 184, 166, 0.06)', 'transparent']}
                 start={{ x: 0, y: 0 }}
@@ -1599,11 +1678,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   transactionCard: {
-    padding: 16,
+    padding: 20,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(6, 182, 212, 0.3)',
     backgroundColor: 'rgba(6, 182, 212, 0.05)',
+    marginBottom: 1,
   },
   transactionContent: {
     flexDirection: 'row',
@@ -1617,13 +1697,13 @@ const styles = StyleSheet.create({
   transactionIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: 'rgba(6, 182, 212, 0.25)',
     borderWidth: 1,
     borderColor: 'rgba(6, 182, 212, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 16,
   },
   transactionIconText: {
     fontSize: 18,
@@ -1635,7 +1715,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   transactionMerchant: {
     fontSize: 16,
@@ -1644,8 +1724,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   categoryBadge: {
-    paddingHorizontal: 2,
-    paddingVertical: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    marginBottom: 4,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
@@ -1657,14 +1738,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   transactionDate: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#06b6d4',
     fontWeight: '600',
   },
   transactionRight: {
     alignItems: 'flex-end',
     flexDirection: 'row',
-    gap: 12,
+    gap: 16,
   },
   transactionAmount: {
     fontSize: 17,
@@ -1754,7 +1835,7 @@ const styles = StyleSheet.create({
     zIndex: 0,
   },
   modalScrollView: {
-    maxHeight: 300,
+    maxHeight: 400,
   },
   modalScrollContent: {
     paddingBottom: 20,
@@ -2065,23 +2146,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   categoryOptionGradient: {
-    padding: 16,
+    padding: 12,
     alignItems: 'center',
     borderRadius: 16,
   },
   categoryOptionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   categoryOptionIconText: {
-    fontSize: 20,
+    fontSize: 18,
   },
   categoryOptionName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: Brand.colors.text.primary,
     textAlign: 'center',
@@ -2095,9 +2176,43 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(239, 68, 68, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 6,
   },
   deleteButtonText: {
     fontSize: 14,
+  },
+  expandButton: {
+    marginTop: 16,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.3)',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  expandButtonGradient: {
+    // Remove gradient, use solid background instead
+  },
+  expandButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Brand.colors.text.primary,
+  },
+  collapseButton: {
+    marginTop: 8,
+    marginHorizontal: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collapseButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Brand.colors.text.secondary,
   },
 })
 

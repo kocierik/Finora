@@ -7,7 +7,7 @@ type AuthContextValue = {
   session: Session | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error?: string }>
-  signUp: (email: string, password: string) => Promise<{ error?: string }>
+  signUp: (email: string, password: string, displayName?: string) => Promise<{ error?: string }>
   signOut: () => Promise<void>
 }
 
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const signUp = useCallback(async (email: string, password: string) => {
+  const signUp = useCallback(async (email: string, password: string, displayName?: string) => {
     try {
       console.log('[Auth] 📝 Attempting sign up...')
       const { data, error } = await supabase.auth.signUp({ email, password })
@@ -65,6 +65,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('[Auth] ❌ Sign up error:', error.message)
         return { error: error.message }
       }
+      
+      // Create profile if user was created and displayName is provided
+      if (data.user && displayName) {
+        console.log('[Auth] 👤 Creating user profile...')
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            display_name: displayName.trim()
+          })
+        
+        if (profileError) {
+          console.log('[Auth] ⚠️ Profile creation error:', profileError.message)
+          // Don't fail signup if profile creation fails, just log it
+        } else {
+          console.log('[Auth] ✅ Profile created successfully')
+        }
+      }
+      
       console.log('[Auth] ✅ Sign up successful:', data.user?.email)
       // Force state update
       setSession(data.session)

@@ -23,10 +23,16 @@ type CategoryBase = {
 }
 
 const categories = [
-  { name: 'Travel', color: '#06b6d4', icon: '✈️' },
-  { name: 'Night Life', color: '#8b5cf6', icon: '🍸' },
-  { name: 'Grocery', color: '#10b981', icon: '🛒' },
-  { name: 'Other', color: '#f59e0b', icon: '📦' },
+  { name: 'Night Life', color: '#ef4444', icon: '🌃' },
+  { name: 'Travel', color: '#3b82f6', icon: '✈️' },
+  { name: 'Grocery', color: '#8b5cf6', icon: '🛒' },
+  { name: 'Shopping', color: '#f59e0b', icon: '🛍️' },
+  { name: 'Other', color: '#10b981', icon: '📦' },
+  { name: 'Transport', color: '#06b6d4', icon: '🚗' },
+  { name: 'Healthcare', color: '#ec4899', icon: '🏥' },
+  { name: 'Education', color: '#6366f1', icon: '📚' },
+  { name: 'Utilities', color: '#f97316', icon: '⚡' },
+  { name: 'Entertainment', color: '#6b7280', icon: '🎬' },
 ];
 
 export function ExpensesPie({ items, selectedYear, selectedMonth }: { 
@@ -98,16 +104,50 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
 
   // Calculate angles for each category
   let currentAngle = -90; // Start from top
-  let categoryData: CategoryBase[] = categories
-    .map(cat => {
-      const amount = byCatLower[cat.name.toLowerCase()] || 0;
+  
+  // Create a map of predefined categories for quick lookup
+  const predefinedCategories = new Map(
+    categories.map(cat => [cat.name.toLowerCase(), cat])
+  );
+  
+  // Get all unique categories from the data
+  const allCategoriesFromData = Object.keys(byCat);
+  
+  // Create category data for all categories that have amounts > 0
+  let categoryData: CategoryBase[] = allCategoriesFromData
+    .filter(catName => byCat[catName] > 0)
+    .map(catName => {
+      const amount = byCat[catName];
       const percentage = totalAmount > 0 ? (amount / totalAmount) * 100 : 0;
-      console.log(`Category ${cat.name} (looking for ${cat.name.toLowerCase()}): amount=${amount}, percentage=${percentage.toFixed(1)}%`);
-      return { ...cat, amount, percentage };
+      
+      // Check if it's a predefined category
+      const predefined = predefinedCategories.get(catName.toLowerCase());
+      if (predefined) {
+        return {
+          name: predefined.name,
+          amount,
+          percentage,
+          color: predefined.color,
+          icon: predefined.icon
+        };
+      }
+      
+      // For unknown categories, assign a default color and icon
+      const defaultColors = ['#ef4444', '#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#06b6d4', '#ec4899', '#6366f1', '#f97316', '#6b7280'];
+      const defaultIcons = ['📦', '💳', '🛒', '✈️', '🚗', '🏥', '📚', '⚡', '🎬', '🌃'];
+      const colorIndex = allCategoriesFromData.indexOf(catName) % defaultColors.length;
+      
+      return {
+        name: catName,
+        amount,
+        percentage,
+        color: defaultColors[colorIndex],
+        icon: defaultIcons[colorIndex]
+      };
     })
-    .filter(cat => cat.amount > 0);
+    .sort((a, b) => b.amount - a.amount); // Sort by amount descending
 
-  console.log('Filtered categoryData:', categoryData.map(c => ({ name: c.name, amount: c.amount })));
+  console.log('Filtered categoryData:', categoryData.map(c => ({ name: c.name, amount: c.amount, percentage: c.percentage.toFixed(1) + '%' })));
 
   // If no categories have data but there's a total, show "Other" category
   if (categoryData.length === 0 && totalAmount > 0) {
@@ -120,14 +160,16 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
     }];
   }
 
-  // Calculate angles for all categories
-  const finalCategoryData: CategoryData[] = categoryData.map(cat => {
-    const angle = (cat.percentage / 100) * 360;
-    const startAngle = currentAngle;
-    const endAngle = currentAngle + angle;
-    currentAngle += angle;
-    return { ...cat, startAngle, endAngle };
-  });
+  // Calculate angles only for categories with data (percentage > 0)
+  const finalCategoryData: CategoryData[] = categoryData
+    .filter(cat => cat.percentage > 0) // Only include categories with actual data
+    .map(cat => {
+      const angle = (cat.percentage / 100) * 360;
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + angle;
+      currentAngle += angle;
+      return { ...cat, startAngle, endAngle };
+    });
 
   // Animate categories when data changes - MUST be before conditional return
   useEffect(() => {
@@ -266,16 +308,36 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
           ))}
 
           {/* Labels */}
-          {finalCategoryData.map((category) => {
+          {finalCategoryData.map((category, index) => {
             const midAngle = (category.startAngle + category.endAngle) / 2;
             const labelPos = getLabelPosition(midAngle, radius);
+            
+            // Skip labels for very small percentages to avoid overlapping
+            if (category.percentage < 1) {
+              console.log(`Skipping label for ${category.name} (${category.percentage.toFixed(1)}%)`);
+              return null;
+            }
+            
+            // Skip every other label if there are too many categories
+            if (finalCategoryData.length > 6 && index % 2 === 1 && category.percentage < 5) {
+              console.log(`Skipping alternating label for ${category.name} (${category.percentage.toFixed(1)}%)`);
+              return null;
+            }
+            
+            console.log(`Showing label for ${category.name} (${category.percentage.toFixed(1)}%)`);
+            
+            // Adjust font size and position based on percentage to reduce overlapping
+            const fontSize = category.percentage < 10 ? 10 : 14;
+            const smallFontSize = category.percentage < 10 ? 8 : 10;
+            const iconOffset = category.percentage < 10 ? -4 : -6;
+            const textOffset = category.percentage < 10 ? 6 : 8;
             
             return (
               <G key={`label-${category.name}`}>
                 <SvgText
                   x={labelPos.x}
-                  y={labelPos.y - 6}
-                  fontSize="14"
+                  y={labelPos.y + iconOffset}
+                  fontSize={fontSize}
                   fontWeight="600"
                   fill="#E8EEF8"
                   textAnchor="middle"
@@ -283,9 +345,9 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
                   {category.icon}
                 </SvgText>
                 <SvgText
-                  x={labelPos.x - 4}
-                  y={labelPos.y + 8}
-                  fontSize="10"
+                  x={labelPos.x}
+                  y={labelPos.y + textOffset}
+                  fontSize={smallFontSize}
                   fontWeight="500"
                   fill="#9ca3af"
                   textAnchor="middle"
@@ -298,14 +360,14 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
 
           {/* Center text */}
           <SvgText
-            x={centerX - 7}
+            x={centerX }
             y={centerY + 2}
             fontSize="16"
             fontWeight="900"
             fill="#E8EEF8"
             textAnchor="middle"
           >
-            € {totalAmount.toFixed(0)}
+            {totalAmount.toFixed(2)} 
           </SvgText>
           <SvgText
             x={centerX}

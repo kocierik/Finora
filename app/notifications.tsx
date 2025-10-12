@@ -6,21 +6,23 @@ import {
     requestNotificationPermission,
     type NotificationPermissionStatus
 } from '@/services/notification-service'
+import {
+    clearNotifications,
+    getWalletNotifications,
+    loadNotifications,
+    sortNotificationsByDate,
+    type StoredNotification
+} from '@/services/notification-storage'
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
 import { useEffect, useState } from 'react'
-import { Alert, Button, DeviceEventEmitter, FlatList, Linking, Platform, ScrollView, StyleSheet, View } from 'react-native'
+import { Button, DeviceEventEmitter, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
-type ActiveNotification = {
-  id: string
-  app: string
-  title: string
-  text: string
-  time: string
-  timestamp: number
-}
+type FilterType = 'all' | 'wallet' | 'other'
 
 export default function NotificationsScreen() {
-  const [notifications, setNotifications] = useState<ActiveNotification[]>([])
+  const [notifications, setNotifications] = useState<StoredNotification[]>([])
+  const [filteredNotifications, setFilteredNotifications] = useState<StoredNotification[]>([])
+  const [filter, setFilter] = useState<FilterType>('all')
   const [permission, setPermission] = useState<NotificationPermissionStatus>('unknown')
   const [logs, setLogs] = useState<string[]>([])
   const [isXiaomi, setIsXiaomi] = useState(false)
@@ -91,15 +93,45 @@ export default function NotificationsScreen() {
       addLog('❌ Failed to save test expense: ' + error)
     }
     
-    // Invia tramite DeviceEventEmitter (il listener aggiungerà automaticamente alla lista)
+    // Salva direttamente la notifica in memoria per il test
+    try {
+      const testStoredNotification = {
+        id: `test-${Date.now()}`,
+        app: testNotification.app,
+        title: testNotification.title,
+        text: testNotification.text,
+        time: testNotification.time,
+        timestamp: testNotification.timestamp,
+        receivedAt: Date.now(),
+        isWalletNotification: true,
+      }
+      
+      const cacheFile = `${cacheDirectory}all_notifications.json`
+      let notifications = []
+      
+      try {
+        const existingData = await readAsStringAsync(cacheFile)
+        notifications = JSON.parse(existingData)
+      } catch (readError) {
+        addLog('📂 Creating new notifications file for test')
+      }
+      
+      notifications.unshift(testStoredNotification)
+      notifications = notifications.slice(0, 100) // Mantieni solo le ultime 100
+      
+      await writeAsStringAsync(cacheFile, JSON.stringify(notifications))
+      addLog('💾 Test notification saved directly to memory')
+      
+      // Ricarica le notifiche per mostrare il test
+      loadNotificationsFromStorage()
+    } catch (error) {
+      addLog('❌ Failed to save test notification: ' + error)
+    }
+    
+    // Invia anche tramite DeviceEventEmitter per simulare il flusso normale
     DeviceEventEmitter.emit('wallet_notification', testNotification)
     
-    addLog('✅ Test notification sent and expense queued for sync')
-    Alert.alert(
-      '🧪 Test Completato',
-      'Notifica inviata e spesa salvata!\n\nVai alla tab Home per sincronizzare e vedere la spesa.',
-      [{ text: 'OK' }]
-    )
+    addLog('✅ Test notification sent and saved to memory')
   }
 
   const handleOpenSettings = () => {
@@ -113,30 +145,50 @@ export default function NotificationsScreen() {
   }
 
   const handleClearNotifications = async () => {
+    await clearNotifications()
     setNotifications([])
-    addLog('🗑️  Notifications cleared')
-    
-    // Cancella anche il file cache
-    try {
-      const cacheFile = `${cacheDirectory}notifications.json`
-      await writeAsStringAsync(cacheFile, JSON.stringify([]))
-      addLog('✅ Cache cleared')
-    } catch (error) {
-      addLog('⚠️  Failed to clear cache')
-    }
+    setFilteredNotifications([])
+    addLog('🗑️  All notifications cleared')
   }
   
-  const loadNotificationsFromCache = async () => {
-    addLog('📂 Loading notifications from cache...')
+  const loadNotificationsFromStorage = async () => {
+    addLog('📂 Loading notifications from storage...')
     try {
-      const cacheFile = `${cacheDirectory}notifications.json`
-      const data = await readAsStringAsync(cacheFile)
-      const cachedNotifications = JSON.parse(data)
-      setNotifications(cachedNotifications)
-      addLog(`✅ Loaded ${cachedNotifications.length} notifications from cache`)
+      const storedNotifications = await loadNotifications()
+      const sortedNotifications = sortNotificationsByDate(storedNotifications)
+      setNotifications(sortedNotifications)
+      addLog(`✅ Loaded ${sortedNotifications.length} notifications from storage`)
+      
+      // Applica il filtro corrente
+      applyFilter(sortedNotifications, filter)
     } catch (error) {
-      addLog('ℹ️  No cached notifications found')
+      addLog('ℹ️  No stored notifications found')
     }
+  }
+
+  const applyFilter = (notificationsToFilter: StoredNotification[], filterType: FilterType) => {
+    let filtered: StoredNotification[] = []
+    
+    switch (filterType) {
+      case 'wallet':
+        filtered = getWalletNotifications(notificationsToFilter)
+        break
+      case 'other':
+        filtered = notificationsToFilter.filter(n => !n.isWalletNotification)
+        break
+      case 'all':
+      default:
+        filtered = notificationsToFilter
+        break
+    }
+    
+    setFilteredNotifications(filtered)
+    addLog(`🔍 Filtered to ${filtered.length} notifications (${filterType})`)
+  }
+
+  const handleFilterChange = (newFilter: FilterType) => {
+    setFilter(newFilter)
+    applyFilter(notifications, newFilter)
   }
 
   useEffect(() => {
@@ -152,12 +204,12 @@ export default function NotificationsScreen() {
     // Check permission
     checkPermission()
     
-    // Carica le notifiche dalla cache
-    loadNotificationsFromCache()
+    // Carica le notifiche dallo storage
+    loadNotificationsFromStorage()
     
-    // Poll ogni 3 secondi per aggiornare la lista dalle cache
+    // Poll ogni 3 secondi per aggiornare la lista dallo storage
     const interval = setInterval(() => {
-      loadNotificationsFromCache()
+      loadNotificationsFromStorage()
     }, 3000)
     
     // Subscribe to notifications (per notifiche in tempo reale quando app è aperta)
@@ -168,24 +220,8 @@ export default function NotificationsScreen() {
       addLog(`📝 Title: ${payload.title || 'No title'}`)
       addLog(`📄 Text: ${payload.text || 'No text'}`)
       
-      const notif: ActiveNotification = {
-        id: `${payload.app}-${Date.now()}`,
-        app: payload.app || payload.packageName || 'Unknown',
-        title: payload.title || 'No title',
-        text: payload.text || 'No text',
-        time: payload.time || new Date().toISOString(),
-        timestamp: Date.now(),
-      }
-      
-      setNotifications(prev => [notif, ...prev])
-      addLog(`✅ Notification added to list: ${notif.title}`)
-      
-      // Show alert
-      Alert.alert(
-        '📬 Notifica ricevuta',
-        `App: ${notif.app}\n\n${notif.title}\n${notif.text}`,
-        [{ text: 'OK' }]
-      )
+      // Ricarica le notifiche dallo storage per mostrare la nuova notifica
+      loadNotificationsFromStorage()
     })
     
     addLog('✅ Notification listener registered')
@@ -276,7 +312,7 @@ export default function NotificationsScreen() {
         
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
           <Button title="🧪 Test Notifica" onPress={handleTestNotification} />
-          <Button title="🔄 Ricarica Notifiche" onPress={loadNotificationsFromCache} />
+          <Button title="🔄 Ricarica Notifiche" onPress={loadNotificationsFromStorage} />
           <Button title="🗑️  Pulisci Log" onPress={handleClearLogs} />
           <Button title="🗑️  Pulisci Notifiche" onPress={handleClearNotifications} />
         </View>
@@ -301,6 +337,58 @@ export default function NotificationsScreen() {
     </Card>
   )
 
+  const renderFilterCard = () => (
+    <Card>
+      <ThemedText type="defaultSemiBold">🔍 Filtri</ThemedText>
+      <View style={{ gap: 8, marginTop: 8 }}>
+        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+          <Pressable
+            style={[
+              styles.filterButton,
+              filter === 'all' && styles.filterButtonActive
+            ]}
+            onPress={() => handleFilterChange('all')}
+          >
+            <ThemedText style={[
+              styles.filterButtonText,
+              filter === 'all' && styles.filterButtonTextActive
+            ]}>
+              Tutte ({notifications.length})
+            </ThemedText>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.filterButton,
+              filter === 'wallet' && styles.filterButtonActive
+            ]}
+            onPress={() => handleFilterChange('wallet')}
+          >
+            <ThemedText style={[
+              styles.filterButtonText,
+              filter === 'wallet' && styles.filterButtonTextActive
+            ]}>
+              Wallet ({getWalletNotifications(notifications).length})
+            </ThemedText>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.filterButton,
+              filter === 'other' && styles.filterButtonActive
+            ]}
+            onPress={() => handleFilterChange('other')}
+          >
+            <ThemedText style={[
+              styles.filterButtonText,
+              filter === 'other' && styles.filterButtonTextActive
+            ]}>
+              Altre ({notifications.filter(n => !n.isWalletNotification).length})
+            </ThemedText>
+          </Pressable>
+        </View>
+      </View>
+    </Card>
+  )
+
   const renderInfoCard = () => (
     <Card>
       <ThemedText type="defaultSemiBold">ℹ️  Informazioni</ThemedText>
@@ -312,10 +400,13 @@ export default function NotificationsScreen() {
           ✅ Riceve notifiche anche con app chiusa
         </ThemedText>
         <ThemedText style={{ fontSize: 12 }}>
-          ✅ Filtra automaticamente Google Wallet
+          ✅ Salva TUTTE le notifiche in memoria per la visualizzazione
         </ThemedText>
         <ThemedText style={{ fontSize: 12 }}>
-          📝 Controlla i log per vedere le notifiche ricevute
+          ✅ Filtra automaticamente Google Wallet per le spese
+        </ThemedText>
+        <ThemedText style={{ fontSize: 12 }}>
+          📝 Usa i filtri per vedere notifiche specifiche
         </ThemedText>
         <ThemedText style={{ fontSize: 12 }}>
           🧪 Usa "Test Notifica" per verificare il funzionamento
@@ -326,7 +417,7 @@ export default function NotificationsScreen() {
 
   return (
     <FlatList
-      data={notifications}
+      data={filteredNotifications}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.container}
       ListHeaderComponent={
@@ -335,22 +426,31 @@ export default function NotificationsScreen() {
           
           {renderPermissionCard()}
           {renderXiaomiGuide()}
+          {renderFilterCard()}
           {renderDebugCard()}
           {renderLogsCard()}
           {renderInfoCard()}
           
           <ThemedText type="subtitle" style={{ marginTop: 8 }}>
-            Notifiche Ricevute ({notifications.length})
+            Notifiche Ricevute ({filteredNotifications.length})
           </ThemedText>
         </View>
       }
       ListEmptyComponent={
         <Card>
           <ThemedText style={{ opacity: 0.7, textAlign: 'center' }}>
-            Nessuna notifica ricevuta ancora
+            {filter === 'all' 
+              ? 'Nessuna notifica ricevuta ancora'
+              : filter === 'wallet'
+              ? 'Nessuna notifica di Google Wallet ricevuta'
+              : 'Nessuna altra notifica ricevuta'
+            }
           </ThemedText>
           <ThemedText style={{ opacity: 0.7, textAlign: 'center', fontSize: 12, marginTop: 4 }}>
-            Prova a inviare una notifica di test
+            {filter === 'all' 
+              ? 'Prova a inviare una notifica di test'
+              : 'Prova a cambiare filtro o inviare una notifica di test'
+            }
           </ThemedText>
         </Card>
       }
@@ -360,9 +460,16 @@ export default function NotificationsScreen() {
             <ThemedText type="defaultSemiBold" style={{ flex: 1 }}>
               {item.title}
             </ThemedText>
-            <ThemedText style={{ fontSize: 10, opacity: 0.5 }}>
-              {new Date(item.timestamp).toLocaleTimeString()}
-            </ThemedText>
+            <View style={{ alignItems: 'flex-end' }}>
+              <ThemedText style={{ fontSize: 10, opacity: 0.5 }}>
+                {new Date(item.receivedAt).toLocaleTimeString()}
+              </ThemedText>
+              {item.isWalletNotification && (
+                <ThemedText style={{ fontSize: 9, opacity: 0.6, color: '#10b981' }}>
+                  💳 Wallet
+                </ThemedText>
+              )}
+            </View>
           </View>
           <ThemedText style={{ opacity: 0.8 }}>{item.text}</ThemedText>
           <ThemedText style={{ fontSize: 11, opacity: 0.5 }}>
@@ -378,5 +485,25 @@ const styles = StyleSheet.create({
   container: {
     gap: 12,
     padding: 16,
+  },
+  filterButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  filterButtonActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  filterButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  filterButtonTextActive: {
+    color: '#10b981',
   },
 })

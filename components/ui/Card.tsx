@@ -1,29 +1,27 @@
 import { ThemedText } from '@/components/themed-text'
+import { Brand } from '@/constants/branding'
 import { useColorScheme } from '@/hooks/use-color-scheme'
-import { LinearGradient } from 'expo-linear-gradient'
 import { PropsWithChildren } from 'react'
 import { StyleSheet, View } from 'react-native'
 
-export function Card({ children, style, glow }: PropsWithChildren<{ style?: any; glow?: string }>) {
+export function Card({ children, style, variant = 'default' }: PropsWithChildren<{ 
+  style?: any; 
+  variant?: 'default' | 'elevated' | 'subtle';
+}>) {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   
+  const cardStyle = [
+    styles.card,
+    isDark && styles.cardDark,
+    variant === 'elevated' && styles.cardElevated,
+    variant === 'subtle' && styles.cardSubtle,
+    style
+  ]
+  
   return (
-    <View style={[styles.cardWrapper, style]}>
-      <LinearGradient
-        colors={isDark 
-          ? ['rgba(20, 20, 30, 0.95)', 'rgba(15, 15, 25, 0.9)']
-          : ['#ffffff', '#f9fafb']
-        }
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.card, isDark && styles.cardDark]}
-      >
-        {glow && (
-          <View style={[styles.glow, { backgroundColor: glow }]} />
-        )}
-        {children}
-      </LinearGradient>
+    <View style={cardStyle}>
+      {children}
     </View>
   )
 }
@@ -54,38 +52,34 @@ function shade(hex: string, amount: number) {
 }
 
 const styles = StyleSheet.create({
-  cardWrapper: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
-    elevation: 12,
-  },
   card: {
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.08)',
-    position: 'relative',
+    backgroundColor: Brand.colors.background.elevated,
+    borderRadius: Brand.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.medium,
+    padding: Brand.spacing.lg,
+    ...Brand.shadows.sm,
   },
   cardDark: {
-    borderColor: 'rgba(255,255,255,0.06)',
-    shadowColor: 'rgba(6, 182, 212, 0.4)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  glow: {
-    position: 'absolute',
-    top: -80,
-    right: -80,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    opacity: 0.4,
+  cardElevated: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    ...Brand.shadows.md,
+  },
+  cardSubtle: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    ...Brand.shadows.sm,
   },
   kpi: {
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: Brand.borderRadius.md,
+    padding: Brand.spacing.md,
     borderWidth: 1,
+    borderColor: Brand.colors.glass.light,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
   }
 })
 
