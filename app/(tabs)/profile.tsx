@@ -5,6 +5,7 @@ import { Brand } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { LinearGradient } from 'expo-linear-gradient'
+import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 
@@ -13,6 +14,7 @@ export default function ProfileScreen() {
   const [displayName, setDisplayName] = useState('')
   const [currency, setCurrency] = useState('EUR')
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   // Auth guard - redirect if not logged in
   if (authLoading) {
@@ -126,6 +128,34 @@ export default function ProfileScreen() {
               <ThemedText style={styles.saveButtonText}>
                 {loading ? 'Salvataggio...' : 'Salva modifiche'}
               </ThemedText>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </Card>
+
+      {/* Notifications Card */}
+      <Card style={styles.card} glow="rgba(139, 92, 246, 0.1)">
+        <View style={styles.cardHeader}>
+          <ThemedText type="defaultSemiBold" style={styles.cardTitle}>🔔 Notifiche</ThemedText>
+        </View>
+        <View style={styles.notificationsContent}>
+          <ThemedText style={styles.notificationsDescription}>
+            Gestisci le notifiche delle tue transazioni e ricevi aggiornamenti in tempo reale sui tuoi movimenti finanziari.
+          </ThemedText>
+          <Pressable 
+            style={styles.notificationsButton}
+            onPress={() => router.push('/notifications')}
+          >
+            <LinearGradient
+              colors={[Brand.colors.primary.magenta, 'rgba(139, 92, 246, 0.8)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.notificationsButtonGradient}
+            >
+              <ThemedText style={styles.notificationsButtonText}>
+                Visualizza Notifiche
+              </ThemedText>
+              <ThemedText style={styles.notificationsButtonIcon}>→</ThemedText>
             </LinearGradient>
           </Pressable>
         </View>
@@ -309,6 +339,36 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Brand.colors.background.deep,
     letterSpacing: 0.5,
+  },
+  notificationsContent: {
+    gap: 16,
+  },
+  notificationsDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    opacity: 0.8,
+    color: Brand.colors.text.secondary,
+  },
+  notificationsButton: {
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  notificationsButtonGradient: {
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  notificationsButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Brand.colors.background.deep,
+    letterSpacing: 0.5,
+  },
+  notificationsButtonIcon: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Brand.colors.background.deep,
   },
   aboutContent: {
     gap: 20,
