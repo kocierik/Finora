@@ -1,14 +1,18 @@
 import { ExpensesPie } from '@/components/charts/ExpensesPie'
 import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
+import { DatePickerModal } from '@/components/ui/DatePickerModal'
 import { Brand } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
+import { syncPendingExpenses } from '@/services/expense-sync'
+import { deleteExpense } from '@/services/expenses'
 import { Expense } from '@/types'
 import { useFocusEffect } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native'
+import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native'
+import { PanGestureHandler, State } from 'react-native-gesture-handler'
 
 export default function ExpensesScreen() {
   const { user, loading } = useAuth()
@@ -18,6 +22,12 @@ export default function ExpensesScreen() {
   const [selectedTransaction, setSelectedTransaction] = useState<Expense | null>(null)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [autoAssignedCount, setAutoAssignedCount] = useState(0)
+  const [categoryUpdateTrigger, setCategoryUpdateTrigger] = useState(0)
+  
+  // Month navigation state
+  const [selectedMonthOffset, setSelectedMonthOffset] = useState(0) // 0 = current month, -1 = previous, 1 = next
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const [showDatePicker, setShowDatePicker] = useState(false)
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -25,6 +35,10 @@ export default function ExpensesScreen() {
   const scaleAnim1 = useRef(new Animated.Value(0.95)).current
   const scaleAnim2 = useRef(new Animated.Value(0.95)).current
   const balanceAnim = useRef(new Animated.Value(0)).current
+  
+  // Month transition animations
+  const monthSlideAnim = useRef(new Animated.Value(0)).current
+  const monthFadeAnim = useRef(new Animated.Value(1)).current
   const listAnim = useRef(new Animated.Value(0)).current
 
   // Auth guard - redirect if not logged in
@@ -49,6 +63,15 @@ export default function ExpensesScreen() {
     if (!user) return
     setRefreshing(true)
     try {
+      // Sincronizza le spese pendenti dalle notifiche Google Wallet
+      console.log('[Expenses] 🔄 Syncing pending expenses from notifications...')
+      const syncResult = await syncPendingExpenses(user.id)
+      if (syncResult.synced > 0) {
+        console.log(`[Expenses] ✅ Synced ${syncResult.synced} new expenses from Google Wallet`)
+        // Trigger category cards update
+        setCategoryUpdateTrigger(prev => prev + 1)
+      }
+      
       const { data } = await supabase
         .from('expenses')
         .select('*')
@@ -144,9 +167,11 @@ export default function ExpensesScreen() {
   )
 
   // KPIs
+  // Month calculations with navigation support
   const now = new Date()
-  const curMonth = now.getMonth()
-  const curYear = now.getFullYear()
+  const currentDate = new Date(now.getFullYear(), now.getMonth() + selectedMonthOffset, 1)
+  const curMonth = currentDate.getMonth()
+  const curYear = currentDate.getFullYear()
   const prevMonthDate = new Date(curYear, curMonth - 1, 1)
   const prevMonth = prevMonthDate.getMonth()
   const prevYear = prevMonthDate.getFullYear()
@@ -155,17 +180,27 @@ export default function ExpensesScreen() {
   const delta = monthTotal - prevTotal
   const deltaPct = prevTotal > 0 ? (delta / prevTotal) * 100 : 0
 
-  const monthName = now.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+  const monthName = currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+
+  // Filter items for selected month
+  const selectedMonthItems = items.filter((e) => sameMonth(e.date, curYear, curMonth))
 
   // Debug log for month calculation
   console.log('Month calculation:', {
     curYear,
     curMonth,
+    prevYear,
+    prevMonth,
     monthName,
     now: now.toISOString(),
     monthTotal,
     prevTotal,
-    totalItems: items.length
+    delta,
+    deltaPct,
+    totalItems: items.length,
+    currentMonthItems: items.filter((e) => sameMonth(e.date, curYear, curMonth)).length,
+    previousMonthItems: items.filter((e) => sameMonth(e.date, prevYear, prevMonth)).length,
+    sampleDates: items.map(e => ({ date: e.date, amount: e.amount })).slice(0, 3)
   })
 
   // Spending categories
@@ -220,7 +255,7 @@ export default function ExpensesScreen() {
       
       return { ...cat, amount, percentage }
     }).sort((a, b) => b.amount - a.amount)
-  }, [items, curYear, curMonth, monthTotal])
+  }, [items, curYear, curMonth, monthTotal, categoryUpdateTrigger])
 
   const onRefresh = useCallback(() => {
     fetchExpenses()
@@ -268,6 +303,217 @@ export default function ExpensesScreen() {
     setShowCategoryModal(false)
     setSelectedTransaction(null)
   }, [])
+
+  const handleDeleteTransaction = useCallback(async (transaction: Expense) => {
+    if (!transaction.id) {
+      console.error('Cannot delete transaction without ID')
+      return
+    }
+
+    Alert.alert(
+      'Elimina Transazione',
+      `Sei sicuro di voler eliminare la transazione di €${transaction.amount.toFixed(2)} presso ${transaction.merchant}?`,
+      [
+        {
+          text: 'Annulla',
+          style: 'cancel',
+        },
+        {
+          text: 'Elimina',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await deleteExpense(transaction.id!)
+              if (error) throw error
+
+              // Update local state
+              setItems(prevItems => prevItems.filter(item => item.id !== transaction.id))
+              
+              console.log('Transaction deleted successfully:', transaction.id)
+            } catch (error) {
+              console.error('Error deleting transaction:', error)
+              Alert.alert('Errore', 'Impossibile eliminare la transazione. Riprova.')
+            }
+          },
+        },
+      ]
+    )
+  }, [])
+
+  // Month navigation functions
+  const navigateToMonth = useCallback((direction: 'prev' | 'next') => {
+    if (isTransitioning) return
+    
+    const newOffset = direction === 'prev' 
+      ? selectedMonthOffset - 1 
+      : selectedMonthOffset + 1
+    
+    // Prevent going beyond current month (offset 0)
+    if (newOffset > 0) {
+      console.log('Cannot navigate beyond current month')
+      return
+    }
+    
+    setIsTransitioning(true)
+    
+    // Animate out
+    Animated.parallel([
+      Animated.timing(monthSlideAnim, {
+        toValue: direction === 'prev' ? 50 : -50,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(monthFadeAnim, {
+        toValue: 0.3,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      // Update month
+      setSelectedMonthOffset(newOffset)
+      
+      // Reset animation values
+      monthSlideAnim.setValue(direction === 'prev' ? -50 : 50)
+      monthFadeAnim.setValue(0.3)
+      
+      // Animate in
+      Animated.parallel([
+        Animated.spring(monthSlideAnim, {
+          toValue: 0,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.timing(monthFadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        setIsTransitioning(false)
+      })
+    })
+  }, [selectedMonthOffset, isTransitioning, monthSlideAnim, monthFadeAnim])
+
+  const resetToCurrentMonth = useCallback(() => {
+    if (selectedMonthOffset === 0) return
+    
+    setIsTransitioning(true)
+    setSelectedMonthOffset(0)
+    
+    Animated.parallel([
+      Animated.spring(monthSlideAnim, {
+        toValue: 0,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.timing(monthFadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      setIsTransitioning(false)
+    })
+  }, [selectedMonthOffset, monthSlideAnim, monthFadeAnim])
+
+  // Date picker functions
+  const handleDatePickerSelect = useCallback((offset: number) => {
+    if (offset === selectedMonthOffset) return
+    
+    setIsTransitioning(true)
+    
+    // Enhanced animation sequence
+    const direction = offset > selectedMonthOffset ? -40 : 40
+    
+    // Phase 1: Slide out and fade
+    Animated.parallel([
+      Animated.timing(monthSlideAnim, {
+        toValue: direction,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(monthFadeAnim, {
+        toValue: 0.3,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim1, {
+        toValue: 0.95,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      // Update the month
+      setSelectedMonthOffset(offset)
+      
+      // Phase 2: Reset position and animate in
+      monthSlideAnim.setValue(-direction)
+      monthFadeAnim.setValue(0.3)
+      scaleAnim1.setValue(0.95)
+      
+      Animated.parallel([
+        Animated.spring(monthSlideAnim, {
+          toValue: 0,
+          tension: 80,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.timing(monthFadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim1, {
+          toValue: 1,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        setIsTransitioning(false)
+      })
+    })
+  }, [selectedMonthOffset, monthSlideAnim, monthFadeAnim, scaleAnim1])
+
+  // Pan gesture handler for swipe navigation
+  const onPanGestureEvent = useCallback((event: any) => {
+    const { translationX, velocityX } = event.nativeEvent
+    
+    // Only allow horizontal swipes
+    if (Math.abs(translationX) > Math.abs(event.nativeEvent.translationY)) {
+      monthSlideAnim.setValue(translationX * 0.3) // Dampen the movement
+    }
+  }, [monthSlideAnim])
+
+  const onPanHandlerStateChange = useCallback((event: any) => {
+    const { state, translationX, velocityX } = event.nativeEvent
+    
+    if (state === State.END) {
+      const threshold = 50
+      const velocityThreshold = 0.5
+      
+      // Reset animation
+      Animated.spring(monthSlideAnim, {
+        toValue: 0,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }).start()
+      
+      // Check if swipe was strong enough
+      if (Math.abs(translationX) > threshold || Math.abs(velocityX) > velocityThreshold) {
+        if (translationX > 0 || velocityX > 0) {
+          // Swipe right - go to previous month
+          navigateToMonth('prev')
+        } else {
+          // Swipe left - go to next month
+          navigateToMonth('next')
+        }
+      }
+    }
+  }, [navigateToMonth, monthSlideAnim])
 
   // Function to auto-assign categories based on existing merchant categories
   const autoAssignCategories = useCallback(async (transactions: Expense[]) => {
@@ -354,7 +600,7 @@ export default function ExpensesScreen() {
           </Animated.View>
         }
       >
-        {/* Header */}
+          {/* Header */}
         <Animated.View 
           style={[
             styles.header,
@@ -368,18 +614,9 @@ export default function ExpensesScreen() {
             <View style={styles.headerLeft}>
               <ThemedText style={styles.headerTitle}>Spese</ThemedText>
               <ThemedText style={styles.headerSubtitle}>{monthName}</ThemedText>
-            </View>
-            <View style={styles.headerActions}>
-              <Pressable 
-                style={styles.hideButton}
-                onPress={() => setHideBalances(!hideBalances)}
-              >
-                <ThemedText style={styles.hideButtonText}>
-                  {hideBalances ? '👁️' : '🙈'}
-                </ThemedText>
-              </Pressable>
-            </View>
           </View>
+         
+            </View>
         </Animated.View>
 
         {/* Auto-assignment notification */}
@@ -404,105 +641,184 @@ export default function ExpensesScreen() {
           </Animated.View>
         )}
 
-        {/* Main Balance Card */}
+        {/* Main Summary Card - Swipeable Design */}
         <Animated.View 
           style={[
-            styles.balanceCardContainer,
+            styles.summaryCardContainer,
             {
               opacity: fadeAnim,
               transform: [{ scale: scaleAnim1 }]
             }
           ]}
         >
-          <Pressable
-            onPressIn={() => Animated.spring(scaleAnim1, { toValue: 0.97, useNativeDriver: true }).start()}
-            onPressOut={() => Animated.spring(scaleAnim1, { toValue: 1, useNativeDriver: true }).start()}
+          <PanGestureHandler
+            onGestureEvent={onPanGestureEvent}
+            onHandlerStateChange={onPanHandlerStateChange}
+            activeOffsetX={[-10, 10]}
           >
-            <Card style={styles.balanceCard} glow="rgba(239, 68, 68, 0.2)">
-              <LinearGradient
-                colors={['rgba(239, 68, 68, 0.12)', 'rgba(220, 38, 38, 0.06)', 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
-              />
-              <View style={styles.balanceIconContainer}>
-                <View style={styles.balanceIcon}>
-                  <ThemedText style={styles.balanceIconText}>💳</ThemedText>
+            <Animated.View
+              style={[
+                styles.summaryCardWrapper,
+                {
+                  transform: [
+                    { translateX: monthSlideAnim },
+                    { scale: monthFadeAnim }
+                  ],
+                  opacity: monthFadeAnim
+                }
+              ]}
+            >
+              <Pressable
+                onPressIn={() => Animated.spring(scaleAnim1, { toValue: 0.99, useNativeDriver: true }).start()}
+                onPressOut={() => Animated.spring(scaleAnim1, { toValue: 1, useNativeDriver: true }).start()}
+              >
+                <Card style={styles.summaryCard} glow="rgba(6, 182, 212, 0.08)">
+                  {/* Minimal Background */}
+                  <View style={styles.summaryBackground} />
+                  
+                  {/* Navigation Indicators */}
+                  <View style={styles.summaryNavigation}>
+                    <Pressable 
+                      style={styles.summaryNavButton}
+                      onPress={() => navigateToMonth('prev')}
+                      disabled={isTransitioning}
+                    >
+                      <ThemedText style={styles.summaryNavIcon}>‹</ThemedText>
+                    </Pressable>
+                    
+                    <Pressable 
+                      style={({ pressed }) => [
+                        styles.summaryMonthIndicator,
+                        {
+                          backgroundColor: pressed
+                            ? 'rgba(6,182,212,0.10)'
+                            : 'rgba(20,184,166,0.06)',
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: 'rgba(6,182,212,0.12)',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          // subtle shadow for more clickable feel
+                          shadowColor: '#0ea5e9',
+                          shadowOpacity: 0.09,
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowRadius: 5,
+                        }
+                      ]}
+                      onPress={() => setShowDatePicker(true)}
+                    >
+                      <View style={styles.monthTextContainer}>
+                        <ThemedText style={styles.summaryMonthText}>
+                          {monthName}
+                        </ThemedText>
+                      </View>
+                    </Pressable>
+                    
+                    <Pressable 
+                      style={[
+                        styles.summaryNavButton,
+                        selectedMonthOffset >= 0 && styles.summaryNavButtonDisabled
+                      ]}
+                      onPress={() => navigateToMonth('next')}
+                      disabled={isTransitioning || selectedMonthOffset >= 0}
+                    >
+                      <ThemedText style={[
+                        styles.summaryNavIcon,
+                        selectedMonthOffset >= 0 && styles.summaryNavIconDisabled
+                      ]}>›</ThemedText>
+                    </Pressable>
+                  </View>
+                  
+                  {/* Header Section */}
+                  <View style={styles.summaryHeader}>
+                    <View style={styles.summaryHeaderLeft}>
+                      <View style={styles.summaryIconContainer}>
+                        <View style={styles.summaryIcon}>
+                          <ThemedText style={styles.summaryIconText}>💳</ThemedText>
+                        </View>
+                        {/* Subtle accent line */}
+                        <View style={styles.summaryAccentLine} />
+                      </View>
+                      <View style={styles.summaryHeaderText}>
+                        <ThemedText style={styles.summaryTitle}>Spese Mensili</ThemedText>
+                        <ThemedText style={styles.summarySubtitle}>{monthName}</ThemedText>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Main Content */}
+                  <View style={styles.summaryContent}>
+                    {/* Total Amount */}
+                    <Animated.View style={[
+                      styles.summaryAmountContainer,
+                      { 
+                        transform: [{ 
+                          scale: balanceAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [1, 1.01]
+                          })
+                        }] 
+                      }
+                    ]}>
+                      <ThemedText style={styles.summaryAmount}>
+                        {hideBalances ? '••••• €' : `${monthTotal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) } €`}
+                      </ThemedText>
+                    </Animated.View>
+
+                    {/* Stats Row */}
+                    <View style={styles.summaryStats}>
+                      <View style={styles.summaryStatItem}>
+                        <View style={[styles.summaryStatBadge, { 
+                          borderColor: delta >= 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)',
+                        }]}>
+                          <ThemedText style={[styles.summaryStatIcon, { color: delta >= 0 ? '#ef4444' : '#10b981' }]}>
+                            {delta >= 0 ? '↗' : '↘'}
+                          </ThemedText>
+                          <ThemedText style={[styles.summaryStatValue, { color: delta >= 0 ? '#ef4444' : '#10b981' }]}>
+                            {delta >= 0 ? '+' : ''}{deltaPct.toFixed(1)}%
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={styles.summaryStatLabel}>vs mese scorso</ThemedText>
+                      </View>
+
+                      <View style={styles.summaryStatItem}>
+                        <View style={styles.summaryStatBadge}>
+                          <ThemedText style={styles.summaryStatIcon}>📊</ThemedText>
+                          <ThemedText style={styles.summaryStatValue}>
+                            {items.filter((e) => sameMonth(e.date, curYear, curMonth)).length}
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={styles.summaryStatLabel}>transazioni</ThemedText>
+                      </View>
+                    </View>
+
+                {/* Activity Indicator */}
+                <View style={styles.summaryActivity}>
+                  <View style={styles.summaryActivityBar}>
+                    <Animated.View style={[styles.summaryActivityFill, { 
+                      width: `${Math.min(100, (monthTotal / 2000) * 100)}%`,
+                      backgroundColor: monthTotal > 1500 ? '#ef4444' : monthTotal > 1000 ? '#f59e0b' : '#10b981',
+                      opacity: isTransitioning ? 0.6 : 1,
+                    }]} />
+                  </View>
+                  <ThemedText style={[
+                    styles.summaryActivityText,
+                    isTransitioning && styles.summaryActivityTextTransitioning
+                  ]}>
+                    {isTransitioning ? 'Aggiornamento...' : 
+                     monthTotal > 1500 ? 'Spesa elevata' : 
+                     monthTotal > 1000 ? 'Spesa moderata' : 'Spesa contenuta'}
+                  </ThemedText>
                 </View>
-                <View style={styles.neonLine} />
-              </View>
-              <View style={styles.balanceContent}>
-                <ThemedText style={styles.balanceLabel}>Totale questo mese</ThemedText>
-                <Animated.View style={{ 
-                  transform: [{ 
-                    scale: balanceAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1, 1.05]
-                    })
-                  }] 
-                }}>
-                  <ThemedText style={styles.balanceValue}>
-                    {hideBalances ? '€ •••••' : `€ ${monthTotal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                </ThemedText>
-                </Animated.View>
-                <View style={styles.balanceFooter}>
-                  <View style={[styles.balanceBadge, { 
-                backgroundColor: delta >= 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                borderColor: delta >= 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)',
-              }]}>
-                    <ThemedText style={[styles.balanceBadgeText, { color: delta >= 0 ? '#ef4444' : '#10b981' }]}>
-                  {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                </ThemedText>
-              </View>
-                  <ThemedText style={styles.balanceSubtext}>
-                    vs mese precedente
-              </ThemedText>
-                </View>
-            </View>
-          </Card>
-          </Pressable>
+                  </View>
+                </Card>
+              </Pressable>
+            </Animated.View>
+          </PanGestureHandler>
         </Animated.View>
 
-          {/* Secondary KPIs */}
-        <Animated.View 
-          style={[
-            styles.kpiContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim2 }]
-            }
-          ]}
-        >
-          <Pressable style={styles.kpiCard}>
-            <LinearGradient
-              colors={deltaPct >= 0 ? ['rgba(239, 68, 68, 0.1)', 'rgba(220, 38, 38, 0.05)'] : ['rgba(16, 185, 129, 0.1)', 'rgba(20, 184, 166, 0.05)']}
-              style={styles.kpiGradient}
-            >
-              <View style={styles.kpiIcon}>
-                <ThemedText style={styles.kpiIconText}>{deltaPct >= 0 ? '📈' : '📉'}</ThemedText>
-              </View>
-              <ThemedText style={styles.kpiLabel}>Variazione</ThemedText>
-              <ThemedText style={[styles.kpiValue, { color: deltaPct >= 0 ? '#ef4444' : '#10b981' }]}>
-                {deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(1)}%
-              </ThemedText>
-            </LinearGradient>
-          </Pressable>
-
-          <Pressable style={styles.kpiCard}>
-            <LinearGradient
-              colors={['rgba(6, 182, 212, 0.1)', 'rgba(20, 184, 166, 0.05)']}
-              style={styles.kpiGradient}
-            >
-              <View style={styles.kpiIcon}>
-                <ThemedText style={styles.kpiIconText}>🧾</ThemedText>
-              </View>
-              <ThemedText style={styles.kpiLabel}>Transazioni</ThemedText>
-              <ThemedText style={styles.kpiValue}>
-                {items.filter((e) => sameMonth(e.date, curYear, curMonth)).length}
-              </ThemedText>
-            </LinearGradient>
-          </Pressable>
-        </Animated.View>
 
         {/* Spending Categories */}
         <Animated.View 
@@ -597,7 +913,7 @@ export default function ExpensesScreen() {
               <ThemedText style={styles.chartTitle}>Distribuzione per categoria</ThemedText>
             </View>
             <View style={styles.chartContainer}>
-              <ExpensesPie items={items} />
+              <ExpensesPie items={items} selectedYear={curYear} selectedMonth={curMonth} />
             </View>
           </Card>
         </Animated.View>
@@ -614,25 +930,30 @@ export default function ExpensesScreen() {
         >
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <ThemedText style={styles.sectionTitle}>Transazioni recenti</ThemedText>
+              <ThemedText style={styles.sectionTitle}>
+                {isTransitioning ? 'Caricamento...' : 'Transazioni recenti'}
+              </ThemedText>
               <Pressable 
                 style={styles.refreshButton}
                 onPress={fetchExpenses}
-                disabled={refreshing}
+                disabled={refreshing || isTransitioning}
               >
-                <ThemedText style={styles.refreshButtonText}>
-                  {refreshing ? '🔄' : '↻'}
+                <ThemedText style={[
+                  styles.refreshButtonText,
+                  (refreshing || isTransitioning) && styles.refreshButtonTextDisabled
+                ]}>
+                  {refreshing || isTransitioning ? '🔄' : '↻'}
                 </ThemedText>
               </Pressable>
           </View>
             <ThemedText style={styles.sectionSubtitle}>
-              {items.length} transazioni • Ultimo aggiornamento: {new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+              {selectedMonthItems.length} transazioni • Ultimo aggiornamento: {new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
             </ThemedText>
           </View>
           
-          {items.length > 0 ? (
+          {selectedMonthItems.length > 0 ? (
             <View style={styles.transactionsList}>
-              {items.slice(0, 15).map((item, index) => (
+              {selectedMonthItems.slice(0, 15).map((item, index) => (
                 <Animated.View
                   key={item.id ?? index}
                   style={[
@@ -668,7 +989,7 @@ export default function ExpensesScreen() {
                             <View style={styles.transactionTitleRow}>
                               <ThemedText style={styles.transactionMerchant}>
                                 {item.merchant ?? '—'}
-                              </ThemedText>
+            </ThemedText>
                             </View>
                             <View style={styles.transactionDateRow}>
                               <ThemedText style={styles.transactionDate}>
@@ -729,6 +1050,13 @@ export default function ExpensesScreen() {
                           <ThemedText style={styles.transactionAmount}>
               € {item.amount?.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </ThemedText>
+                          <TouchableOpacity
+                            style={styles.deleteButton}
+                            onPress={() => handleDeleteTransaction(item)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          >
+                            <ThemedText style={styles.deleteButtonText}>🗑️</ThemedText>
+                          </TouchableOpacity>
                         </View>
                       </View>
                     </Card>
@@ -829,6 +1157,14 @@ export default function ExpensesScreen() {
           </Animated.View>
         </View>
       </Modal>
+
+      {/* Date Picker Modal */}
+      <DatePickerModal
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        selectedMonthOffset={selectedMonthOffset}
+        onMonthSelect={handleDatePickerSelect}
+      />
     </View>
   )
 }
@@ -1126,6 +1462,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  refreshButtonTextDisabled: {
+    opacity: 0.6,
+  },
   sectionSubtitle: {
     fontSize: 13,
     fontWeight: '500',
@@ -1244,7 +1583,7 @@ const styles = StyleSheet.create({
     color: Brand.colors.text.primary,
   },
   chartContainer: {
-    height: 220,
+    height: 280,
   },
   transactionsSection: {
     paddingHorizontal: 12,
@@ -1324,6 +1663,8 @@ const styles = StyleSheet.create({
   },
   transactionRight: {
     alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 12,
   },
   transactionAmount: {
     fontSize: 17,
@@ -1480,6 +1821,244 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     zIndex: 1,
   },
+  
+  // Swipeable Summary Card Styles
+  summaryCardContainer: {
+    paddingHorizontal: 12,
+    marginBottom: 20,
+  },
+  summaryCardWrapper: {
+    position: 'relative',
+  },
+  summaryCard: {
+    borderRadius: 20,
+    padding: 24,
+    minHeight: 200,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  summaryNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  summaryNavButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  summaryNavButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  summaryNavIcon: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Brand.colors.text.secondary,
+  },
+  summaryNavIconDisabled: {
+    color: 'rgba(255, 255, 255, 0.2)',
+  },
+  summaryMonthIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  monthTextContainer: {
+    alignItems: 'center',
+  },
+  summaryMonthText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Brand.colors.text.primary,
+  },
+  summaryMonthOffset: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: 'rgba(6, 182, 212, 0.8)',
+  },
+  datePickerIcon: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  datePickerIconText: {
+    fontSize: 10,
+  },
+  datePickerIconInline: {
+    fontSize: 15,
+    marginLeft: 8,
+    opacity: 0.6,
+  },
+  summaryBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 15, 20, 0.6)',
+    borderRadius: 20,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  summaryHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  summaryIconContainer: {
+    position: 'relative',
+    marginRight: 16,
+  },
+  summaryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  summaryIconText: {
+    fontSize: 20,
+  },
+  summaryAccentLine: {
+    position: 'absolute',
+    bottom: -8,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: 'rgba(6, 182, 212, 0.4)',
+    borderRadius: 1,
+  },
+  summaryHeaderText: {
+    flex: 1,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Brand.colors.text.primary,
+    marginBottom: 2,
+    letterSpacing: -0.3,
+  },
+  summarySubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Brand.colors.text.secondary,
+    textTransform: 'capitalize',
+  },
+  summaryHeaderRight: {
+    alignItems: 'center',
+  },
+  summaryHideButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  summaryHideIcon: {
+    fontSize: 14,
+  },
+  summaryContent: {
+    flex: 1,
+  },
+  summaryAmountContainer: {
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  summaryAmount: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: Brand.colors.text.primary,
+    letterSpacing: -1,
+    textAlign: 'center',
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 12,
+  },
+  summaryStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryStatBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: 6,
+  },
+  summaryStatIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  summaryStatValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Brand.colors.text.primary,
+  },
+  summaryStatLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: Brand.colors.text.secondary,
+    textAlign: 'center',
+  },
+  summaryActivity: {
+    alignItems: 'center',
+  },
+  summaryActivityBar: {
+    width: '100%',
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 2,
+    marginBottom: 6,
+    overflow: 'hidden',
+  },
+  summaryActivityFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  summaryActivityText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: Brand.colors.text.secondary,
+    textAlign: 'center',
+  },
+  summaryActivityTextTransitioning: {
+    color: 'rgba(6, 182, 212, 0.8)',
+    fontWeight: '600',
+  },
   categoryOptionButton: {
     borderRadius: 16,
     overflow: 'hidden',
@@ -1506,6 +2085,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Brand.colors.text.primary,
     textAlign: 'center',
+  },
+  deleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    fontSize: 14,
   },
 })
 

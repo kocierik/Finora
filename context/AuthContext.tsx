@@ -85,6 +85,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw error
       }
       console.log('[Auth] ✅ Logout successful')
+      // Force immediate state update
+      setSession(null)
+      setUser(null)
     } catch (error) {
       console.error('[Auth] ❌ Logout failed:', error)
       throw error

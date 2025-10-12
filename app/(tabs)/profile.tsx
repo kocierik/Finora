@@ -1,13 +1,12 @@
 import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
-import { Logo } from '@/components/ui/Logo'
 import { Brand } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { Alert, Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 
 export default function ProfileScreen() {
   const { user, signOut, loading: authLoading } = useAuth()
@@ -62,7 +61,11 @@ export default function ProfileScreen() {
           colors={['rgba(6, 182, 212, 0.1)', 'transparent']}
           style={styles.brandGradient}
         />
-        <Logo size="lg" variant="glow" />
+        <Image 
+          source={require('@/assets/images/icon.png')} 
+          style={styles.appIcon}
+          resizeMode="contain"
+        />
         <View style={styles.brandInfo}>
           <ThemedText style={styles.brandName}>{Brand.name}</ThemedText>
           <ThemedText style={styles.tagline}>{Brand.tagline}</ThemedText>
@@ -198,13 +201,16 @@ export default function ProfileScreen() {
         onPress={async () => {
           try {
             setLoading(true)
+            console.log('[Profile] 🚪 Starting logout process...')
             await signOut()
-            // The AuthContext should handle redirect automatically
             console.log('[Profile] ✅ Logout completed, redirecting...')
+            // Small delay to ensure state is updated
+            setTimeout(() => {
+              console.log('[Profile] 🔄 Redirecting to welcome screen...')
+            }, 100)
           } catch (error) {
             console.error('[Profile] ❌ Logout failed:', error)
             Alert.alert('Errore', 'Impossibile effettuare il logout. Riprova.')
-          } finally {
             setLoading(false)
           }
         }}
@@ -245,9 +251,15 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+  appIcon: {
+    width: 90,
+    height: 90,
+    borderRadius: 20,
+    marginBottom: 2,
+  },
   brandInfo: {
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 10,
   },
   brandName: {
     fontSize: 32,

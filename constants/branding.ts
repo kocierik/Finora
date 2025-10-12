@@ -4,7 +4,7 @@
  */
 
 export const Brand = {
-  name: 'finora',
+  name: 'Finora',
   tagline: 'Your Financial Future',
   
   colors: {

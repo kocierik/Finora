@@ -61,4 +61,12 @@ export async function fetchExpenses(userId: string) {
   return { data: (data as Expense[]) ?? [], error }
 }
 
+export async function deleteExpense(expenseId: string) {
+  const { error } = await supabase
+    .from('expenses')
+    .delete()
+    .eq('id', expenseId)
+  return { error }
+}
+
 

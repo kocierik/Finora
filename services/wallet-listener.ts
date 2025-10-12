@@ -32,11 +32,16 @@ async function writeCache(items: Expense[]) {
 }
 
 export function useWalletListener() {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
 
   useEffect(() => {
     if (Platform.OS !== 'android') {
       console.log('[WalletListener] ⚠️  Not Android, listener disabled')
+      return
+    }
+    
+    if (loading) {
+      console.log('[WalletListener] ⏳ Auth still loading, waiting...')
       return
     }
     
@@ -48,6 +53,12 @@ export function useWalletListener() {
     console.log('[WalletListener] 🚀 Initializing wallet listener for user:', user.id)
 
     const handlePayload = async (payload: any) => {
+      // Double check user is still logged in
+      if (!user) {
+        console.log('[WalletListener] ⚠️  User logged out during notification processing, skipping')
+        return
+      }
+      
       const timestamp = new Date().toISOString()
       
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
@@ -65,6 +76,16 @@ export function useWalletListener() {
       const pkg = payload?.packageName || payload?.package || payload?.app || ''
       console.log('[WalletListener] 🔍 Package name detected:', pkg)
       console.log('[WalletListener] 🔍 Checking if it contains "wallet" or "com.google.android.apps.wallet"...')
+      
+      // Debug più dettagliato per capire il formato delle notifiche
+      console.log('[WalletListener] 🔍 Full payload keys:', Object.keys(payload || {}))
+      console.log('[WalletListener] 🔍 Payload structure:', {
+        packageName: payload?.packageName,
+        package: payload?.package,
+        app: payload?.app,
+        android: payload?.android,
+        notification: payload?.notification
+      })
       
       const isWallet = pkg && (pkg.includes('com.google.android.apps.wallet') || pkg.includes('wallet'))
       
@@ -164,6 +185,6 @@ export function useWalletListener() {
       devEmitterSub.remove()
       console.log('[WalletListener] ✅ Wallet listener cleaned up\n')
     }
-  }, [user?.id])
+  }, [user?.id, loading])
 }
 

@@ -1,10 +1,9 @@
 import { ThemedText } from '@/components/themed-text'
-import { Logo } from '@/components/ui/Logo'
 import { Brand } from '@/constants/branding'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { useEffect, useRef } from 'react'
-import { Animated, Dimensions, Pressable, StyleSheet, View } from 'react-native'
+import { Animated, Dimensions, Image, Pressable, StyleSheet, View } from 'react-native'
 
 const { width, height } = Dimensions.get('window')
 
@@ -95,7 +94,11 @@ export default function WelcomeScreen() {
       >
         {/* Logo Section */}
         <View style={styles.logoSection}>
-          <Logo size="xxl" variant="glow" />
+          <Image 
+            source={require('@/assets/images/icon.png')} 
+            style={styles.appIcon}
+            resizeMode="contain"
+          />
           <ThemedText style={styles.appName}>{Brand.name}</ThemedText>
           <ThemedText style={styles.tagline}>{Brand.tagline}</ThemedText>
         </View>
@@ -178,6 +181,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 80,
     paddingHorizontal: 20,
+  },
+  appIcon: {
+    width: 120,
+    height: 120,
+    borderRadius: 30,
+    marginBottom: 8,
   },
   appName: {
     fontSize: 56,
