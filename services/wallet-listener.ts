@@ -1,5 +1,5 @@
 import { useAuth } from '@/context/AuthContext'
-import { parseWalletNotification, saveExpense } from '@/services/expenses'
+import { parseBBVANotification, parseWalletNotification, saveExpense } from '@/services/expenses'
 import { Expense } from '@/types'
 import * as FileSystem from 'expo-file-system'
 import { useEffect } from 'react'
@@ -78,10 +78,10 @@ export function useWalletListener() {
       console.log('[WalletListener] ℹ️  Notification received via DeviceEventEmitter (app is open)')
       console.log('[WalletListener] ℹ️  Headless task should have already saved this notification')
       
-      // Filtra per Google Wallet per il salvataggio delle spese
+      // Filtra per Google Wallet o BBVA per il salvataggio delle spese
       const pkg = payload?.packageName || payload?.package || payload?.app || ''
       console.log('[WalletListener] 🔍 Package name detected:', pkg)
-      console.log('[WalletListener] 🔍 Checking if it contains "wallet" or "com.google.android.apps.wallet"...')
+      console.log('[WalletListener] 🔍 Checking if it contains "wallet", "com.google.android.apps.wallet" or "bbva"...')
       
       // Debug più dettagliato per capire il formato delle notifiche
       console.log('[WalletListener] 🔍 Full payload keys:', Object.keys(payload || {}))
@@ -94,15 +94,15 @@ export function useWalletListener() {
       })
       
       const isWallet = pkg && (pkg.includes('com.google.android.apps.wallet') || pkg.includes('wallet'))
+      const isBBVA = pkg && pkg.toLowerCase().includes('bbva')
       
-      if (!isWallet) {
-        console.log('[WalletListener] ⏭️  Not a Google Wallet notification (package: ' + pkg + '), skipping expense save')
+      if (!isWallet && !isBBVA) {
+        console.log('[WalletListener] ⏭️  Not a supported finance app notification (package: ' + pkg + '), skipping expense save')
         console.log('[WalletListener] ℹ️  Notification should be saved to memory by headless task!')
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
         return
       }
-      
-      console.log('[WalletListener] 🎯 Google Wallet notification detected!')
+      console.log(`[WalletListener] 🎯 ${isWallet ? 'Google Wallet' : 'BBVA'} notification detected!`)
       
       // Estrai il testo della notifica
       const title = payload?.title || ''
@@ -110,8 +110,8 @@ export function useWalletListener() {
       console.log('[WalletListener] 📝 Notification title:', title)
       console.log('[WalletListener] 📝 Notification text:', text)
       
-      // Parsa la notifica
-      const parsed = parseWalletNotification(title, text)
+      // Parsa la notifica in base all'origine
+      const parsed = isWallet ? parseWalletNotification(title, text) : parseBBVANotification(title, text)
       console.log('[WalletListener] 🔍 Parsed data:', parsed)
       
       if (!parsed.amount || !parsed.date) {
@@ -125,7 +125,7 @@ export function useWalletListener() {
         user_id: user.id,
         amount: parsed.amount!,
         currency: parsed.currency,
-        merchant: parsed.merchant ?? 'Google Wallet',
+        merchant: parsed.merchant ?? (isWallet ? 'Google Wallet' : 'BBVA'),
         date: parsed.date!,
         raw_notification: text,
       }

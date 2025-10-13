@@ -77,11 +77,7 @@ export default function LoginScreen() {
         setErrors({ general: error })
       } else {
         console.log('[Login] ✅ Login successful, redirecting...')
-        // Success - AuthContext should handle redirect automatically
-        // Add explicit redirect as fallback
-        setTimeout(() => {
-          router.replace('/(tabs)')
-        }, 100)
+        // Success - AuthContext and main index route will handle redirect automatically
       }
     } catch (error) {
       console.log('[Login] ❌ Login exception:', error)

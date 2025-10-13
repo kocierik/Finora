@@ -139,6 +139,24 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           ,reset_password_title: 'Reimposta password'
           ,reset_password_enter_email: 'Inserisci una email valida per procedere'
           ,reset_password_link_sent: 'Ti abbiamo inviato un link per reimpostare la password'
+          ,tutorial: 'Tutorial'
+          ,review_tutorial: 'Rivedi il Tutorial'
+          ,tutorial_desc: 'Scopri le funzioni dell\'app'
+          ,welcome_title: 'Benvenuto in Finora'
+          ,welcome_subtitle: 'Il tuo assistente smart per gestire i tuoi risparmi.'
+          ,tracking_title: 'Tracciamento Automatico'
+          ,tracking_subtitle: 'Finora rileva automaticamente le tue spese dalle notifiche bancarie e le categorizza.'
+          ,insights_title: 'Insights Intelligenti'
+          ,insights_subtitle: 'Ricevi analisi dettagliate sui tuoi pattern di spesa e suggerimenti per risparmiare.'
+          ,background_title: 'Funzionamento in Background'
+          ,background_subtitle: 'Consenti all\'app di rimanere attiva in background per un tracciamento continuo.'
+          ,notifications_title: 'Permessi per le Notifiche'
+          ,notifications_subtitle: 'Ci servono per tracciare automaticamente le spese dalle notifiche bancarie.'
+          ,confirm_title: 'Tutto Pronto?'
+          ,confirm_subtitle: 'Tocca il pulsante per aprire le impostazioni e concedere i permessi per le notifiche.'
+          ,open_settings: 'Apri le impostazioni'
+          ,next: 'Avanti'
+          ,back: 'Indietro'
         },
         en: {
           monthly_expenses: 'Monthly Expenses',
@@ -154,6 +172,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           add_transaction: 'Add Transaction',
           saving: 'Saving…',
           amount: 'Amount',
+          open_settings: 'Open Settings',
+          next: 'Next',
+          back: 'Back',
           category: 'Category',
           title: 'Title',
           date: 'Date',
@@ -194,6 +215,21 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           ,reset_password_title: 'Reset password'
           ,reset_password_enter_email: 'Enter a valid email to proceed'
           ,reset_password_link_sent: 'We sent you a link to reset your password'
+          ,tutorial: 'Tutorial'
+          ,review_tutorial: 'Review Tutorial'
+          ,tutorial_desc: 'Review the app features'
+          ,welcome_title: 'Welcome to Finora'
+          ,welcome_subtitle: 'Your smart assistant for managing your savings.'
+          ,tracking_title: 'Automatic Tracking'
+          ,tracking_subtitle: 'Finora automatically detects your expenses from bank notifications and categorizes them.'
+          ,insights_title: 'Smart Insights'
+          ,insights_subtitle: 'Get detailed analysis of your spending patterns and savings suggestions.'
+          ,background_title: 'Background Operation'
+          ,background_subtitle: 'Allow the app to stay active in background for continuous tracking.'
+          ,notifications_title: 'Notification Permissions'
+          ,notifications_subtitle: 'We need them to automatically track expenses from bank notifications.'
+          ,confirm_title: 'Ready?'
+          ,confirm_subtitle: 'Tap the button to open settings and grant notification permissions.'
         }
       }
       const dict = i18n[language] || i18n.it

@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
 import { loadExpenseThresholds, saveExpenseThresholds, type ExpenseThresholds } from '@/services/expense-thresholds'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
@@ -20,6 +21,20 @@ export default function ProfileScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
   const router = useRouter()
+
+  // Function to show tutorial again
+  const showTutorial = async () => {
+    try {
+      // Set force onboarding flag to show tutorial
+      await AsyncStorage.setItem('@finora:forceOnboarding', '1')
+      await AsyncStorage.setItem('@finora:onboardingActive', '1')
+      // Navigate to onboarding
+      router.push('/onboarding')
+    } catch (error) {
+      console.log('[Profile] Error showing tutorial:', error)
+      Alert.alert('Errore', 'Impossibile aprire il tutorial')
+    }
+  }
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -368,6 +383,37 @@ export default function ProfileScreen() {
         </Card>
         </Animated.View>
 
+        {/* Tutorial */}
+        <Animated.View
+          style={[
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim3 }]
+            }
+          ]}
+        >
+          <Card variant="default" style={styles.premiumCard}>
+            <View style={styles.cardHeader}>
+              <ThemedText style={styles.cardTitle}>{t('tutorial')}</ThemedText>
+            </View>
+            <View style={styles.actionList}>
+              <Pressable 
+                style={styles.actionItem}
+                onPress={showTutorial}
+              >
+                <View style={styles.actionIcon}>
+                  <ThemedText style={styles.actionIconText}>🎯</ThemedText>
+                </View>
+                <View style={styles.actionContent}>
+                  <ThemedText style={styles.actionLabel}>{t('review_tutorial')}</ThemedText>
+                  <ThemedText style={styles.actionDescription}>{t('tutorial_desc')}</ThemedText>
+                </View>
+                <ThemedText style={styles.actionArrow}>→</ThemedText>
+              </Pressable>
+            </View>
+          </Card>
+        </Animated.View>
+
         {/* Lingua e Formati */}
         <Animated.View
           style={[
@@ -387,7 +433,7 @@ export default function ProfileScreen() {
                 <ThemedText style={styles.settingIconText}>🌐</ThemedText>
               </View>
               <View style={styles.settingContent}>
-                <ThemedText style={styles.settingLabel}>{t('language_label')}</ThemedText>
+                <ThemedText type="label" style={styles.settingLabel}>{t('language_label')}</ThemedText>
                 <View style={styles.langChipsContainer}>
                   <Pressable
                     accessibilityRole="button"
@@ -398,7 +444,8 @@ export default function ProfileScreen() {
                     ]}
                     onPress={() => { setLanguage('it'); setLocale('it-IT') }}
                   >
-                    <ThemedText style={[styles.langChipText, language === 'it' && styles.langChipTextActive]}>IT</ThemedText>
+                    <ThemedText style={styles.langChipFlag}>🇮🇹</ThemedText>
+                    <ThemedText style={[styles.langChipText, language === 'it' && styles.langChipTextActive]}>Italiano</ThemedText>
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
@@ -409,13 +456,14 @@ export default function ProfileScreen() {
                     ]}
                     onPress={() => { setLanguage('en'); setLocale('en-US') }}
                   >
-                    <ThemedText style={[styles.langChipText, language === 'en' && styles.langChipTextActive]}>EN</ThemedText>
+                    <ThemedText style={styles.langChipFlag}>🇺🇸</ThemedText>
+                    <ThemedText style={[styles.langChipText, language === 'en' && styles.langChipTextActive]}>English</ThemedText>
                   </Pressable>
                 </View>
+              </View>
             </View>
           </View>
-        </View>
-      </Card>
+          </Card>
         </Animated.View>
 
         {/* Logout Section */}
@@ -893,31 +941,39 @@ const styles = StyleSheet.create({
   },
   langChipsContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
     marginTop: 8,
   },
   langChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(6,182,212,0.25)',
     backgroundColor: 'rgba(6,182,212,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
   },
   langChipActive: {
     backgroundColor: 'rgba(6,182,212,0.18)',
-    borderColor: 'rgba(6,182,212,0.45)'
+    borderColor: 'rgba(6,182,212,0.45)',
+    shadowColor: '#06b6d4',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  langChipFlag: {
+    fontSize: 16,
   },
   langChipText: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+    fontSize: 14,
+    fontWeight: '600',
     color: '#E8EEF8',
   },
   langChipTextActive: {
     color: '#06b6d4',
+    fontWeight: '700',
   },
   logoutSection: {
     marginTop: 20,

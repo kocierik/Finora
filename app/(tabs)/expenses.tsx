@@ -651,7 +651,7 @@ export default function ExpensesScreen() {
   }, [getMerchantCategory])
 
   if (loading) {
-    return (
+  return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="small" color="#06b6d4" />
       </View>

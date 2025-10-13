@@ -41,6 +41,44 @@ export function parseWalletNotification(
   return { amount, currency, merchant, date }
 }
 
+/**
+ * Parser per notifiche BBVA
+ * Esempi possibili (variano per paese/lingua):
+ * - "Acquisto di 12,34 € presso COFFEE BAR"
+ * - "Se ha realizado una compra por 15,99 € en SUPERMERCADO"
+ * - "Pagamento di €12,34"
+ */
+export function parseBBVANotification(
+  title: string,
+  text: string
+): Partial<Expense> & { merchant?: string } {
+  // Riutilizza le stesse regex di Wallet per importo e data
+  const amountMatch = text.match(AMOUNT_REGEX)
+  let amount = undefined
+  let currency = '€'
+
+  if (amountMatch) {
+    const normalized = amountMatch[1].replace(',', '.')
+    amount = parseFloat(normalized)
+    currency = amountMatch[2]
+  }
+
+  // Prova a ricavare il merchant dal title o dal testo
+  // Heuristica semplice: prima parte prima dei ':' oppure ultima parola maiuscola nel title
+  let merchant = title
+  if (title.includes(':')) {
+    merchant = title.split(':')[0].trim()
+  } else {
+    const candidate = (title.match(/[A-Z0-9][A-Z0-9\s&.-]{2,}/g) || [])[0]
+    if (candidate) merchant = candidate.trim()
+  }
+
+  const dateMatch = text.match(DATE_REGEX)
+  const date = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0]
+
+  return { amount, currency, merchant, date }
+}
+
 export async function saveExpense(expense: Expense) {
   const { error } = await supabase.from('expenses').insert(expense)
   return { error }

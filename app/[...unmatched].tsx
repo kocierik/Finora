@@ -9,7 +9,8 @@ export default function UnmatchedRoute() {
   useEffect(() => {
     if (loading) return
     if (__DEV__) console.log('[Router] Unmatched path redirected:', pathname, 'user:', !!user)
-    router.replace(user ? '/(tabs)' : '/auth/welcome')
+    // Let the main index route handle the proper redirect logic including onboarding
+    router.replace('/')
   }, [pathname, user, loading])
   return <View />
 }

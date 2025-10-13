@@ -32,6 +32,8 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    'expo-font',
+    'expo-web-browser',
     './plugins/notification-listener-plugin.js',
     [
       'expo-splash-screen',

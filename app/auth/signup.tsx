@@ -88,10 +88,10 @@ export default function SignupScreen() {
         setErrors({ general: error })
       } else {
         console.log('[Signup] ✅ Signup successful, redirecting...')
-        // Success - AuthContext should handle redirect automatically
-        // Add explicit redirect as fallback
+        // Force navigation to index to trigger onboarding check
         setTimeout(() => {
-          router.replace('/(tabs)')
+          console.log('[Signup] 🔄 Navigating to index...')
+          router.replace('/')
         }, 100)
       }
     } catch (error) {

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Session, User } from '@supabase/supabase-js'
 import { makeRedirectUri } from 'expo-auth-session'
 import { router } from 'expo-router'
@@ -56,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Force state update
       setSession(data.session)
       setUser(data.user)
+      // Let the main index route handle the redirect based on onboarding status
       return { error: undefined }
     } catch (error) {
       console.log('[Auth] ❌ Sign in exception:', error)
@@ -94,6 +96,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Force state update
       setSession(data.session)
       setUser(data.user)
+      try {
+        await AsyncStorage.removeItem('@finora:onboardingSeen')
+        await AsyncStorage.setItem('@finora:forceOnboarding', '1')
+        console.log('[Auth] 🎯 Set forceOnboarding flag for new user')
+      } catch (error) {
+        console.log('[Auth] ❌ Error setting onboarding flags:', error)
+      }
+      
+      // Force redirect to onboarding for new users
+      setTimeout(() => {
+        console.log('[Auth] 🔄 Redirecting new user to onboarding...')
+        router.replace('/onboarding')
+      }, 200)
+      
       return { error: undefined }
     } catch (error) {
       console.log('[Auth] ❌ Sign up exception:', error)
@@ -193,7 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (setErr) console.log('[Auth] ❌ setSession error from auth session result:', setErr.message)
             else {
               console.log('[Auth] ✅ Session set from auth session result tokens')
-              router.replace('/(tabs)')
+              // Let the main index route handle the redirect based on onboarding status
               return { error: undefined }
             }
           } else if (code) {
@@ -201,7 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (exchErr) console.log('[Auth] ❌ exchangeCodeForSession error from auth session result:', exchErr.message)
             else {
               console.log('[Auth] ✅ Session established via code exchange from auth session result')
-              router.replace('/(tabs)')
+              // Let the main index route handle the redirect based on onboarding status
               return { error: undefined }
             }
           } else {
