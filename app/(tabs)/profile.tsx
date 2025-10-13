@@ -52,10 +52,23 @@ export default function ProfileScreen() {
       
       // Carica dati del profilo
       const { data } = await supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
+      const metaName = (user as any)?.user_metadata?.full_name || (user as any)?.user_metadata?.name || ''
+      const identityName = (user as any)?.identities?.[0]?.identity_data?.name || ''
+      const fallbackEmailName = (user?.email || '').split('@')[0] || ''
+      const derived = (data?.display_name || metaName || identityName || fallbackEmailName || '').trim()
       if (data) {
         const name = data.display_name ?? ''
-        setDisplayName(name)
-        setCurrentDisplayName(name)
+        setDisplayName(name || derived)
+        setCurrentDisplayName(name || derived)
+      } else {
+        // Se non c'è un profilo, inizializzalo con un nome derivato se disponibile
+        if (derived) {
+          try {
+            await supabase.from('profiles').upsert({ id: user.id, display_name: derived })
+          } catch {}
+        }
+        setDisplayName(derived)
+        setCurrentDisplayName(derived)
       }
       
       // Carica soglie delle spese
@@ -152,7 +165,7 @@ export default function ProfileScreen() {
         </View>
             <View style={styles.userDetails}>
               <ThemedText type="heading" style={styles.userName}>
-                {currentDisplayName || 'Utente'}
+                {currentDisplayName || (user as any)?.user_metadata?.full_name || (user as any)?.user_metadata?.name || (user?.email || '').split('@')[0] || 'Utente'}
               </ThemedText>
               <ThemedText type="body" style={styles.userEmail}>
                 {user?.email}
@@ -374,12 +387,28 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.settingContent}>
                 <ThemedText style={styles.settingLabel}>{t('language_label')}</ThemedText>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <Pressable style={[styles.primaryButton, language === 'it' && { backgroundColor: 'rgba(6,182,212,0.18)' }]} onPress={() => { setLanguage('it'); setLocale('it-IT') }}>
-                    <ThemedText style={styles.primaryButtonText}>Italiano</ThemedText>
+                <View style={styles.langChipsContainer}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={language === 'it' ? 'Lingua Italiano selezionata' : 'Seleziona Italiano'}
+                    style={[
+                      styles.langChip,
+                      language === 'it' && styles.langChipActive,
+                    ]}
+                    onPress={() => { setLanguage('it'); setLocale('it-IT') }}
+                  >
+                    <ThemedText style={[styles.langChipText, language === 'it' && styles.langChipTextActive]}>IT</ThemedText>
                   </Pressable>
-                  <Pressable style={[styles.primaryButton, language === 'en' && { backgroundColor: 'rgba(6,182,212,0.18)' }]} onPress={() => { setLanguage('en'); setLocale('en-US') }}>
-                    <ThemedText style={styles.primaryButtonText}>English</ThemedText>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={language === 'en' ? 'English language selected' : 'Select English'}
+                    style={[
+                      styles.langChip,
+                      language === 'en' && styles.langChipActive,
+                    ]}
+                    onPress={() => { setLanguage('en'); setLocale('en-US') }}
+                  >
+                    <ThemedText style={[styles.langChipText, language === 'en' && styles.langChipTextActive]}>EN</ThemedText>
                   </Pressable>
                 </View>
             </View>
@@ -860,6 +889,34 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#06b6d4',
     marginLeft: 8,
+  },
+  langChipsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  langChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(6,182,212,0.25)',
+    backgroundColor: 'rgba(6,182,212,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  langChipActive: {
+    backgroundColor: 'rgba(6,182,212,0.18)',
+    borderColor: 'rgba(6,182,212,0.45)'
+  },
+  langChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    color: '#E8EEF8',
+  },
+  langChipTextActive: {
+    color: '#06b6d4',
   },
   logoutSection: {
     marginTop: 20,
