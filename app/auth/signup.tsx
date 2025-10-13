@@ -153,13 +153,13 @@ export default function SignupScreen() {
         >
         {/* Name Field */}
         <View style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Nome</ThemedText>
+          <ThemedText style={styles.inputLabel}>Name</ThemedText>
           <View style={[styles.inputWrapper, errors.name && styles.inputError]}>
             <TextInput
               style={styles.input}
               value={name}
               onChangeText={setName}
-              placeholder="Il tuo nome"
+              placeholder="Enter your name"
               placeholderTextColor={Brand.colors.text.tertiary}
               autoCapitalize="words"
               autoCorrect={false}

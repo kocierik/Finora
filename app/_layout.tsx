@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { SettingsProvider } from '@/context/SettingsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useWalletListener } from '@/services/wallet-listener';
 
@@ -18,9 +19,11 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AuthProvider>
-          <RootNavigator />
-        </AuthProvider>
+        <SettingsProvider>
+          <AuthProvider>
+            <RootNavigator />
+          </AuthProvider>
+        </SettingsProvider>
         <StatusBar style="auto" />
       </ThemeProvider>
     </GestureHandlerRootView>
@@ -43,7 +46,9 @@ function RootNavigator() {
       <Stack.Screen name="auth/welcome" />
       <Stack.Screen name="auth/login" />
       <Stack.Screen name="auth/signup" />
+      <Stack.Screen name="auth/callback" />
       <Stack.Screen name="auth/index" />
+      <Stack.Screen name="expo-development-client" />
       <Stack.Screen name="(tabs)" />
     </Stack>
   )

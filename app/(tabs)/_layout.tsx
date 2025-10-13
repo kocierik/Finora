@@ -25,6 +25,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="portfolio"
         options={{
+          // Temporarily hidden
+          href: null,
           title: 'Portafoglio',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.line.uptrend.xyaxis" color={color} />,
         }}

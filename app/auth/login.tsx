@@ -1,19 +1,22 @@
 import { ThemedText } from '@/components/themed-text'
 import { Brand } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
+import { useSettings } from '@/context/SettingsContext'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { Animated, Dimensions, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { Animated, Dimensions, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 
 const { width, height } = Dimensions.get('window')
 
 export default function LoginScreen() {
-  const { signIn } = useAuth()
+  const { signIn, resetPassword } = useAuth()
+  const { t } = useSettings()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({})
+  const [resetModal, setResetModal] = useState<{ visible: boolean; title: string; message: string }>({ visible: false, title: '', message: '' })
 
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(30)).current
@@ -88,9 +91,17 @@ export default function LoginScreen() {
     }
   }
 
-  const handleForgotPassword = () => {
-    // TODO: Implement forgot password
-    console.log('Forgot password clicked')
+  const handleForgotPassword = async () => {
+    if (!email || !email.includes('@')) {
+      setResetModal({ visible: true, title: t('reset_password_title'), message: t('reset_password_enter_email') })
+      return
+    }
+    const { error } = await resetPassword(email.trim())
+    if (error) {
+      setResetModal({ visible: true, title: t('reset_password_title'), message: error })
+    } else {
+      setResetModal({ visible: true, title: t('reset_password_title'), message: t('reset_password_link_sent') })
+    }
   }
 
   const handleBack = () => {
@@ -180,7 +191,7 @@ export default function LoginScreen() {
 
         {/* Forgot Password */}
         <Pressable style={styles.forgotPassword} onPress={handleForgotPassword}>
-          <ThemedText style={styles.forgotPasswordText}>Forgot password?</ThemedText>
+          <ThemedText style={styles.forgotPasswordText}>{t('forgot_password')}</ThemedText>
         </Pressable>
 
         {/* General Error */}
@@ -217,6 +228,35 @@ export default function LoginScreen() {
         </View>
         </Animated.View>
       </ScrollView>
+
+      {/* Reset Password Modal - app styled */}
+      <Modal
+        visible={resetModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setResetModal(prev => ({ ...prev, visible: false }))}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <LinearGradient
+              colors={[ 'rgba(6,182,212,0.10)', 'rgba(139,92,246,0.06)', 'transparent' ]}
+              style={styles.modalGradient}
+            />
+            <View style={styles.modalHeaderRow}>
+              <ThemedText style={styles.modalTitle}>{resetModal.title}</ThemedText>
+              <Pressable onPress={() => setResetModal(prev => ({ ...prev, visible: false }))}>
+                <ThemedText style={styles.modalClose}>✕</ThemedText>
+              </Pressable>
+            </View>
+            <View style={styles.modalBody}>
+              <ThemedText style={styles.modalMessage}>{resetModal.message}</ThemedText>
+            </View>
+            <Pressable style={styles.modalAction} onPress={() => setResetModal(prev => ({ ...prev, visible: false }))}>
+              <ThemedText style={styles.modalActionText}>{t('close')}</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -370,6 +410,69 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Brand.colors.primary.cyan,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 20,
+    backgroundColor: 'rgba(15,15,20,0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(6,182,212,0.2)',
+    padding: 20,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  modalGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Brand.colors.text.primary,
+  },
+  modalClose: {
+    fontSize: 18,
+    color: Brand.colors.text.secondary,
+  },
+  modalBody: {
+    paddingVertical: 10,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: Brand.colors.text.secondary,
+    lineHeight: 20,
+  },
+  modalAction: {
+    marginTop: 14,
+    alignSelf: 'flex-end',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(6,182,212,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(6,182,212,0.35)',
+  },
+  modalActionText: {
+    color: Brand.colors.text.primary,
+    fontWeight: '700',
   },
   scrollContainer: {
     flex: 1,

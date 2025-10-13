@@ -5,6 +5,7 @@ const config: ExpoConfig = {
   name: 'Finora',
   slug: 'finora',
   version: '1.0.1',
+  scheme: 'com.kocierik.finora',
   icon: './assets/images/icon.png',
   backgroundColor: '#0a0a0f',
   userInterfaceStyle: 'dark',

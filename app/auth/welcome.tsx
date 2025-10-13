@@ -1,5 +1,6 @@
 import { ThemedText } from '@/components/themed-text'
 import { Brand } from '@/constants/branding'
+import { useAuth } from '@/context/AuthContext'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { useEffect, useRef } from 'react'
@@ -8,6 +9,7 @@ import { Animated, Dimensions, Image, Pressable, StyleSheet, View } from 'react-
 const { width, height } = Dimensions.get('window')
 
 export default function WelcomeScreen() {
+  const { signInWithGoogle } = useAuth()
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(50)).current
   const scaleAnim = useRef(new Animated.Value(0.9)).current
@@ -124,6 +126,18 @@ export default function WelcomeScreen() {
               style={styles.signupButtonGradient}
             >
               <ThemedText style={styles.signupButtonText}>Sign up</ThemedText>
+            </LinearGradient>
+          </Pressable>
+
+          {/* Google Sign-In */}
+          <Pressable style={styles.googleButton} onPress={async () => { await signInWithGoogle() }}>
+            <LinearGradient
+              colors={['rgba(255, 255, 255, 0.06)', 'rgba(255, 255, 255, 0.02)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.signupButtonGradient}
+            >
+              <ThemedText style={styles.signupButtonText}>Continue with Google</ThemedText>
             </LinearGradient>
           </Pressable>
         </View>
@@ -249,5 +263,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Brand.colors.text.primary,
     letterSpacing: 0.5,
+  },
+  googleButton: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    overflow: 'hidden',
   },
 })

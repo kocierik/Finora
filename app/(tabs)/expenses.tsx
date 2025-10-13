@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card'
 import { DatePickerModal } from '@/components/ui/DatePickerModal'
 import { Brand } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
+import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
 import { syncPendingExpenses } from '@/services/expense-sync'
 import { calculateActivityPercentage, getExpenseLevel, getExpenseLevelColor, getExpenseLevelText, loadExpenseThresholds, type ExpenseThresholds } from '@/services/expense-thresholds'
@@ -12,16 +13,19 @@ import { Expense } from '@/types'
 import { useFocusEffect } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native'
+import { Alert, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native'
 import { PanGestureHandler, State } from 'react-native-gesture-handler'
 
 export default function ExpensesScreen() {
+  const { locale, currency, t, monthlyBudget, language } = useSettings()
   const { user, loading } = useAuth()
   const [items, setItems] = useState<Expense[]>([])
   const [hideBalances, setHideBalances] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<Expense | null>(null)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [transactionToDelete, setTransactionToDelete] = useState<Expense | null>(null)
   const [autoAssignedCount, setAutoAssignedCount] = useState(0)
   const [categoryUpdateTrigger, setCategoryUpdateTrigger] = useState(0)
   const [expenseThresholds, setExpenseThresholds] = useState<ExpenseThresholds>({ moderate: 1000, high: 1500 })
@@ -198,7 +202,12 @@ export default function ExpensesScreen() {
       fetchExpenses()
     }, 30000)
 
-    return () => clearInterval(interval)
+    const sub = DeviceEventEmitter.addListener('expenses:externalUpdate', () => {
+      fetchExpenses()
+      loadAllMonthItems(curYear, curMonth)
+    })
+
+    return () => { clearInterval(interval); sub.remove() }
   }, [fetchExpenses])
 
 
@@ -224,7 +233,7 @@ export default function ExpensesScreen() {
   const delta = monthTotal - prevTotal
   const deltaPct = prevTotal > 0 ? (delta / prevTotal) * 100 : 0
 
-  const monthName = currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+  const monthName = currentDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
 
   // Load all month items when month changes
   useEffect(() => {
@@ -280,6 +289,37 @@ export default function ExpensesScreen() {
 
   // Available categories for selection (main categories only)
   const availableCategories = mainCategories
+
+  // i18n - category labels by current language
+  const translateCategory = (name: string) => {
+    if (language !== 'it') return name
+    const key = (name || '').toLowerCase()
+    switch (key) {
+      case 'other': return 'Altro'
+      case 'transport': return 'Trasporti'
+      case 'grocery': return 'Spesa'
+      case 'shopping': return 'Shopping'
+      case 'night life': return 'Vita notturna'
+      case 'travel': return 'Viaggi'
+      case 'healthcare': return 'Sanità'
+      case 'education': return 'Istruzione'
+      case 'utilities': return 'Utenze'
+      case 'entertainment': return 'Intrattenimento'
+      default: return name
+    }
+  }
+
+  // Shorten category label to avoid overlap in badges
+  const shortenCategory = (name: string) => {
+    const it = translateCategory(name)
+    switch (it.toLowerCase()) {
+      case 'vita notturna': return 'Notte'
+      case 'intrattenimento': return 'Intratt.'
+      case 'istruzione': return 'Studio'
+      default:
+        return it.length > 10 ? it.slice(0, 10) + '…' : it
+    }
+  }
 
   // Calculate category spending from real data - use useMemo to make it reactive
   const categoryTotals = useMemo(() => {
@@ -352,6 +392,16 @@ export default function ExpensesScreen() {
       
       setItems(updatedItems)
 
+      // Update month dataset used by pie chart so it refreshes immediately
+      setAllMonthItems(prev => prev.map(item =>
+        item.merchant === selectedTransaction.merchant
+          ? { ...item, category: category.toLowerCase() }
+          : item
+      ))
+
+      // Trigger recalculation of memoized category totals
+      setCategoryUpdateTrigger(prev => prev + 1)
+
       setShowCategoryModal(false)
       setSelectedTransaction(null)
     } catch (error) {
@@ -370,34 +420,8 @@ export default function ExpensesScreen() {
       return
     }
 
-    Alert.alert(
-      'Elimina Transazione',
-      `Sei sicuro di voler eliminare la transazione di €${transaction.amount.toFixed(2)} presso ${transaction.merchant}?`,
-      [
-        {
-          text: 'Annulla',
-          style: 'cancel',
-        },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error } = await deleteExpense(transaction.id!)
-              if (error) throw error
-
-              // Update local state
-              setItems(prevItems => prevItems.filter(item => item.id !== transaction.id))
-              
-              console.log('Transaction deleted successfully:', transaction.id)
-            } catch (error) {
-              console.error('Error deleting transaction:', error)
-              Alert.alert('Errore', 'Impossibile eliminare la transazione. Riprova.')
-            }
-          },
-        },
-      ]
-    )
+    setShowConfirmModal(true)
+    setTransactionToDelete(transaction)
   }, [])
 
   // Month navigation functions
@@ -796,7 +820,7 @@ export default function ExpensesScreen() {
                         <View style={styles.summaryAccentLine} />
                       </View>
                       <View style={styles.summaryHeaderText}>
-                        <ThemedText style={styles.summaryTitle}>Spese Mensili</ThemedText>
+                        <ThemedText style={styles.summaryTitle}>{t('monthly_expenses')}</ThemedText>
                         <ThemedText style={styles.summarySubtitle}>{monthName}</ThemedText>
                       </View>
               </View>
@@ -817,7 +841,10 @@ export default function ExpensesScreen() {
                       }
                     ]}>
                       <ThemedText style={styles.summaryAmount}>
-                        {hideBalances ? '••••• €' : `${monthTotal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) } €`}
+                        {hideBalances ? '••••• €' : monthTotal.toLocaleString(locale, { style: 'currency', currency })}
+                        {typeof monthlyBudget === 'number' && monthlyBudget > 0 && (
+                          <ThemedText style={{ fontSize: 12, color: Brand.colors.text.tertiary }}> / {monthlyBudget.toLocaleString(locale, { style: 'currency', currency })}</ThemedText>
+                        )}
                       </ThemedText>
                     </Animated.View>
 
@@ -834,7 +861,7 @@ export default function ExpensesScreen() {
                             {delta >= 0 ? '+' : ''}{deltaPct.toFixed(1)}%
                 </ThemedText>
               </View>
-                        <ThemedText style={styles.summaryStatLabel}>vs mese scorso</ThemedText>
+                        <ThemedText style={styles.summaryStatLabel}>{t('vs_last_month')}</ThemedText>
                       </View>
 
                       <View style={styles.summaryStatItem}>
@@ -844,7 +871,7 @@ export default function ExpensesScreen() {
                             {items.filter((e) => sameMonth(e.date, curYear, curMonth)).length}
               </ThemedText>
             </View>
-                        <ThemedText style={styles.summaryStatLabel}>transazioni</ThemedText>
+                        <ThemedText style={styles.summaryStatLabel}>{language === 'it' ? 'transazioni' : 'transactions'}</ThemedText>
                       </View>
                     </View>
 
@@ -884,8 +911,8 @@ export default function ExpensesScreen() {
           ]}
         >
           <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionTitle}>Categorie di spesa</ThemedText>
-            <ThemedText style={styles.sectionSubtitle}>Distribuzione mensile</ThemedText>
+            <ThemedText style={styles.sectionTitle}>{language === 'it' ? 'Categorie di spesa' : 'Spending categories'}</ThemedText>
+            <ThemedText style={styles.sectionSubtitle}>{language === 'it' ? 'Distribuzione mensile' : 'Monthly distribution'}</ThemedText>
               </View>
 
           <View style={styles.categoriesGrid}>
@@ -921,7 +948,7 @@ export default function ExpensesScreen() {
                     <View style={[styles.categoryIcon, { backgroundColor: `${category.color}20` }]}>
                       <ThemedText style={styles.categoryIconText}>{category.icon}</ThemedText>
                     </View>
-                    <ThemedText style={styles.categoryName}>{category.name}</ThemedText>
+                  <ThemedText style={styles.categoryName}>{translateCategory(category.name)}</ThemedText>
                     <ThemedText style={styles.categoryAmount}>
                       € {category.amount.toFixed(0)}
               </ThemedText>
@@ -963,7 +990,7 @@ export default function ExpensesScreen() {
               <View style={styles.chartIcon}>
                 <ThemedText style={styles.chartIconText}>📊</ThemedText>
               </View>
-              <ThemedText style={styles.chartTitle}>Distribuzione per categoria</ThemedText>
+              <ThemedText style={styles.chartTitle}>{language === 'it' ? 'Distribuzione per categoria' : 'Category distribution'}</ThemedText>
             </View>
             <View style={styles.chartContainer}>
               <ExpensesPie items={allMonthItems} selectedYear={curYear} selectedMonth={curMonth} />
@@ -984,7 +1011,7 @@ export default function ExpensesScreen() {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <ThemedText style={styles.sectionTitle}>
-                {isTransitioning ? 'Caricamento...' : 'Transazioni recenti'}
+                {isTransitioning ? t('loading') : t('recent_transactions')}
               </ThemedText>
               <Pressable 
                 style={styles.refreshButton}
@@ -1000,7 +1027,7 @@ export default function ExpensesScreen() {
               </Pressable>
           </View>
             <ThemedText style={styles.sectionSubtitle}>
-              {selectedMonthItems.length} transazioni • Ultimo aggiornamento: {new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+              {selectedMonthItems.length} {selectedMonthItems.length !== 1 ? t('transactions') : t('transaction')} • {language === 'it' ? 'Ultimo aggiornamento' : 'Last update'}: {new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
             </ThemedText>
           </View>
           
@@ -1036,7 +1063,9 @@ export default function ExpensesScreen() {
                       <View style={styles.transactionContent}>
                         <View style={styles.transactionLeft}>
                           <View style={styles.transactionIcon}>
-                            <ThemedText style={styles.transactionIconText}>💳</ThemedText>
+                            <ThemedText style={styles.transactionIconText}>
+                              {item.raw_notification === 'manual' ? '✍️' : '💳'}
+            </ThemedText>
                           </View>
                           <View style={styles.transactionText}>
                             <View style={styles.transactionTitleRow}>
@@ -1046,7 +1075,7 @@ export default function ExpensesScreen() {
                             </View>
                             <View style={styles.transactionDateRow}>
                               <ThemedText style={styles.transactionDate}>
-                                {formatDate(item.date)}
+                                {formatDateWithLocale(item.date, language, locale)}
                               </ThemedText>
                               {(() => {
                                 const categoryInfo = getCategoryInfo(item.merchant)
@@ -1065,7 +1094,7 @@ export default function ExpensesScreen() {
                                   })
                                 }
                                 
-                                // Always show badge if categoryInfo exists
+                                // Show badge if categoryInfo exists
                                 return categoryInfo ? (
                                   <View style={[
                                     styles.categoryBadge, 
@@ -1075,8 +1104,8 @@ export default function ExpensesScreen() {
                                       borderWidth: isAutoAssigned || isDefaultOther ? 1 : 0,
                                     }
                                   ]}>
-                                    <ThemedText style={[styles.categoryBadgeText, { color: categoryInfo.color }]}>
-                                      {categoryInfo.icon} {categoryInfo.name}
+                                    <ThemedText style={[styles.categoryBadgeText, { color: categoryInfo.color }]} numberOfLines={1} ellipsizeMode="tail">
+                                      {categoryInfo.icon} {shortenCategory(categoryInfo.name)}
                                       {(isAutoAssigned || isDefaultOther) && ' ✨'}
                                     </ThemedText>
                                   </View>
@@ -1101,7 +1130,7 @@ export default function ExpensesScreen() {
                         </View>
                         <View style={styles.transactionRight}>
                           <ThemedText style={styles.transactionAmount}>
-              € {item.amount?.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {item.amount?.toLocaleString(locale, { style: 'currency', currency })}
             </ThemedText>
                           <TouchableOpacity
                             style={styles.deleteButton}
@@ -1118,7 +1147,7 @@ export default function ExpensesScreen() {
               ))}
               
               {/* Expand/Collapse Button */}
-              {selectedMonthItems.length > visibleTransactionsCount && (
+                  {selectedMonthItems.length > visibleTransactionsCount && (
                 <Pressable
                   style={styles.expandButton}
                   onPress={() => {
@@ -1126,28 +1155,28 @@ export default function ExpensesScreen() {
                     setVisibleTransactionsCount(newCount)
                   }}
                 >
-                  <ThemedText style={styles.expandButtonText}>
-                    Mostra altre {Math.min(10, selectedMonthItems.length - visibleTransactionsCount)} transazioni
-                  </ThemedText>
+                      <ThemedText style={styles.expandButtonText}>
+                        {language === 'it' ? 'Mostra altre' : 'Show more'} {Math.min(10, selectedMonthItems.length - visibleTransactionsCount)} {t('transaction')}{Math.min(10, selectedMonthItems.length - visibleTransactionsCount) !== 1 ? 'i' : ''}
+                      </ThemedText>
                 </Pressable>
               )}
               
-              {visibleTransactionsCount > 10 && (
+                  {visibleTransactionsCount > 10 && (
                 <Pressable
                   style={styles.collapseButton}
                   onPress={() => setVisibleTransactionsCount(10)}
                 >
-                  <ThemedText style={styles.collapseButtonText}>
-                    Mostra meno
-                  </ThemedText>
+                      <ThemedText style={styles.collapseButtonText}>
+                        {language === 'it' ? 'Mostra meno' : 'Show less'}
+                      </ThemedText>
                 </Pressable>
               )}
             </View>
           ) : (
         <Card variant="subtle" style={styles.emptyCard}>
-          <ThemedText style={styles.emptyText}>Nessuna spesa registrata</ThemedText>
+          <ThemedText style={styles.emptyText}>{t('no_expenses')}</ThemedText>
           <ThemedText style={styles.emptySubtext}>
-            Le spese da Google Wallet verranno aggiunte automaticamente
+            {t('wallet_auto')}
           </ThemedText>
         </Card>
           )}
@@ -1163,9 +1192,9 @@ export default function ExpensesScreen() {
       >
         <View style={styles.modalOverlay}>
           <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}>
-            <Card variant="elevated" style={styles.modalCard}>
+            <Card  style={styles.modalCard}>
               <LinearGradient
-                colors={['rgba(6, 182, 212, 0.12)', 'rgba(20, 184, 166, 0.06)', 'transparent']}
+                colors={['rgba(6, 181, 212, 0)', 'rgba(4, 32, 29, 0.06)', 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.modalGradient}
@@ -1182,7 +1211,7 @@ export default function ExpensesScreen() {
                   {selectedTransaction?.merchant ?? '—'}
                 </ThemedText>
                 <ThemedText style={styles.transactionInfoAmount}>
-                  € {selectedTransaction?.amount?.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {selectedTransaction?.amount?.toLocaleString(locale, { style: 'currency', currency })}
                 </ThemedText>
                 <ThemedText style={styles.transactionInfoNote}>
                   La categoria verrà applicata a {items.filter(item => item.merchant === selectedTransaction?.merchant).length} transazioni di questo merchant
@@ -1225,13 +1254,59 @@ export default function ExpensesScreen() {
                           <View style={[styles.categoryOptionIcon, { backgroundColor: `${category.color}20` }]}>
                             <ThemedText style={styles.categoryOptionIconText}>{category.icon}</ThemedText>
                           </View>
-                          <ThemedText style={styles.categoryOptionName}>{category.name}</ThemedText>
+                          <ThemedText style={styles.categoryOptionName}>{translateCategory(category.name)}</ThemedText>
                         </LinearGradient>
                       </TouchableOpacity>
                     </Animated.View>
                   ))}
                 </View>
               </ScrollView>
+            </Card>
+          </Animated.View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showConfirmModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowConfirmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}> 
+            <Card style={styles.modalCard}>
+              <LinearGradient
+                colors={['rgba(6, 181, 212, 0)', 'rgba(4, 32, 29, 0.06)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalGradient}
+              />
+              <View style={styles.modalHeader}>
+                <ThemedText style={styles.modalTitle}>{t('delete_transaction')}</ThemedText>
+              </View>
+              <View style={{ alignItems: 'center', padding: 16 }}>
+                <ThemedText style={styles.modalMessage}>{t('delete_confirm_text')}</ThemedText>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'flex-end' }}>
+                <Pressable onPress={() => { setShowConfirmModal(false); setTransactionToDelete(null) }} style={[styles.modalButton, { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.15)' }] }>
+                  <ThemedText style={styles.modalButtonText}>{t('cancel')}</ThemedText>
+                </Pressable>
+                <Pressable onPress={async () => {
+                  if (!transactionToDelete?.id) return
+                  try {
+                    const { error } = await deleteExpense(transactionToDelete.id!)
+                    if (error) throw error
+                    setItems(prev => prev.filter(i => i.id !== transactionToDelete.id))
+                    setShowConfirmModal(false)
+                    setTransactionToDelete(null)
+                  } catch (e) {
+                    Alert.alert('Errore', 'Impossibile eliminare la transazione. Riprova.')
+                  }
+                }} style={[styles.modalButton, { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}>
+                  <ThemedText style={[styles.modalButtonText, { color: '#ef4444' }]}>{t('delete')}</ThemedText>
+                </Pressable>
+              </View>
             </Card>
           </Animated.View>
         </View>
@@ -1248,7 +1323,7 @@ export default function ExpensesScreen() {
   )
 }
 
-function formatDate(dateStr: string) {
+function formatDateWithLocale(dateStr: string, language: 'it' | 'en', locale: string) {
   if (!dateStr) return '—'
   try {
     const parts = dateStr.includes('/') ? dateStr.split('/') : []
@@ -1263,6 +1338,8 @@ function formatDate(dateStr: string) {
     }
     
     const now = new Date()
+    const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+    if (isToday) return language === 'it' ? 'Oggi' : 'Today'
     const diffTime = now.getTime() - d.getTime()
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
     const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
@@ -1270,15 +1347,17 @@ function formatDate(dateStr: string) {
     
     // Show relative time for recent transactions
     if (diffMinutes < 60) {
-      return diffMinutes < 1 ? 'Ora' : `${diffMinutes}m fa`
+      return language === 'it'
+        ? (diffMinutes < 1 ? 'Ora' : `${diffMinutes}m fa`)
+        : (diffMinutes < 1 ? 'Now' : `${diffMinutes}m ago`)
     } else if (diffHours < 24) {
-      return `${diffHours}h fa`
+      return language === 'it' ? `${diffHours}h fa` : `${diffHours}h ago`
     } else if (diffDays === 1) {
-      return 'Ieri'
+      return language === 'it' ? 'Ieri' : 'Yesterday'
     } else if (diffDays < 7) {
-      return `${diffDays} giorni fa`
+      return language === 'it' ? `${diffDays} giorni fa` : `${diffDays} days ago`
     } else {
-    return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })
+    return d.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })
     }
   } catch {
     return dateStr
@@ -1732,10 +1811,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   categoryBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'none',
+    letterSpacing: 0.2,
   },
   transactionDate: {
     fontSize: 14,
@@ -1825,6 +1904,24 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     position: 'relative',
     overflow: 'hidden',
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: Brand.colors.text.secondary,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  modalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Brand.colors.text.primary,
   },
   modalGradient: {
     position: 'absolute',

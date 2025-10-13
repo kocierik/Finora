@@ -2,6 +2,7 @@ import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
 import { Brand } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
+import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
 import { loadExpenseThresholds, saveExpenseThresholds, type ExpenseThresholds } from '@/services/expense-thresholds'
 import { useRouter } from 'expo-router'
@@ -10,6 +11,7 @@ import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, TextInput, V
 
 export default function ProfileScreen() {
   const { user, signOut, loading: authLoading } = useAuth()
+  const { language, locale, currency, enableBiometrics, sessionTimeoutMinutes, setLanguage, setLocale, setCurrency, setEnableBiometrics, setSessionTimeoutMinutes, monthlyBudget, setMonthlyBudget, t } = useSettings()
   const [displayName, setDisplayName] = useState('')
   const [currentDisplayName, setCurrentDisplayName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -106,11 +108,11 @@ export default function ProfileScreen() {
     const { error } = await supabase.from('profiles').upsert({ id: user.id, display_name: displayName })
     setLoading(false)
     if (error) {
-      setSuccessMessage('Errore: ' + error.message)
+      setSuccessMessage(t('error_prefix') + error.message)
       setShowSuccessModal(true)
     } else {
-      setCurrentDisplayName(displayName) // Aggiorna il nome visualizzato solo dopo il salvataggio
-      setSuccessMessage('Profilo aggiornato con successo!')
+      setCurrentDisplayName(displayName)
+      setSuccessMessage(t('profile_updated_success'))
       setShowSuccessModal(true)
     }
   }
@@ -119,10 +121,10 @@ export default function ProfileScreen() {
     try {
       setThresholdsLoading(true)
       await saveExpenseThresholds(expenseThresholds)
-      setSuccessMessage('Soglie delle spese aggiornate con successo!')
+      setSuccessMessage(t('thresholds_updated_success'))
       setShowSuccessModal(true)
     } catch (error: any) {
-      setSuccessMessage('Errore: ' + (error.message || 'Impossibile salvare le soglie'))
+      setSuccessMessage(t('error_prefix') + (error.message || t('thresholds_save_error_generic')))
       setShowSuccessModal(true)
     } finally {
       setThresholdsLoading(false)
@@ -147,7 +149,7 @@ export default function ProfileScreen() {
               <ThemedText style={styles.userInitial}>
                 {currentDisplayName.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
               </ThemedText>
-            </View>
+        </View>
             <View style={styles.userDetails}>
               <ThemedText type="heading" style={styles.userName}>
                 {currentDisplayName || 'Utente'}
@@ -155,8 +157,8 @@ export default function ProfileScreen() {
               <ThemedText type="body" style={styles.userEmail}>
                 {user?.email}
               </ThemedText>
-            </View>
-          </View>
+        </View>
+      </View>
         </View>
       </Animated.View>
 
@@ -166,7 +168,7 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
 
-        {/* Account Settings */}
+        {/* Impostazioni Account */}
         <Animated.View
           style={[
             {
@@ -176,31 +178,31 @@ export default function ProfileScreen() {
           ]}
         >
           <Card variant="default" style={styles.premiumCard}>
-          <View style={styles.cardHeader}>
-            <ThemedText type="heading" style={styles.cardTitle}>Account Settings</ThemedText>
+        <View style={styles.cardHeader}>
+            <ThemedText type="heading" style={styles.cardTitle}>{t('account_settings')}</ThemedText>
           </View>
           <View style={styles.settingsList}>
             <View style={styles.settingItem}>
               <View style={styles.settingIcon}>
                 <ThemedText style={styles.settingIconText}>👤</ThemedText>
-              </View>
+        </View>
               <View style={styles.settingContent}>
-                <ThemedText type="label" style={styles.settingLabel}>Nome</ThemedText>
-                <TextInput 
+                <ThemedText type="label" style={styles.settingLabel}>{t('name')}</ThemedText>
+            <TextInput 
                   style={styles.settingInput} 
-                  value={displayName} 
-                  onChangeText={setDisplayName} 
-                  placeholder="Il tuo nome"
-                  placeholderTextColor={Brand.colors.text.muted}
-                />
-              </View>
+              value={displayName} 
+              onChangeText={setDisplayName} 
+              placeholder="Il tuo nome"
+              placeholderTextColor={Brand.colors.text.muted}
+            />
+          </View>
             </View>
             <View style={styles.settingItem}>
               <View style={styles.settingIcon}>
                 <ThemedText style={styles.settingIconText}>📧</ThemedText>
               </View>
               <View style={styles.settingContent}>
-                <ThemedText type="label" style={styles.settingLabel}>Email Address</ThemedText>
+                <ThemedText type="label" style={styles.settingLabel}>{t('email_address')}</ThemedText>
                 <ThemedText type="body" style={styles.settingValue}>{user?.email}</ThemedText>
               </View>
             </View>
@@ -213,13 +215,13 @@ export default function ProfileScreen() {
             onPressOut={() => Animated.spring(scaleAnim1, { toValue: 1, useNativeDriver: true }).start()}
           >
             <ThemedText type="label" style={styles.primaryButtonText}>
-              {loading ? 'Saving...' : 'Save Changes'}
-            </ThemedText>
+              {loading ? t('saving_changes') : t('save_changes')}
+              </ThemedText>
           </Pressable>
-        </Card>
+      </Card>
         </Animated.View>
 
-        {/* Financial Settings */}
+        {/* Impostazioni Finanziarie */}
         <Animated.View
           style={[
             {
@@ -229,16 +231,16 @@ export default function ProfileScreen() {
           ]}
         >
           <Card variant="default" style={styles.premiumCard}>
-          <View style={styles.cardHeader}>
-            <ThemedText style={styles.cardTitle}>Financial Settings</ThemedText>
+        <View style={styles.cardHeader}>
+            <ThemedText style={styles.cardTitle}>{t('financial_settings')}</ThemedText>
           </View>
           <View style={styles.settingsList}>
             <View style={styles.settingItem}>
               <View style={styles.settingIcon}>
                 <ThemedText style={styles.settingIconText}>💰</ThemedText>
-              </View>
+        </View>
               <View style={styles.settingContent}>
-                <ThemedText style={styles.settingLabel}>Moderate Threshold (€)</ThemedText>
+                <ThemedText style={styles.settingLabel}>{language === 'it' ? 'Soglia Moderata (€)' : 'Moderate Threshold (€)'}</ThemedText>
                 <TextInput 
                   style={styles.settingInput} 
                   value={expenseThresholds.moderate.toString()} 
@@ -251,8 +253,8 @@ export default function ProfileScreen() {
                   keyboardType="numeric"
                 />
                 <ThemedText style={styles.settingDescription}>
-                  Expenses from {expenseThresholds.moderate}€ to {expenseThresholds.high}€ are considered moderate
-                </ThemedText>
+                  {language === 'it' ? 'Le spese da' : 'Expenses from'} {expenseThresholds.moderate}€ {language === 'it' ? 'a' : 'to'} {expenseThresholds.high}€ {language === 'it' ? 'sono considerate moderate' : 'are considered moderate'}
+          </ThemedText>
               </View>
             </View>
             <View style={styles.settingItem}>
@@ -260,7 +262,7 @@ export default function ProfileScreen() {
                 <ThemedText style={styles.settingIconText}>📈</ThemedText>
               </View>
               <View style={styles.settingContent}>
-                <ThemedText style={styles.settingLabel}>High Threshold (€)</ThemedText>
+                <ThemedText style={styles.settingLabel}>{language === 'it' ? 'Soglia Alta (€)' : 'High Threshold (€)'}</ThemedText>
                 <TextInput 
                   style={styles.settingInput} 
                   value={expenseThresholds.high.toString()} 
@@ -273,7 +275,7 @@ export default function ProfileScreen() {
                   keyboardType="numeric"
                 />
                 <ThemedText style={styles.settingDescription}>
-                  Expenses above {expenseThresholds.high}€ are considered high
+                  {language === 'it' ? 'Le spese superiori a' : 'Expenses above'} {expenseThresholds.high}€ {language === 'it' ? 'sono considerate alte' : 'are considered high'}
                 </ThemedText>
               </View>
             </View>
@@ -286,7 +288,7 @@ export default function ProfileScreen() {
             onPressOut={() => Animated.spring(scaleAnim2, { toValue: 1, useNativeDriver: true }).start()}
           >
             <ThemedText style={styles.primaryButtonText}>
-              {thresholdsLoading ? 'Saving...' : 'Save Thresholds'}
+              {thresholdsLoading ? t('saving_changes') : t('save_thresholds')}
             </ThemedText>
           </Pressable>
         </Card>
@@ -303,7 +305,7 @@ export default function ProfileScreen() {
         >
           <Card variant="default" style={styles.premiumCard}>
           <View style={styles.cardHeader}>
-            <ThemedText style={styles.cardTitle}>App Actions</ThemedText>
+            <ThemedText style={styles.cardTitle}>{t('app_actions')}</ThemedText>
           </View>
           <View style={styles.actionList}>
             <Pressable 
@@ -314,28 +316,37 @@ export default function ProfileScreen() {
                 <ThemedText style={styles.actionIconText}>🔔</ThemedText>
               </View>
               <View style={styles.actionContent}>
-                <ThemedText style={styles.actionLabel}>Notifications</ThemedText>
-                <ThemedText style={styles.actionDescription}>View transaction notifications</ThemedText>
+                <ThemedText style={styles.actionLabel}>{t('notifications')}</ThemedText>
+                <ThemedText style={styles.actionDescription}>{t('notifications_desc')}</ThemedText>
+                <ThemedText style={styles.actionMeta}>Ultimo aggiornamento: {new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</ThemedText>
               </View>
               <ThemedText style={styles.actionArrow}>→</ThemedText>
             </Pressable>
-            <Pressable style={styles.actionItem}>
+            <Pressable 
+              style={styles.actionItem}
+              onPress={() => Alert.alert(language === 'it' ? 'Sicurezza' : 'Security', language === 'it' ? 'Gestisci autenticazione, sessioni e permessi (presto disponibile).' : 'Manage authentication, sessions and permissions (coming soon).')}
+            >
               <View style={styles.actionIcon}>
                 <ThemedText style={styles.actionIconText}>🔐</ThemedText>
               </View>
               <View style={styles.actionContent}>
-                <ThemedText style={styles.actionLabel}>Security</ThemedText>
-                <ThemedText style={styles.actionDescription}>Manage your security settings</ThemedText>
+                <ThemedText style={styles.actionLabel}>{t('security')}</ThemedText>
+                <ThemedText style={styles.actionDescription}>{t('security_desc')}</ThemedText>
+                <ThemedText style={styles.actionMeta}>Account: {user?.email}</ThemedText>
               </View>
               <ThemedText style={styles.actionArrow}>→</ThemedText>
             </Pressable>
-            <Pressable style={styles.actionItem}>
+            <Pressable 
+              style={styles.actionItem}
+              onPress={() => Alert.alert(language === 'it' ? 'Supporto' : 'Support', language === 'it' ? 'Scrivici a support@finora.app o consulta le FAQ (presto disponibile).' : 'Write us at support@finora.app or check the FAQ (coming soon).')}
+            >
               <View style={styles.actionIcon}>
                 <ThemedText style={styles.actionIconText}>ℹ️</ThemedText>
               </View>
               <View style={styles.actionContent}>
-                <ThemedText style={styles.actionLabel}>Help & Support</ThemedText>
-                <ThemedText style={styles.actionDescription}>Get help and contact support</ThemedText>
+                <ThemedText style={styles.actionLabel}>{t('support')}</ThemedText>
+                <ThemedText style={styles.actionDescription}>{t('support_desc')}</ThemedText>
+                <ThemedText style={styles.actionMeta}>{t('support_email_label')}: support@finora.app</ThemedText>
               </View>
               <ThemedText style={styles.actionArrow}>→</ThemedText>
             </Pressable>
@@ -343,33 +354,67 @@ export default function ProfileScreen() {
         </Card>
         </Animated.View>
 
+        {/* Lingua e Formati */}
+        <Animated.View
+          style={[
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim2 }]
+            }
+          ]}
+        >
+          <Card variant="default" style={styles.premiumCard}>
+          <View style={styles.cardHeader}>
+            <ThemedText style={styles.cardTitle}>{t('language_formats')}</ThemedText>
+          </View>
+          <View style={styles.settingsList}>
+            <View style={styles.settingItem}>
+              <View style={styles.settingIcon}>
+                <ThemedText style={styles.settingIconText}>🌐</ThemedText>
+              </View>
+              <View style={styles.settingContent}>
+                <ThemedText style={styles.settingLabel}>{t('language_label')}</ThemedText>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <Pressable style={[styles.primaryButton, language === 'it' && { backgroundColor: 'rgba(6,182,212,0.18)' }]} onPress={() => { setLanguage('it'); setLocale('it-IT') }}>
+                    <ThemedText style={styles.primaryButtonText}>Italiano</ThemedText>
+                  </Pressable>
+                  <Pressable style={[styles.primaryButton, language === 'en' && { backgroundColor: 'rgba(6,182,212,0.18)' }]} onPress={() => { setLanguage('en'); setLocale('en-US') }}>
+                    <ThemedText style={styles.primaryButtonText}>English</ThemedText>
+                  </Pressable>
+                </View>
+            </View>
+          </View>
+        </View>
+      </Card>
+        </Animated.View>
+
         {/* Logout Section */}
         <View style={styles.logoutSection}>
-          <Pressable 
+      <Pressable 
             style={[styles.logoutButton, loading && styles.logoutButtonDisabled]} 
-            onPress={async () => {
-              try {
-                setLoading(true)
+        onPress={async () => {
+          try {
+            setLoading(true)
                 console.log('[Profile] 🚪 Starting logout process...')
-                await signOut()
-                console.log('[Profile] ✅ Logout completed, redirecting...')
+            await signOut()
+            console.log('[Profile] ✅ Logout completed, redirecting...')
                 setTimeout(() => {
                   console.log('[Profile] 🔄 Redirecting to welcome screen...')
                 }, 100)
-              } catch (error) {
-                console.error('[Profile] ❌ Logout failed:', error)
+          } catch (error) {
+            console.error('[Profile] ❌ Logout failed:', error)
                 Alert.alert('Error', 'Unable to logout. Please try again.')
-                setLoading(false)
-              }
-            }}
-            disabled={loading}
-          >
-            <ThemedText style={styles.logoutButtonText}>
-              {loading ? 'Signing out...' : 'Sign Out'}
-            </ThemedText>
-          </Pressable>
-        </View>
-      </ScrollView>
+            setLoading(false)
+          }
+        }}
+        disabled={loading}
+      >
+        <ThemedText style={styles.logoutButtonText}>
+              {loading ? (language === 'it' ? 'Disconnessione...' : 'Signing out...') : (language === 'it' ? 'Esci' : 'Sign Out')}
+        </ThemedText>
+      </Pressable>
+      </View>
+    </ScrollView>
 
       {/* Custom Success Modal */}
       <Modal
@@ -388,7 +433,7 @@ export default function ProfileScreen() {
                   </ThemedText>
                 </View>
                 <ThemedText type="heading" style={styles.modalTitle}>
-                  {successMessage.includes('Errore') ? 'Errore' : 'Completato'}
+                  {successMessage.includes('Errore') ? (language === 'it' ? 'Errore' : 'Error') : (language === 'it' ? 'Completato' : 'Done')}
                 </ThemedText>
                 <ThemedText type="body" style={styles.modalMessage}>
                   {successMessage}
@@ -398,7 +443,7 @@ export default function ProfileScreen() {
                   onPress={() => setShowSuccessModal(false)}
                 >
                   <ThemedText type="label" style={styles.modalButtonText}>
-                    Chiudi
+                    {language === 'it' ? 'Chiudi' : 'Close'}
                   </ThemedText>
                 </Pressable>
               </View>
@@ -751,25 +796,22 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   primaryButton: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: 'rgba(6,182,212,0.12)',
+    borderColor: 'rgba(6,182,212,0.35)',
+    borderWidth: 1,
     borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     alignItems: 'center',
-    marginTop: 20,
-    shadowColor: '#06b6d4',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    marginTop: 16,
   },
   primaryButtonDisabled: {
     opacity: 0.6,
   },
   primaryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#E8EEF8',
   },
   actionList: {
     gap: 4,
@@ -777,9 +819,12 @@ const styles = StyleSheet.create({
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 4,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     borderRadius: 12,
+    backgroundColor: 'rgba(6,182,212,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(6,182,212,0.15)',
   },
   actionIcon: {
     width: 40,
@@ -806,9 +851,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Brand.colors.text.secondary,
   },
+  actionMeta: {
+    fontSize: 11,
+    color: Brand.colors.text.tertiary,
+    marginTop: 2,
+  },
   actionArrow: {
     fontSize: 18,
-    color: Brand.colors.text.tertiary,
+    color: '#06b6d4',
     marginLeft: 8,
   },
   logoutSection: {

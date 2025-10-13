@@ -2,6 +2,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/Card';
 import { Brand } from '@/constants/branding';
 import { useAuth } from '@/context/AuthContext';
+import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/lib/supabase';
 import { syncPendingExpenses } from '@/services/expense-sync';
 import { fetchExpenses } from '@/services/expenses';
@@ -10,7 +11,7 @@ import { Expense } from '@/types';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Animated, DeviceEventEmitter, Dimensions, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -31,12 +32,25 @@ function sameMonth(dateStr: string, year: number, monthIndex: number) {
 
 
 export default function HomeScreen() {
+  const { t, language } = useSettings()
   const { user, signOut, loading } = useAuth()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [portfolioPoints, setPortfolioPoints] = useState<{ x: string; y: number }[]>([])
   const [kpis, setKpis] = useState<{ totalInvested: number; totalMarket?: number; monthExpenses: number } | null>(null)
   const [hideBalances, setHideBalances] = useState(false)
   const [userDisplayName, setUserDisplayName] = useState('')
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [newAmount, setNewAmount] = useState('')
+  const [newCategory, setNewCategory] = useState('Other')
+  const [newTitle, setNewTitle] = useState('')
+  const [newDate, setNewDate] = useState<string>(() => new Date().toISOString().split('T')[0])
+  const [showCalendarModal, setShowCalendarModal] = useState(false)
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1)
+  })
+  const [toast, setToast] = useState<{ visible: boolean; text: string }>({ visible: false, text: '' })
+  const [submitting, setSubmitting] = useState(false)
 
   // Animation values - MUST be before any conditional returns
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -120,7 +134,7 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ThemedText style={styles.loadingText}>Caricamento...</ThemedText>
+        <ThemedText style={styles.loadingText}>{t('loading')}</ThemedText>
       </View>
     )
   }
@@ -128,8 +142,8 @@ export default function HomeScreen() {
   if (!user) {
     return (
       <View style={styles.errorContainer}>
-        <ThemedText style={styles.errorText}>Accesso non autorizzato</ThemedText>
-        <ThemedText style={styles.errorSubtext}>Effettua il login per continuare</ThemedText>
+        <ThemedText style={styles.errorText}>{t('unauthorized')}</ThemedText>
+        <ThemedText style={styles.errorSubtext}>{t('login_continue')}</ThemedText>
       </View>
     )
   }
@@ -150,7 +164,28 @@ export default function HomeScreen() {
 
   // Get user name
   const userName = userDisplayName || user?.email?.split('@')[0] || 'Utente'
-  const greeting = getGreeting()
+  const greeting = (() => {
+    const hour = new Date().getHours()
+    if (hour < 12) return t('good_morning')
+    if (hour < 18) return t('good_afternoon')
+    return t('good_evening')
+  })()
+
+  const translateCategoryName = (name: string) => {
+    const key = (name || '').toLowerCase()
+    if (language === 'it') {
+      switch (key) {
+        case 'other': return 'Altro'
+        case 'transport': return 'Trasporti'
+        case 'grocery': return 'Spesa'
+        case 'shopping': return 'Shopping'
+        case 'night life': return 'Vita notturna'
+        case 'travel': return 'Viaggi'
+        default: return name
+      }
+    }
+    return name
+  }
 
   return (
     <View style={styles.container}>
@@ -195,8 +230,8 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {/* Main Balance Card */}
-        <Animated.View 
+        {/* Main Balance Card - temporarily hidden */}
+        {/* <Animated.View 
           style={[
             styles.balanceCardContainer,
             {
@@ -218,7 +253,7 @@ export default function HomeScreen() {
                 </View>
                 <View style={styles.balanceHeaderText}>
               <ThemedText type="heading" style={styles.balanceTitle}>Patrimonio Totale</ThemedText>
-              <ThemedText type="label" style={styles.balanceSubtitle}>Investimenti</ThemedText>
+                  <ThemedText type="label" style={styles.balanceSubtitle}>{t('financial_settings')}</ThemedText>
                 </View>
               </View>
 
@@ -233,13 +268,13 @@ export default function HomeScreen() {
                       <ThemedText style={styles.balanceStatIcon}>📈</ThemedText>
                       <ThemedText type="label" style={styles.balanceStatValue}>+2.4%</ThemedText>
                     </View>
-                    <ThemedText type="caption" style={styles.balanceStatLabel}>vs mese scorso</ThemedText>
+                    <ThemedText type="caption" style={styles.balanceStatLabel}>{t('vs_last_month')}</ThemedText>
                     </View>
                   </View>
                 </View>
           </Card>
             </Pressable>
-          </Animated.View>
+          </Animated.View> */}
 
         {/* Financial Overview Cards */}
         <View style={styles.overviewContainer}>
@@ -265,8 +300,8 @@ export default function HomeScreen() {
                     </View>
                   </View>
                   <View style={styles.overviewCardText}>
-                    <ThemedText type="heading" style={styles.overviewCardTitle}>Spese Mensili</ThemedText>
-                    <ThemedText type="label" style={styles.overviewCardSubtitle}>Questo mese</ThemedText>
+                    <ThemedText type="heading" style={styles.overviewCardTitle}>{t('monthly_expenses')}</ThemedText>
+                    <ThemedText type="label" style={styles.overviewCardSubtitle}>{t('this_month')}</ThemedText>
                   </View>
                 </View>
                 
@@ -286,7 +321,7 @@ export default function HomeScreen() {
                         {expenseDelta >= 0 ? '+' : ''}{expenseDeltaPct.toFixed(1)}%
                       </ThemedText>
                     </View>
-                    <ThemedText type="caption" style={styles.overviewBadgeLabel}>vs mese scorso</ThemedText>
+                    <ThemedText type="caption" style={styles.overviewBadgeLabel}>{t('vs_last_month')}</ThemedText>
                   </View>
                 </View>
           </Card>
@@ -295,7 +330,219 @@ export default function HomeScreen() {
 
         </View>
 
+        {/* Add Transaction Floating Button */}
+        <View style={styles.fabContainer}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.fab,
+              pressed && { transform: [{ scale: 0.98 }] }
+            ]}
+            onPress={() => setShowAddModal(true)}
+          >
+            <LinearGradient
+              colors={[ 'rgba(6,182,212,0.25)', 'rgba(6,182,212,0.08)' ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.fabGradient}
+            />
+            <ThemedText style={styles.fabIcon}>＋</ThemedText>
+          <ThemedText style={styles.fabLabel}>{t('add_transaction')}</ThemedText>
+          </Pressable>
+        </View>
+
     </ScrollView>
+
+      {/* Add Transaction Modal */}
+      <Modal
+        visible={showAddModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.addModalCard}>
+            <LinearGradient
+              colors={[ 'rgba(6,182,212,0.10)', 'rgba(139,92,246,0.06)', 'transparent' ]}
+              style={styles.addModalGradient}
+            />
+            <View style={styles.addModalHeader}>
+              <ThemedText style={styles.addModalTitle}>{t('add_transaction')}</ThemedText>
+              <Pressable onPress={() => setShowAddModal(false)} style={styles.addModalClose}>
+                <ThemedText style={styles.addModalCloseText}>✕</ThemedText>
+              </Pressable>
+            </View>
+            <View style={styles.formRow}>
+              <ThemedText style={styles.formLabel}>{t('title')}</ThemedText>
+              <TextInput
+                style={styles.input}
+                placeholder={t('title') +' '+ t('transaction')}
+                placeholderTextColor="#94a3b8"
+                value={newTitle}
+                onChangeText={setNewTitle}
+              />
+            </View>
+            <View style={styles.formRow}>
+              <ThemedText style={styles.formLabel}>{t('amount')}</ThemedText>
+              <TextInput
+                style={styles.input}
+                placeholder="0.00"
+                placeholderTextColor="#94a3b8"
+                keyboardType="decimal-pad"
+                value={newAmount}
+                onChangeText={setNewAmount}
+              />
+            </View>
+            <View style={styles.formRow}>
+              <ThemedText style={styles.formLabel}>{t('category')}</ThemedText>
+              <View style={styles.categoryRow}>
+                {['Other','Transport','Grocery','Shopping','Night Life','Travel'].map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[styles.categoryChip, newCategory === c && styles.categoryChipActive]}
+                    onPress={() => setNewCategory(c)}
+                  >
+                    <ThemedText style={[styles.categoryChipText, newCategory === c && styles.categoryChipTextActive]}>{translateCategoryName(c)}</ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.formRow}>
+              <ThemedText style={styles.formLabel}>{t('date')}</ThemedText>
+              <Pressable style={styles.input} onPress={() => setShowCalendarModal(true)}>
+                <ThemedText style={{ color: '#E8EEF8' }}>{newDate}</ThemedText>
+              </Pressable>
+            </View>
+
+      {/* Calendar Modal */}
+      <Modal
+        visible={showCalendarModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCalendarModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.addModalCard}>
+            <ThemedText style={styles.addModalTitle}>{t('select_date')}</ThemedText>
+            <View style={styles.calendarContainer}>
+                <View style={styles.calendarHeader}>
+                 <Pressable onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))} style={styles.calendarNav}>
+                    <ThemedText style={styles.calendarNavText}>‹</ThemedText>
+                  </Pressable>
+                  <ThemedText style={styles.calendarMonthText}>
+                    {calendarMonth.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
+                  </ThemedText>
+                 <Pressable
+                   disabled={(calendarMonth.getFullYear() === new Date().getFullYear() && calendarMonth.getMonth() >= new Date().getMonth())}
+                   onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
+                   style={[styles.calendarNav, (calendarMonth.getFullYear() === new Date().getFullYear() && calendarMonth.getMonth() >= new Date().getMonth()) && { opacity: 0.4 }]}
+                 >
+                    <ThemedText style={styles.calendarNavText}>›</ThemedText>
+                  </Pressable>
+                </View>
+              <View style={styles.calendarWeekRow}>
+                {['L', 'M', 'M', 'G', 'V', 'S', 'D'].map((d, i) => (
+                  <ThemedText key={`wd-${i}`} style={styles.calendarWeekText}>{d}</ThemedText>
+                ))}
+              </View>
+                <View style={styles.calendarGrid}>
+                  {(() => {
+                   const firstDay = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay() || 7
+                   const today = new Date()
+                   const isCurrentCalendarMonth = calendarMonth.getFullYear() === today.getFullYear() && calendarMonth.getMonth() === today.getMonth()
+                   const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate()
+                    const cells: any[] = []
+                    const leading = firstDay - 1
+                    for (let i = 0; i < leading; i++) cells.push(null)
+                    for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+                    return cells.map((day, idx) => {
+                      const isEmpty = day === null
+                      const yyyy = calendarMonth.getFullYear()
+                      const mm = String(calendarMonth.getMonth() + 1).padStart(2, '0')
+                      const dd = String(day || 1).padStart(2, '0')
+                      const value = `${yyyy}-${mm}-${dd}`
+                      const isSelected = !isEmpty && newDate === value
+                      const disableFuture = isCurrentCalendarMonth && !isEmpty && day! > today.getDate()
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          disabled={isEmpty || disableFuture}
+                          style={[
+                            styles.calendarCell,
+                            isSelected && styles.calendarCellSelected,
+                            isEmpty && styles.calendarCellEmpty,
+                            disableFuture && { opacity: 0.4 }
+                          ]}
+                        onPress={() => { setNewDate(value); setShowCalendarModal(false) }}
+                        >
+                          {!isEmpty && (
+                            <ThemedText style={[styles.calendarCellText, isSelected && styles.calendarCellTextSelected]}>
+                              {day}
+                            </ThemedText>
+                          )}
+                        </TouchableOpacity>
+                      )
+                    })
+                  })()}
+                </View>
+            </View>
+            <Pressable onPress={() => setShowCalendarModal(false)} style={[styles.submitButton, { marginTop: 12 }]}>
+              <ThemedText style={styles.submitButtonText}>{t('close')}</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+            <Pressable
+              style={({ pressed }) => [styles.submitButton, pressed && { opacity: 0.9 }]}
+              onPress={async () => {
+                if (!user || submitting) return
+                setSubmitting(true)
+                try {
+                  const amountNum = parseFloat((newAmount || '').replace(',', '.'))
+                  if (!newTitle || newTitle.trim().length === 0) throw new Error('Titolo obbligatorio')
+                  if (!amountNum || isNaN(amountNum) || amountNum <= 0) throw new Error('Importo non valido')
+                  if (!newDate) throw new Error('Data obbligatoria')
+                  const { error } = await supabase.from('expenses').insert([
+                    {
+                      user_id: user.id,
+                      amount: amountNum,
+                      category: newCategory.toLowerCase(),
+                      date: newDate,
+                      raw_notification: 'manual',
+                      merchant: newTitle || 'Manual',
+                    }
+                  ])
+                  if (error) throw error
+                  await loadData()
+                  // notify Expenses screen to refresh immediately
+                  DeviceEventEmitter.emit('expenses:externalUpdate')
+                  setNewAmount('')
+                  setNewCategory('Other')
+                  setNewTitle('')
+                  setNewDate(new Date().toISOString().split('T')[0])
+                  setShowAddModal(false)
+                  // Show toast
+                  setToast({ visible: true, text: 'Transazione aggiunta ✅' })
+                  setTimeout(() => setToast({ visible: false, text: '' }), 2000)
+                } catch (e: any) {
+                  console.log('[Home] add expense error', e)
+                  Alert.alert('Errore', e?.message || 'Impossibile salvare la transazione')
+                } finally {
+                  setSubmitting(false)
+                }
+              }}
+            >
+              <ThemedText style={styles.submitButtonText}>{submitting ? t('saving') : t('add_transaction')}</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {toast.visible && (
+        <View style={styles.toast}>
+          <ThemedText style={styles.toastText}>{toast.text}</ThemedText>
+        </View>
+      )}
+
     </View>
   );
 }
@@ -528,6 +775,7 @@ const styles = StyleSheet.create({
   overviewContainer: {
     gap: 16,
     marginBottom: 32,
+    marginTop: 24,
   },
   overviewCardContainer: {
     flex: 1,
@@ -609,5 +857,246 @@ const styles = StyleSheet.create({
   overviewBadgeLabel: {
     fontSize: 11,
     color: Brand.colors.text.secondary,
+  },
+  // Floating action button
+  fabContainer: {
+    paddingTop: 12,
+    paddingBottom: 12,
+    alignItems: 'center',
+  },
+  fab: {
+    backgroundColor: 'rgba(6,182,212,0.12)',
+    borderColor: 'rgba(6,182,212,0.35)',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    overflow: 'hidden',
+  },
+  fabGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 12,
+  },
+  fabIcon: {
+    color: '#06b6d4',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  fabLabel: {
+    color: '#E8EEF8',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  // Add modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  addModalCard: {
+    width: '100%',
+    maxWidth: 520,
+    borderRadius: 20,
+    backgroundColor: 'rgba(15,15,20,0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(6,182,212,0.15)',
+    padding: 20,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  addModalGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
+  addModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    zIndex: 1,
+  },
+  addModalTitle: {
+    color: '#E8EEF8',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  addModalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addModalCloseText: {
+    color: '#9ca3af',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  formRow: {
+    marginTop: 10,
+    zIndex: 1,
+  },
+  formLabel: {
+    color: '#9ca3af',
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  input: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    color: '#E8EEF8',
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  categoryChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  categoryChipActive: {
+    backgroundColor: 'rgba(6,182,212,0.15)',
+    borderColor: 'rgba(6,182,212,0.35)',
+  },
+  categoryChipText: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  categoryChipTextActive: {
+    color: '#06b6d4',
+  },
+  submitButton: {
+    marginTop: 16,
+    backgroundColor: 'rgba(6,182,212,0.18)',
+    borderColor: 'rgba(6,182,212,0.4)',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  submitButtonText: {
+    color: '#E8EEF8',
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  // Toast
+  toast: {
+    position: 'absolute',
+    bottom: 84,
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(6,182,212,0.10)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(6,182,212,0.22)',
+    alignItems: 'center',
+  },
+  toastText: {
+    color: 'rgba(232, 238, 248, 0.9)',
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 0.2,
+  },
+  // Calendar styles
+  calendarContainer: {
+    marginTop: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    padding: 10,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  calendarNav: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)'
+  },
+  calendarNavText: {
+    color: '#E8EEF8',
+    fontWeight: '700',
+  },
+  calendarMonthText: {
+    color: '#E8EEF8',
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    marginVertical: 4,
+  },
+  calendarWeekText: {
+    color: '#94a3b8',
+    fontSize: 10,
+    width: '14.2857%',
+    textAlign: 'center',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarCell: {
+    width: '14.2857%',
+    aspectRatio: 1,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    marginVertical: 2,
+    transform: [{ scale: 0.96 }],
+  },
+  calendarCellEmpty: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+  },
+  calendarCellSelected: {
+    backgroundColor: 'rgba(6,182,212,0.18)',
+    borderColor: 'rgba(6,182,212,0.4)'
+  },
+  calendarCellText: {
+    color: '#E8EEF8',
+    fontWeight: '700',
+  },
+  calendarCellTextSelected: {
+    color: '#06b6d4',
   },
 });

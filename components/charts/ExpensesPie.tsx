@@ -1,8 +1,25 @@
-import { Expense } from '@/types';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef } from 'react';
-import { Animated, Dimensions, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Defs, FeGaussianBlur, FeMerge, FeMergeNode, Filter, G, Path, Text as SvgText } from 'react-native-svg';
+// Simple i18n: Italian labels for display only (future: add language toggle)
+const translateCategory = (name: string) => {
+  const key = (name || '').toLowerCase()
+  switch (key) {
+    case 'other': return 'Altro'
+    case 'transport': return 'Trasporti'
+    case 'grocery': return 'Spesa'
+    case 'shopping': return 'Shopping'
+    case 'night life': return 'Vita notturna'
+    case 'travel': return 'Viaggi'
+    case 'healthcare': return 'Sanità'
+    case 'education': return 'Istruzione'
+    case 'utilities': return 'Utenze'
+    case 'entertainment': return 'Intrattenimento'
+    default: return name
+  }
+}
+import { Expense } from '@/types'
+import { LinearGradient } from 'expo-linear-gradient'
+import { useEffect, useRef } from 'react'
+import { Animated, Dimensions, StyleSheet, Text, View } from 'react-native'
+import Svg, { Circle, Defs, FeGaussianBlur, FeMerge, FeMergeNode, Filter, G, Path, Text as SvgText } from 'react-native-svg'
 
 type CategoryData = {
   name: string;
