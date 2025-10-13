@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { loadExpenseThresholds, saveExpenseThresholds, type ExpenseThresholds } from '@/services/expense-thresholds'
 import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 
 export default function ProfileScreen() {
   const { user, signOut, loading: authLoading } = useAuth()
@@ -28,23 +28,7 @@ export default function ProfileScreen() {
   const scaleAnim2 = useRef(new Animated.Value(0.95)).current
   const scaleAnim3 = useRef(new Animated.Value(0.95)).current
 
-  // Auth guard - redirect if not logged in
-  if (authLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ThemedText style={styles.loadingText}>Caricamento...</ThemedText>
-      </View>
-    )
-  }
-
-  if (!user) {
-    return (
-      <View style={styles.errorContainer}>
-        <ThemedText style={styles.errorText}>Accesso non autorizzato</ThemedText>
-        <ThemedText style={styles.errorSubtext}>Effettua il login per continuare</ThemedText>
-      </View>
-    )
-  }
+  // Note: Avoid early returns before hooks; render guards applied just before JSX return
 
   useEffect(() => {
     ;(async () => {
@@ -142,6 +126,23 @@ export default function ProfileScreen() {
     } finally {
       setThresholdsLoading(false)
     }
+  }
+
+  if (authLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#06b6d4" />
+      </View>
+    )
+  }
+
+  // Durante il logout/redirect mostra caricamento invece di errore
+  if (!user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#06b6d4" />
+      </View>
+    )
   }
 
   return (

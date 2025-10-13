@@ -11,7 +11,7 @@ import { Expense } from '@/types';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, DeviceEventEmitter, Dimensions, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Dimensions, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -134,16 +134,16 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ThemedText style={styles.loadingText}>{t('loading')}</ThemedText>
+        <ActivityIndicator size="small" color="#06b6d4" />
       </View>
     )
   }
 
+  // Durante logout/redirect mostra caricamento
   if (!user) {
     return (
-      <View style={styles.errorContainer}>
-        <ThemedText style={styles.errorText}>{t('unauthorized')}</ThemedText>
-        <ThemedText style={styles.errorSubtext}>{t('login_continue')}</ThemedText>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#06b6d4" />
       </View>
     )
   }

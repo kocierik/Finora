@@ -113,6 +113,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Force immediate state update
       setSession(null)
       setUser(null)
+      // Navigate to welcome screen to avoid unauthorized view on current route
+      try {
+        router.replace('/auth/welcome')
+      } catch {}
     } catch (error) {
       console.error('[Auth] ❌ Logout failed:', error)
       throw error

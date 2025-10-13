@@ -13,7 +13,7 @@ import { Expense } from '@/types'
 import { useFocusEffect } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native'
 import { PanGestureHandler, State } from 'react-native-gesture-handler'
 
 export default function ExpensesScreen() {
@@ -49,23 +49,7 @@ export default function ExpensesScreen() {
   const monthFadeAnim = useRef(new Animated.Value(1)).current
   const listAnim = useRef(new Animated.Value(0)).current
 
-  // Auth guard - redirect if not logged in
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ThemedText style={styles.loadingText}>Caricamento...</ThemedText>
-      </View>
-    )
-  }
-
-  if (!user) {
-    return (
-      <View style={styles.errorContainer}>
-        <ThemedText style={styles.errorText}>Accesso non autorizzato</ThemedText>
-        <ThemedText style={styles.errorSubtext}>Effettua il login per continuare</ThemedText>
-      </View>
-    )
-  }
+  // Note: Do NOT early-return before hooks. Render guards are applied later to keep hook order stable.
 
   const fetchExpenses = useCallback(async () => {
     if (!user) return
@@ -665,6 +649,23 @@ export default function ExpensesScreen() {
     const categoryInfo = availableCategories.find(c => c.name.toLowerCase() === categoryToUse.toLowerCase())
     return categoryInfo ? { ...categoryInfo, name: categoryToUse } : null
   }, [getMerchantCategory])
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#06b6d4" />
+      </View>
+    )
+  }
+
+  // Durante il logout/redirect mostra caricamento invece di errore
+  if (!user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#06b6d4" />
+      </View>
+    )
+  }
 
   return (
     <View style={styles.container}>
