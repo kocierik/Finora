@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
 import type { NotificationData } from '@/services/notification-service'
+import { checkNotificationPermission, type NotificationPermissionStatus } from '@/services/notification-service'
 import { loadNotifications, saveNotification, sortNotificationsByDate, type StoredNotification } from '@/services/notification-storage'
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
@@ -27,6 +28,7 @@ export default function OnboardingScreen() {
   const [checking, setChecking] = useState(true)
   const [forceShow, setForceShow] = useState(false)
   const [notifPreview, setNotifPreview] = useState<StoredNotification[]>([])
+  const [notifReadStatus, setNotifReadStatus] = useState<NotificationPermissionStatus>('unknown')
   const sessionStartRef = useRef<number>(Date.now())
   const params = useLocalSearchParams()
   useEffect(() => {
@@ -45,6 +47,12 @@ export default function OnboardingScreen() {
 
     (async () => {
       try {
+        // Check Android notification-read permission at mount
+        try {
+          const status = await checkNotificationPermission()
+          setNotifReadStatus(status)
+        } catch {}
+
         // Only show onboarding if explicitly forced (after signup) or currently active
         const raw = (params as any)?.first
         const first = Array.isArray(raw) ? raw[0] : raw
@@ -87,6 +95,19 @@ export default function OnboardingScreen() {
       setChecking(false)
     })()
   }, [params])
+
+  // Periodically re-check permission while on this screen
+  useEffect(() => {
+    let timer: any
+    const poll = async () => {
+      try {
+        const status = await checkNotificationPermission()
+        setNotifReadStatus(status)
+      } catch {}
+    }
+    timer = setInterval(poll, 3000)
+    return () => clearInterval(timer)
+  }, [])
 
   const pages = useMemo(
     () => [
@@ -192,6 +213,11 @@ export default function OnboardingScreen() {
   const sendTestNotification = async () => {
     try {
       try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+      // Validate read-notifications permission to avoid false positives in preview
+      try {
+        const status = await checkNotificationPermission()
+        setNotifReadStatus(status)
+      } catch {}
       // Ensure Android notification channel exists
       if (Platform.OS === 'android') {
         try {
@@ -222,19 +248,21 @@ export default function OnboardingScreen() {
         trigger: null
       })
 
-      // Also persist a synthetic notification locally to guarantee preview fields
-      try {
-        const now = Date.now()
-        const synthetic: NotificationData = {
-          id: `finora-test-${now}`,
-          app: 'Finora',
-          title: t('test_notif_title'),
-          text: t('test_notif_body'),
-          time: new Date(now).toISOString(),
-          timestamp: now
-        }
-        await saveNotification(synthetic)
-      } catch {}
+      // Persist synthetic entry only if permission is authorized
+      if (notifReadStatus === 'authorized') {
+        try {
+          const now = Date.now()
+          const synthetic: NotificationData = {
+            id: `finora-test-${now}`,
+            app: 'Finora',
+            title: t('test_notif_title'),
+            text: t('test_notif_body'),
+            time: new Date(now).toISOString(),
+            timestamp: now
+          }
+          await saveNotification(synthetic)
+        } catch {}
+      }
 
       // Toast feedback
       if (Platform.OS === 'android') {
