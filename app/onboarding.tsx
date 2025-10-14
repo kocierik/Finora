@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
+import { loadNotifications, sortNotificationsByDate, type StoredNotification } from '@/services/notification-storage'
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
 const CARD_MAX_WIDTH = 420
@@ -17,12 +18,13 @@ const CARD_HEIGHT = Math.min(320, Math.max(360, screenHeight * 0.56))
 
 export default function OnboardingScreen() {
   const { user, loading } = useAuth()
-  const { t } = useSettings()
+  const { t, language, locale } = useSettings()
   const [index, setIndex] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
   const [saving, setSaving] = useState(false)
   const [checking, setChecking] = useState(true)
   const [forceShow, setForceShow] = useState(false)
+  const [notifPreview, setNotifPreview] = useState<StoredNotification[]>([])
   const params = useLocalSearchParams()
   useEffect(() => {
     (async () => {
@@ -127,9 +129,7 @@ export default function OnboardingScreen() {
 
   const goNext = () => {
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium) } catch {}
-    if (index === pages.length - 1) {
-      complete()
-    } else {
+    if (index < pages.length - 1) {
       goToIndex(index + 1)
     }
   }
@@ -150,27 +150,45 @@ export default function OnboardingScreen() {
         await AsyncStorage.setItem('@finora:onboardingSeen', '1')
       } catch {}
       try { await AsyncStorage.removeItem('@finora:onboardingActive') } catch {}
-      
-      // Open notification settings
-      try {
-        console.log('[Onboarding] 🔔 Opening notification settings...')
-        // Try to open notification settings directly
-        await Linking.openURL('app-settings:notification')
-      } catch (error) {
-        console.log('[Onboarding] ⚠️ Could not open notification settings directly, opening general settings')
-        try {
-          // Fallback to general app settings
-          await Linking.openSettings()
-        } catch (fallbackError) {
-          console.log('[Onboarding] ❌ Could not open any settings:', fallbackError)
-        }
-      }
-      
       router.replace('/(tabs)')
     } finally {
       setSaving(false)
     }
   }
+
+  const openNotificationSettings = async () => {
+    try {
+      console.log('[Onboarding] 🔔 Opening notification settings...')
+      // Try to open notification settings directly
+      // apri le impostazioni
+      await Linking.openSettings()
+    } catch (error) {
+      console.log('[Onboarding] ⚠️ Could not open notification settings directly, opening general settings')
+      try {
+        // Fallback to general app settings
+        await Linking.openSettings()
+      } catch (fallbackError) {
+        console.log('[Onboarding] ❌ Could not open any settings:', fallbackError)
+      }
+    }
+  }
+
+  // Load a small preview of recent notifications (top 5)
+  useEffect(() => {
+    let timer: any
+    const loadPreview = async () => {
+      try {
+        const all = await loadNotifications()
+        const sorted = sortNotificationsByDate(all)
+        setNotifPreview(sorted.slice(0, 1))
+      } catch {}
+    }
+    // initial load
+    loadPreview()
+    // refresh periodically while on onboarding (lightweight)
+    timer = setInterval(loadPreview, 3000)
+    return () => clearInterval(timer)
+  }, [])
 
   if (loading || checking || (!user && !forceShow)) {
     return (
@@ -195,6 +213,30 @@ export default function OnboardingScreen() {
         {pages.map((p) => (
           <View key={p.key} style={{ width: screenWidth, paddingHorizontal: 28 }}>
             <View style={styles.pageCenter}>
+              {/* Recent notifications preview shown at the top on confirm page */}
+              {p.key === 'confirm' && (
+                <View style={{ width: '100%', alignItems: 'center', marginBottom: 14 }}>
+                  <Card style={[styles.previewCard, { maxWidth: CARD_MAX_WIDTH, width: '100%' }]}>
+                    <ThemedText type="label" style={styles.previewTitle}>{t('recent_notifications')}</ThemedText>
+                    {notifPreview.length === 0 ? (
+                      <ThemedText style={styles.previewEmpty}>{t('no_notifications_yet')}</ThemedText>
+                    ) : (
+                      <View style={{ gap: 10 }}>
+                        {notifPreview.map((n) => (
+                          <View key={n.id} style={styles.previewItem}>
+                            <View style={styles.previewDot} />
+                            <View style={{ flex: 1 }}>
+                              <ThemedText style={styles.previewItemTitle} numberOfLines={1}>{n.title}</ThemedText>
+                              <ThemedText style={styles.previewItemText} numberOfLines={1}>{n.text}</ThemedText>
+                            </View>
+                            <ThemedText style={styles.previewTime}>{new Date(n.receivedAt).toLocaleTimeString(locale || (language === 'it' ? 'it-IT' : 'en-US'), { hour: '2-digit', minute: '2-digit' })}</ThemedText>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </Card>
+                </View>
+              )}
               <Card style={[styles.card, { height: CARD_HEIGHT, maxWidth: CARD_MAX_WIDTH }]}>
                 <LinearGradient
                   colors={[
@@ -220,15 +262,30 @@ export default function OnboardingScreen() {
                 <View style={styles.navRow}>
                   <Pressable
                     accessibilityRole="button"
-                    onPress={() => { try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}; goBack() }}
-                    disabled={index === 0 || saving}
-                    style={[styles.backBtn, (index === 0 || saving) && styles.btnDisabled]}
+                    onPress={() => {
+                      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+                      if (index === pages.length - 1) {
+                        complete()
+                      } else {
+                        goBack()
+                      }
+                    }}
+                    disabled={saving || (index === 0 && pages.length > 1)}
+                    style={[styles.backBtn, (saving || (index === 0 && pages.length > 1)) && styles.btnDisabled]}
                   >
-                    <ThemedText style={styles.backText}>{t('back')}</ThemedText>
+                    <ThemedText style={styles.backText}>
+                      {index === pages.length - 1 ? (language === 'it' ? 'Chiudi' : 'Close') : t('back')}
+                    </ThemedText>
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
-                    onPress={goNext}
+                    onPress={() => {
+                      if (index === pages.length - 1) {
+                        openNotificationSettings()
+                      } else {
+                        goNext()
+                      }
+                    }}
                     disabled={saving}
                     style={styles.nextBtn}
                   >
@@ -239,7 +296,7 @@ export default function OnboardingScreen() {
                       style={styles.nextGradient}
                     >
                       <ThemedText style={styles.nextText}>
-                        {index === pages.length - 1 ? (saving ? t('open_settings') : t('open_settings')) : t('next')}
+                        {index === pages.length - 1 ? t('open_settings') : t('next')}
                       </ThemedText>
                     </LinearGradient>
                   </Pressable>
@@ -323,6 +380,48 @@ const styles = StyleSheet.create({
     lineHeight: 25,
     marginBottom: 30,
     textAlign: 'center'
+  },
+  // notifications preview styles
+  previewCard: {
+    backgroundColor: 'rgba(6,182,212,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(6,182,212,0.18)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  previewTitle: {
+    color: '#E8EEF8',
+    marginBottom: 10,
+    fontWeight: '700'
+  },
+  previewEmpty: {
+    opacity: 0.7,
+    textAlign: 'center'
+  },
+  previewItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  previewDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#06b6d4'
+  },
+  previewItemTitle: {
+    fontWeight: '700',
+    color: '#E8EEF8',
+    marginBottom: 2
+  },
+  previewItemText: {
+    opacity: 0.8,
+    fontSize: 12
+  },
+  previewTime: {
+    fontSize: 10,
+    opacity: 0.6,
+    marginLeft: 8
   },
   localBottom: {
     width: '100%',

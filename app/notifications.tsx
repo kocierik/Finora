@@ -1,32 +1,34 @@
 import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
+import { useSettings } from '@/context/SettingsContext'
 import {
-    checkNotificationPermission,
-    isXiaomiDevice,
-    requestNotificationPermission,
-    type NotificationPermissionStatus
+  checkNotificationPermission,
+  requestNotificationPermission,
+  type NotificationPermissionStatus
 } from '@/services/notification-service'
 import {
-    clearNotifications,
-    getWalletNotifications,
-    loadNotifications,
-    sortNotificationsByDate,
-    type StoredNotification
+  clearNotifications,
+  getWalletNotifications,
+  loadNotifications,
+  sortNotificationsByDate,
+  type StoredNotification
 } from '@/services/notification-storage'
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
+import { router } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Button, DeviceEventEmitter, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { DeviceEventEmitter, FlatList, Linking, Pressable, StyleSheet, View } from 'react-native'
 
 type FilterType = 'all' | 'wallet' | 'other'
 
 export default function NotificationsScreen() {
+  const { t } = useSettings()
   const [notifications, setNotifications] = useState<StoredNotification[]>([])
   const [filteredNotifications, setFilteredNotifications] = useState<StoredNotification[]>([])
   const [filter, setFilter] = useState<FilterType>('all')
   const [permission, setPermission] = useState<NotificationPermissionStatus>('unknown')
   const [logs, setLogs] = useState<string[]>([])
-  const [isXiaomi, setIsXiaomi] = useState(false)
   const [loading, setLoading] = useState(false)
+  // Mostra solo le 5 più recenti in questa schermata
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
@@ -194,13 +196,6 @@ export default function NotificationsScreen() {
   useEffect(() => {
     addLog('🚀 Notifications screen mounted')
     
-    // Check device
-    const xiaomi = isXiaomiDevice()
-    setIsXiaomi(xiaomi)
-    if (xiaomi) {
-      addLog('📱 Xiaomi/MIUI device detected')
-    }
-    
     // Check permission
     checkPermission()
     
@@ -234,249 +229,93 @@ export default function NotificationsScreen() {
     }
   }, [])
 
-  const renderPermissionCard = () => (
+  const renderInstructionWarning = () => (
     <Card>
-      <ThemedText type="defaultSemiBold">🔐 Stato Permessi</ThemedText>
+      <ThemedText type="defaultSemiBold">⚠️ {t('important_instructions_title')}</ThemedText>
       <View style={{ gap: 8, marginTop: 8 }}>
-        <ThemedText>
-          Permesso notifiche: {
-            permission === 'authorized' ? '✅ Abilitato' :
-            permission === 'denied' ? '❌ Negato' :
-            '⚠️  Sconosciuto'
-          }
-        </ThemedText>
-        
-        {permission !== 'authorized' && (
-          <>
-            <ThemedText style={{ opacity: 0.7, fontSize: 12 }}>
-              Per ricevere notifiche, devi abilitare l'accesso alle notifiche nelle impostazioni.
-            </ThemedText>
-            <Button 
-              title="📱 Richiedi Permesso" 
-              onPress={handleRequestPermission}
-            />
-          </>
-        )}
-        
-        <Button 
-          title="⚙️  Apri Impostazioni Sistema" 
+        <ThemedText style={{ opacity: 0.85, fontSize: 13 }}>{t('important_instructions_intro')}</ThemedText>
+        <View style={{ gap: 4 }}>
+          <ThemedText style={{ fontSize: 12 }}>{t('important_instructions_point1')}</ThemedText>
+          <ThemedText style={{ fontSize: 12 }}>{t('important_instructions_point2')}</ThemedText>
+          <ThemedText style={{ fontSize: 12 }}>{t('important_instructions_point3')}</ThemedText>
+        </View>
+        <ThemedText style={{ opacity: 0.85, fontSize: 13 }}>{t('important_instructions_hint')}</ThemedText>
+        <Pressable 
+          style={styles.primaryButton}
           onPress={handleOpenSettings}
-        />
+        >
+          <ThemedText style={styles.primaryButtonText}>⚙️ {t('open_settings')}</ThemedText>
+        </Pressable>
       </View>
     </Card>
   )
 
-  const renderXiaomiGuide = () => {
-    if (!isXiaomi) return null
-    
-    return (
-      <Card style={{ backgroundColor: '#fff3cd', borderColor: '#ffc107', borderWidth: 1 }}>
-        <ThemedText type="defaultSemiBold" style={{ color: '#856404' }}>
-          ⚠️  Dispositivo Xiaomi/MIUI Rilevato
-        </ThemedText>
-        <ThemedText style={{ color: '#856404', marginTop: 8, fontSize: 13 }}>
-          MIUI ha restrizioni aggiuntive. Segui questi passaggi:
-        </ThemedText>
-        <View style={{ gap: 4, marginTop: 8 }}>
-          <ThemedText style={{ color: '#856404', fontSize: 12 }}>
-            1️⃣ Impostazioni → App → finora → Auto-avvio → Abilita
-          </ThemedText>
-          <ThemedText style={{ color: '#856404', fontSize: 12 }}>
-            2️⃣ Impostazioni → App → finora → Batteria → Nessuna limitazione
-          </ThemedText>
-          <ThemedText style={{ color: '#856404', fontSize: 12 }}>
-            3️⃣ Impostazioni → App speciali → Accesso notifiche → finora → Abilita
-          </ThemedText>
-          <ThemedText style={{ color: '#856404', fontSize: 12 }}>
-            4️⃣ Riavvia l'app dopo aver configurato
-          </ThemedText>
-        </View>
-      </Card>
-    )
-  }
+  const renderXiaomiGuide = () => null
 
-  const renderDebugCard = () => (
-    <Card>
-      <ThemedText type="defaultSemiBold">🐛 Debug</ThemedText>
-      <View style={{ gap: 8, marginTop: 8 }}>
-        <ThemedText style={{ fontSize: 12 }}>Platform: {Platform.OS}</ThemedText>
-        <ThemedText style={{ fontSize: 12 }}>
-          Device: {isXiaomi ? 'Xiaomi/MIUI' : 'Other'}
-        </ThemedText>
-        <ThemedText style={{ fontSize: 12 }}>
-          Library: react-native-android-notification-listener
-        </ThemedText>
-        <ThemedText style={{ fontSize: 12 }}>
-          Headless Task: ✅ Registered
-        </ThemedText>
-        
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-          <Button title="🧪 Test Notifica" onPress={handleTestNotification} />
-          <Button title="🔄 Ricarica Notifiche" onPress={loadNotificationsFromStorage} />
-          <Button title="🗑️  Pulisci Log" onPress={handleClearLogs} />
-          <Button title="🗑️  Pulisci Notifiche" onPress={handleClearNotifications} />
-        </View>
-      </View>
-    </Card>
-  )
+  const renderDebugCard = () => null
 
-  const renderLogsCard = () => (
-    <Card>
-      <ThemedText type="defaultSemiBold">📝 Log Runtime ({logs.length})</ThemedText>
-      <ScrollView style={{ maxHeight: 200, marginTop: 8 }}>
-        {logs.length === 0 ? (
-          <ThemedText style={{ opacity: 0.7, fontSize: 12 }}>Nessun log disponibile</ThemedText>
-        ) : (
-          logs.map((log, index) => (
-            <ThemedText key={index} style={{ fontSize: 11, fontFamily: 'monospace', opacity: 0.8 }}>
-              {log}
-            </ThemedText>
-          ))
-        )}
-      </ScrollView>
-    </Card>
-  )
+  const renderLogsCard = () => null
 
-  const renderFilterCard = () => (
-    <Card>
-      <ThemedText type="defaultSemiBold">🔍 Filtri</ThemedText>
-      <View style={{ gap: 8, marginTop: 8 }}>
-        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          <Pressable
-            style={[
-              styles.filterButton,
-              filter === 'all' && styles.filterButtonActive
-            ]}
-            onPress={() => handleFilterChange('all')}
-          >
-            <ThemedText style={[
-              styles.filterButtonText,
-              filter === 'all' && styles.filterButtonTextActive
-            ]}>
-              Tutte ({notifications.length})
-            </ThemedText>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.filterButton,
-              filter === 'wallet' && styles.filterButtonActive
-            ]}
-            onPress={() => handleFilterChange('wallet')}
-          >
-            <ThemedText style={[
-              styles.filterButtonText,
-              filter === 'wallet' && styles.filterButtonTextActive
-            ]}>
-              Wallet ({getWalletNotifications(notifications).length})
-            </ThemedText>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.filterButton,
-              filter === 'other' && styles.filterButtonActive
-            ]}
-            onPress={() => handleFilterChange('other')}
-          >
-            <ThemedText style={[
-              styles.filterButtonText,
-              filter === 'other' && styles.filterButtonTextActive
-            ]}>
-              Altre ({notifications.filter(n => !n.isWalletNotification).length})
-            </ThemedText>
-          </Pressable>
-        </View>
-      </View>
-    </Card>
-  )
+  const renderFilterCard = () => null
 
-  const renderInfoCard = () => (
-    <Card>
-      <ThemedText type="defaultSemiBold">ℹ️  Informazioni</ThemedText>
-      <View style={{ gap: 4, marginTop: 8 }}>
-        <ThemedText style={{ fontSize: 12 }}>
-          ✅ Il servizio headless è registrato e funzionante
-        </ThemedText>
-        <ThemedText style={{ fontSize: 12 }}>
-          ✅ Riceve notifiche anche con app chiusa
-        </ThemedText>
-        <ThemedText style={{ fontSize: 12 }}>
-          ✅ Salva TUTTE le notifiche in memoria per la visualizzazione
-        </ThemedText>
-        <ThemedText style={{ fontSize: 12 }}>
-          ✅ Filtra automaticamente Google Wallet per le spese
-        </ThemedText>
-        <ThemedText style={{ fontSize: 12 }}>
-          📝 Usa i filtri per vedere notifiche specifiche
-        </ThemedText>
-        <ThemedText style={{ fontSize: 12 }}>
-          🧪 Usa "Test Notifica" per verificare il funzionamento
-        </ThemedText>
-      </View>
-    </Card>
-  )
+  const renderInfoCard = () => null
+
+  const displayedNotifications = filteredNotifications.slice(0, 1)
 
   return (
     <FlatList
-      data={filteredNotifications}
+      data={displayedNotifications}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.container}
       ListHeaderComponent={
         <View style={{ gap: 12 }}>
-          <ThemedText type="title">📬 Notifiche</ThemedText>
+          <View style={styles.headerRow}>
+            <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={12}>
+              <ThemedText style={styles.backIcon}>←</ThemedText>
+            </Pressable>
+            <ThemedText type="title" style={styles.headerTitle}>{t('notifications')}</ThemedText>
+            <View style={{ width: 36 }} />
+          </View>
           
-          {renderPermissionCard()}
-          {renderXiaomiGuide()}
-          {renderFilterCard()}
-          {renderDebugCard()}
-          {renderLogsCard()}
-          {renderInfoCard()}
+          {renderInstructionWarning()}
           
-          <ThemedText type="subtitle" style={{ marginTop: 8 }}>
-            Notifiche Ricevute ({filteredNotifications.length})
-          </ThemedText>
+          <ThemedText type="subtitle" style={{ marginTop: 8, marginBottom: 12 }}>{t('recent_notifications')}</ThemedText>
         </View>
       }
       ListEmptyComponent={
         <Card>
-          <ThemedText style={{ opacity: 0.7, textAlign: 'center' }}>
-            {filter === 'all' 
-              ? 'Nessuna notifica ricevuta ancora'
-              : filter === 'wallet'
-              ? 'Nessuna notifica di Google Wallet ricevuta'
-              : 'Nessuna altra notifica ricevuta'
-            }
-          </ThemedText>
-          <ThemedText style={{ opacity: 0.7, textAlign: 'center', fontSize: 12, marginTop: 4 }}>
-            {filter === 'all' 
-              ? 'Prova a inviare una notifica di test'
-              : 'Prova a cambiare filtro o inviare una notifica di test'
-            }
-          </ThemedText>
+          <ThemedText style={{ opacity: 0.7, textAlign: 'center' }}>{t('no_notifications_yet')}</ThemedText>
+          <ThemedText style={{ opacity: 0.7, textAlign: 'center', fontSize: 12, marginTop: 4 }}>{t('try_send_test')}</ThemedText>
         </Card>
       }
       renderItem={({ item }) => (
-        <Card style={{ gap: 6 }}>
+        <Pressable style={({ pressed }) => [
+          styles.card,
+          pressed && styles.cardPressed,
+        ]}
+        android_ripple={{ color: 'rgba(6,182,212,0.08)' }}
+        >
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <ThemedText type="defaultSemiBold" style={{ flex: 1 }}>
-              {item.title}
-            </ThemedText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <View style={styles.accentDot} />
+              <ThemedText type="defaultSemiBold" style={styles.titleText}>
+                {item.title}
+              </ThemedText>
+            </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <ThemedText style={{ fontSize: 10, opacity: 0.5 }}>
+              <ThemedText style={styles.timeText}>
                 {new Date(item.receivedAt).toLocaleTimeString()}
               </ThemedText>
               {item.isWalletNotification && (
-                <ThemedText style={{ fontSize: 9, opacity: 0.6, color: '#10b981' }}>
-                  💳 Wallet
-                </ThemedText>
+                <ThemedText style={styles.metaWallet}>💳 {t('wallet_badge')}</ThemedText>
               )}
             </View>
           </View>
-          <ThemedText style={{ opacity: 0.8 }}>{item.text}</ThemedText>
-          <ThemedText style={{ fontSize: 11, opacity: 0.5 }}>
-            📱 {item.app}
-          </ThemedText>
-        </Card>
+          <ThemedText style={styles.messageText}>{item.text}</ThemedText>
+          <ThemedText style={styles.metaText}>📱 {item.app}</ThemedText>
+        </Pressable>
       )}
+      ListFooterComponent={null}
     />
   )
 }
@@ -485,6 +324,92 @@ const styles = StyleSheet.create({
   container: {
     gap: 12,
     padding: 16,
+    backgroundColor: '#0a0a0f',
+    flex: 1,
+    paddingTop: 40,
+  },
+  card: {
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(6,182,212,0.06)',
+    borderWidth: 1,
+    shadowColor: '#000',
+    borderColor: 'rgba(8, 160, 187, 0.35)',
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
+    marginBottom: 16,
+  },
+  cardPressed: {
+    backgroundColor: 'rgba(6,182,212,0.12)'
+  },
+  accentDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#06b6d4'
+  },
+  titleText: {
+    flex: 1
+  },
+  messageText: {
+    opacity: 0.9
+  },
+  metaText: {
+    fontSize: 11,
+    opacity: 0.6
+  },
+  timeText: {
+    fontSize: 10,
+    opacity: 0.55
+  },
+  metaWallet: {
+    fontSize: 9,
+    opacity: 0.7,
+    color: '#10b981'
+  },
+  // unified glassmorphic primary button
+  primaryButton: {
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(6,182,212,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(6,182,212,0.35)'
+  },
+  primaryButtonText: {
+    fontWeight: '700',
+    color: '#E8EEF8'
+    
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 56,
+  },
+  backButton: {
+    width: 44,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(6,182,212,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(6,182,212,0.15)'
+  },
+  backIcon: {
+    fontSize: 20,
+    marginBottom: 8,
+    opacity: 0.9
+  },
+  headerTitle: {
+    textAlign: 'center',
+    flex: 1
   },
   filterButton: {
     paddingHorizontal: 12,

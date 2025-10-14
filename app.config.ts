@@ -36,6 +36,16 @@ const config: ExpoConfig = {
     'expo-web-browser',
     './plugins/notification-listener-plugin.js',
     [
+      'expo-build-properties',
+      {
+        android: {
+          enableProguardInReleaseBuilds: true,
+          enableShrinkResourcesInReleaseBuilds: true,
+          abiFilters: ['arm64-v8a', 'armeabi-v7a']
+        }
+      }
+    ],
+    [
       'expo-splash-screen',
       {
         image: './assets/images/icon.png',

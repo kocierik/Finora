@@ -1,6 +1,7 @@
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/Card';
 import { Brand } from '@/constants/branding';
+import { useSettings } from '@/context/SettingsContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -20,21 +21,22 @@ interface DatePickerModalProps {
   onMonthSelect: (offset: number) => void;
 }
 
-const months = [
-  'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
-  'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
-];
-
 export function DatePickerModal({ 
   visible, 
   onClose, 
   selectedMonthOffset, 
   onMonthSelect 
 }: DatePickerModalProps) {
+  const { t, language } = useSettings();
   const [displayYear, setDisplayYear] = useState(new Date().getFullYear());
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  const months = [
+    t('january'), t('february'), t('march'), t('april'), t('may'), t('june'),
+    t('july'), t('august'), t('september'), t('october'), t('november'), t('december')
+  ];
 
   useEffect(() => {
     if (visible) {
@@ -169,7 +171,7 @@ export function DatePickerModal({
           ]}
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
-            <Card style={styles.modalCard} glow="rgba(6, 182, 212, 0.1)">
+            <Card style={styles.modalCard}>
               <LinearGradient
                 colors={['rgba(15, 15, 20, 0.95)', 'rgba(20, 20, 25, 0.95)']}
                 style={styles.modalGradient}
@@ -177,7 +179,7 @@ export function DatePickerModal({
               
               {/* Header */}
               <View style={styles.modalHeader}>
-                <ThemedText style={styles.modalTitle}>Seleziona Mese</ThemedText>
+                <ThemedText style={styles.modalTitle}>{t('select_month')}</ThemedText>
                 <Pressable style={styles.closeButton} onPress={onClose}>
                   <ThemedText style={styles.closeIcon}>✕</ThemedText>
                 </Pressable>
@@ -255,13 +257,13 @@ export function DatePickerModal({
                   style={styles.quickActionButton}
                   onPress={() => handleQuickAction(0)}
                 >
-                  <ThemedText style={styles.quickActionText}>Oggi</ThemedText>
+                  <ThemedText style={styles.quickActionText}>{t('today')}</ThemedText>
                 </Pressable>
                 <Pressable 
                   style={styles.quickActionButton}
                   onPress={() => handleQuickAction(-1)}
                 >
-                  <ThemedText style={styles.quickActionText}>Mese Scorso</ThemedText>
+                  <ThemedText style={styles.quickActionText}>{t('last_month')}</ThemedText>
                 </Pressable>
               </View>
             </Card>

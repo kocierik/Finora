@@ -367,7 +367,7 @@ export default function ProfileScreen() {
             </Pressable>
             <Pressable 
               style={styles.actionItem}
-              onPress={() => Alert.alert(language === 'it' ? 'Supporto' : 'Support', language === 'it' ? 'Scrivici a support@finora.app o consulta le FAQ (presto disponibile).' : 'Write us at support@finora.app or check the FAQ (coming soon).')}
+              //onPress={() => Alert.alert(language === 'it' ? 'Supporto' : 'Support', language === 'it' ? 'Scrivici a contactfinora@gmail.com o consulta le FAQ (presto disponibile).' : 'Write us at contactfinora@gmail.com or check the FAQ (coming soon).')}
             >
               <View style={styles.actionIcon}>
                 <ThemedText style={styles.actionIconText}>ℹ️</ThemedText>
@@ -375,9 +375,9 @@ export default function ProfileScreen() {
               <View style={styles.actionContent}>
                 <ThemedText style={styles.actionLabel}>{t('support')}</ThemedText>
                 <ThemedText style={styles.actionDescription}>{t('support_desc')}</ThemedText>
-                <ThemedText style={styles.actionMeta}>{t('support_email_label')}: support@finora.app</ThemedText>
+                <ThemedText style={styles.actionMeta}>{t('support_email_label')}: contactfinora@gmail.com</ThemedText>
               </View>
-              <ThemedText style={styles.actionArrow}>→</ThemedText>
+             {/*<ThemedText style={styles.actionArrow}>→</ThemedText>*/}
             </Pressable>
           </View>
         </Card>
