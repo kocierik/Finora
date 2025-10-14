@@ -347,7 +347,7 @@ export default function ProfileScreen() {
               <View style={styles.actionContent}>
                 <ThemedText style={styles.actionLabel}>{t('notifications')}</ThemedText>
                 <ThemedText style={styles.actionDescription}>{t('notifications_desc')}</ThemedText>
-                <ThemedText style={styles.actionMeta}>Ultimo aggiornamento: {new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</ThemedText>
+             {/*  <ThemedText style={styles.actionMeta}>{t('last_update')}: {new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</ThemedText> */}
               </View>
               <ThemedText style={styles.actionArrow}>→</ThemedText>
             </Pressable>
@@ -361,7 +361,7 @@ export default function ProfileScreen() {
               <View style={styles.actionContent}>
                 <ThemedText style={styles.actionLabel}>{t('security')}</ThemedText>
                 <ThemedText style={styles.actionDescription}>{t('security_desc')}</ThemedText>
-                <ThemedText style={styles.actionMeta}>Account: {user?.email}</ThemedText>
+              {/*  <ThemedText style={styles.actionMeta}>Account: {user?.email}</ThemedText> */}
               </View>
               <ThemedText style={styles.actionArrow}>→</ThemedText>
             </Pressable>
@@ -930,7 +930,7 @@ const styles = StyleSheet.create({
     color: Brand.colors.text.secondary,
   },
   actionMeta: {
-    fontSize: 11,
+    fontSize: 12,
     color: Brand.colors.text.tertiary,
     marginTop: 2,
   },

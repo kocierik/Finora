@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
+import * as Notifications from 'expo-notifications'
 import { router, useLocalSearchParams } from 'expo-router'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Dimensions, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Dimensions, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
@@ -25,8 +26,22 @@ export default function OnboardingScreen() {
   const [checking, setChecking] = useState(true)
   const [forceShow, setForceShow] = useState(false)
   const [notifPreview, setNotifPreview] = useState<StoredNotification[]>([])
+  const sessionStartRef = useRef<number>(Date.now())
   const params = useLocalSearchParams()
   useEffect(() => {
+    // Ensure local notifications can show alerts when app is foreground
+    try {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        })
+      })
+    } catch {}
+
     (async () => {
       try {
         // Only show onboarding if explicitly forced (after signup) or currently active
@@ -173,6 +188,54 @@ export default function OnboardingScreen() {
     }
   }
 
+  const sendTestNotification = async () => {
+    try {
+      // Ensure Android notification channel exists
+      if (Platform.OS === 'android') {
+        try {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'Default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#06b6d4'
+          })
+        } catch {}
+      }
+
+      // Request permission if needed (Android 13+ / iOS)
+      try {
+        const { status } = await Notifications.getPermissionsAsync()
+        if (status !== 'granted') {
+          await Notifications.requestPermissionsAsync()
+        }
+      } catch {}
+
+      // Send a real local notification
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: t('test_notif_title'),
+          body: t('test_notif_body'),
+          subtitle: 'Finora',
+        },
+        trigger: null
+      })
+
+      // Give the system a short moment to deliver, then refresh preview (only Finora/test notif)
+      setTimeout(async () => {
+        const all = await loadNotifications()
+        const sorted = sortNotificationsByDate(all)
+        const onlyTest = sorted.filter(n => {
+          const isAppTest = (n.app || '').toLowerCase().includes('finora') || n.title === t('test_notif_title')
+          const isCurrentSession = typeof n.receivedAt === 'number' ? n.receivedAt >= sessionStartRef.current : true
+          return isAppTest && isCurrentSession
+        })
+        setNotifPreview(onlyTest.slice(0, 1))
+      }, 600)
+    } catch (e) {
+      // no-op
+    }
+  }
+
   // Load a small preview of recent notifications (top 5)
   useEffect(() => {
     let timer: any
@@ -180,7 +243,12 @@ export default function OnboardingScreen() {
       try {
         const all = await loadNotifications()
         const sorted = sortNotificationsByDate(all)
-        setNotifPreview(sorted.slice(0, 1))
+        const onlyTest = sorted.filter(n => {
+          const isAppTest = (n.app || '').toLowerCase().includes('finora') || n.title === t('test_notif_title')
+          const isCurrentSession = typeof n.receivedAt === 'number' ? n.receivedAt >= sessionStartRef.current : true
+          return isAppTest && isCurrentSession
+        })
+        setNotifPreview(onlyTest.slice(0, 1))
       } catch {}
     }
     // initial load
@@ -219,21 +287,27 @@ export default function OnboardingScreen() {
                   <Card style={[styles.previewCard, { maxWidth: CARD_MAX_WIDTH, width: '100%' }]}>
                     <ThemedText type="label" style={styles.previewTitle}>{t('recent_notifications')}</ThemedText>
                     {notifPreview.length === 0 ? (
-                      <ThemedText style={styles.previewEmpty}>{t('no_notifications_yet')}</ThemedText>
+                      <>
+                        <ThemedText style={styles.previewEmpty}>{t('no_notifications_yet')}</ThemedText>
+                      </>
                     ) : (
                       <View style={{ gap: 10 }}>
                         {notifPreview.map((n) => (
                           <View key={n.id} style={styles.previewItem}>
                             <View style={styles.previewDot} />
                             <View style={{ flex: 1 }}>
-                              <ThemedText style={styles.previewItemTitle} numberOfLines={1}>{n.title}</ThemedText>
-                              <ThemedText style={styles.previewItemText} numberOfLines={1}>{n.text}</ThemedText>
+                              <ThemedText style={styles.previewItemTitle} numberOfLines={1}>{n.title || t('no_title')}</ThemedText>
+                              <ThemedText style={styles.previewItemText} numberOfLines={1}>{n.text || t('no_text')}</ThemedText>
                             </View>
-                            <ThemedText style={styles.previewTime}>{new Date(n.receivedAt).toLocaleTimeString(locale || (language === 'it' ? 'it-IT' : 'en-US'), { hour: '2-digit', minute: '2-digit' })}</ThemedText>
+                            <ThemedText style={styles.previewTime}>{new Date(n.receivedAt).toLocaleTimeString(locale || (language === 'it' ? 'it-IT' : 'en-US'), { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</ThemedText>
                           </View>
                         ))}
                       </View>
                     )}
+                    <View style={{ height: 10 }} />
+                    <Pressable accessibilityRole="button" onPress={sendTestNotification} style={styles.testBtn}>
+                      <ThemedText style={styles.backText}>{t('try_send_test')}</ThemedText>
+                    </Pressable>
                   </Card>
                 </View>
               )}
@@ -489,6 +563,16 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     opacity: 0.5
+  },
+  testBtn: {
+    alignSelf: 'center',
+    marginTop: 6,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.04)'
   }
 })
 

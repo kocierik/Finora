@@ -14,9 +14,10 @@ import {
   type StoredNotification
 } from '@/services/notification-storage'
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
+import * as Notifications from 'expo-notifications'
 import { router } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { DeviceEventEmitter, FlatList, Linking, Pressable, StyleSheet, View } from 'react-native'
+import { DeviceEventEmitter, FlatList, Linking, Platform, Pressable, StyleSheet, View } from 'react-native'
 
 type FilterType = 'all' | 'wallet' | 'other'
 
@@ -141,6 +142,40 @@ export default function NotificationsScreen() {
     Linking.openSettings()
   }
 
+  const handleSendLocalTest = async () => {
+    addLog('🧪 Sending local test notification via Expo Notifications...')
+    try {
+      if (Platform.OS === 'android') {
+        try {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'Default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#06b6d4'
+          })
+        } catch {}
+      }
+      try {
+        const { status } = await Notifications.getPermissionsAsync()
+        if (status !== 'granted') {
+          await Notifications.requestPermissionsAsync()
+        }
+      } catch {}
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: t('test_notif_title'),
+          body: t('test_notif_body'),
+          subtitle: 'Finora',
+        },
+        trigger: null
+      })
+      addLog('✅ Local test notification scheduled')
+    } catch (e) {
+      addLog('❌ Failed to schedule local notification: ' + e)
+    }
+  }
+
   const handleClearLogs = () => {
     setLogs([])
     addLog('🗑️  Logs cleared')
@@ -196,6 +231,35 @@ export default function NotificationsScreen() {
   useEffect(() => {
     addLog('🚀 Notifications screen mounted')
     
+    // Ensure local notifications show as heads-up while app is foreground
+    try {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        })
+      })
+    } catch {}
+
+    // Ensure high-importance Android channel exists for heads-up notifications
+    if (Platform.OS === 'android') {
+      (async () => {
+        try {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'Default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#06b6d4',
+            enableVibrate: true,
+            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          })
+        } catch {}
+      })()
+    }
+
     // Check permission
     checkPermission()
     
@@ -280,6 +344,12 @@ export default function NotificationsScreen() {
           {renderInstructionWarning()}
           
           <ThemedText type="subtitle" style={{ marginTop: 8, marginBottom: 12 }}>{t('recent_notifications')}</ThemedText>
+          <Pressable 
+            style={styles.primaryButton}
+            onPress={handleSendLocalTest}
+          >
+            <ThemedText style={styles.primaryButtonText}>🔔 {t('try_send_test')}</ThemedText>
+          </Pressable>
         </View>
       }
       ListEmptyComponent={
@@ -299,7 +369,7 @@ export default function NotificationsScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
               <View style={styles.accentDot} />
               <ThemedText type="defaultSemiBold" style={styles.titleText}>
-                {item.title}
+                {item.title || t('no_title')}
               </ThemedText>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
@@ -311,7 +381,7 @@ export default function NotificationsScreen() {
               )}
             </View>
           </View>
-          <ThemedText style={styles.messageText}>{item.text}</ThemedText>
+          <ThemedText style={styles.messageText}>{item.text || t('no_text')}</ThemedText>
           <ThemedText style={styles.metaText}>📱 {item.app}</ThemedText>
         </Pressable>
       )}
