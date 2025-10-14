@@ -4,14 +4,15 @@ import { LinearGradient } from 'expo-linear-gradient'
 import * as Notifications from 'expo-notifications'
 import { router, useLocalSearchParams } from 'expo-router'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Dimensions, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Dimensions, Linking, Platform, Pressable, ScrollView, StyleSheet, ToastAndroid, View } from 'react-native'
 
 import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
-import { loadNotifications, sortNotificationsByDate, type StoredNotification } from '@/services/notification-storage'
+import type { NotificationData } from '@/services/notification-service'
+import { loadNotifications, saveNotification, sortNotificationsByDate, type StoredNotification } from '@/services/notification-storage'
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
 const CARD_MAX_WIDTH = 420
@@ -108,17 +109,17 @@ export default function OnboardingScreen() {
         subtitle: t('insights_subtitle')
       },
       {
+        key: 'notifications',
+        emoji: '🔔',
+        title: t('notifications_title'),
+        subtitle: t('notifications_subtitle')
+      },
+      {
         key: 'background',
         emoji: '⚙️',
         title: t('background_title'),
         subtitle:
           t('background_subtitle')
-      },
-      {
-        key: 'notifications',
-        emoji: '🔔',
-        title: t('notifications_title'),
-        subtitle: t('notifications_subtitle')
       },
       {
         key: 'confirm',
@@ -190,6 +191,7 @@ export default function OnboardingScreen() {
 
   const sendTestNotification = async () => {
     try {
+      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
       // Ensure Android notification channel exists
       if (Platform.OS === 'android') {
         try {
@@ -219,6 +221,25 @@ export default function OnboardingScreen() {
         },
         trigger: null
       })
+
+      // Also persist a synthetic notification locally to guarantee preview fields
+      try {
+        const now = Date.now()
+        const synthetic: NotificationData = {
+          id: `finora-test-${now}`,
+          app: 'Finora',
+          title: t('test_notif_title'),
+          text: t('test_notif_body'),
+          time: new Date(now).toISOString(),
+          timestamp: now
+        }
+        await saveNotification(synthetic)
+      } catch {}
+
+      // Toast feedback
+      if (Platform.OS === 'android') {
+        try { ToastAndroid.show(t('notification_sent'), ToastAndroid.SHORT) } catch {}
+      }
 
       // Give the system a short moment to deliver, then refresh preview (only Finora/test notif)
       setTimeout(async () => {
