@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SettingsProvider } from '@/context/SettingsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useDatabaseSync } from '@/hooks/use-database-sync';
 import { useWalletListener } from '@/services/wallet-listener';
 
 export const unstable_settings = {
@@ -35,6 +36,9 @@ function RootNavigator() {
   
   // Always call hooks unconditionally - wallet listener handles user check internally
   useWalletListener()
+  
+  // Sync settings with database
+  useDatabaseSync()
   
   console.log('[RootNavigator] 🔄 Auth state:', { user: !!user, loading })
   

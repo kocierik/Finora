@@ -72,7 +72,7 @@ export default function ProfileScreen() {
       
       // Carica soglie delle spese
       try {
-        const thresholds = await loadExpenseThresholds()
+        const thresholds = await loadExpenseThresholds(user?.id)
         setExpenseThresholds(thresholds)
       } catch (error) {
         console.log('[Profile] ⚠️  Error loading expense thresholds:', error)
@@ -132,7 +132,7 @@ export default function ProfileScreen() {
   const saveThresholds = async () => {
     try {
       setThresholdsLoading(true)
-      await saveExpenseThresholds(expenseThresholds)
+      await saveExpenseThresholds(expenseThresholds, user?.id)
       setSuccessMessage(t('thresholds_updated_success'))
       setShowSuccessModal(true)
     } catch (error: any) {

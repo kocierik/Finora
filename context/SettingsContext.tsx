@@ -101,7 +101,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           '@finora:settings',
           JSON.stringify({ language, locale, currency, hideBalances, monthlyBudget, enableBiometrics, sessionTimeoutMinutes })
         )
-      } catch {}
+      } catch (error) {
+        console.log('[Settings] ❌ Error saving settings:', error)
+      }
     }
     save()
   }, [language, locale, currency, hideBalances, monthlyBudget, enableBiometrics, sessionTimeoutMinutes])

@@ -192,8 +192,11 @@ export default function ExpensesScreen() {
     }, 30000)
 
     const sub = DeviceEventEmitter.addListener('expenses:externalUpdate', () => {
+      console.log('[Expenses] 🔄 External update received, refreshing data...')
       fetchExpenses()
       loadAllMonthItems(curYear, curMonth)
+      // Force pie chart update
+      setCategoryUpdateTrigger(prev => prev + 1)
     })
 
     return () => { clearInterval(interval); sub.remove() }
@@ -473,8 +476,14 @@ export default function ExpensesScreen() {
       setAllMonthItems(prev => prev.map(it =>
         (it as any).recurring_group_id === groupId ? ({ ...it, recurring_stopped: true } as any) : it
       ))
+      
+      // Force pie chart update
+      setCategoryUpdateTrigger(prev => prev + 1)
+      
       setShowCategoryModal(false)
       setSelectedTransaction(null)
+      
+      console.log('[Expenses] ✅ Recurring series stopped, pie chart updated')
     } catch (e) {
       console.error('[Expenses] ❌ Error stopping recurring series', e)
     }
@@ -1089,7 +1098,12 @@ export default function ExpensesScreen() {
               <ThemedText style={styles.chartTitle}>{language === 'it' ? 'Distribuzione per categoria' : 'Category distribution'}</ThemedText>
             </View>
             <View style={styles.chartContainer}>
-              <ExpensesPie items={allMonthItems} selectedYear={curYear} selectedMonth={curMonth} />
+              <ExpensesPie 
+                key={`${curYear}-${curMonth}-${categoryUpdateTrigger}`}
+                items={allMonthItems} 
+                selectedYear={curYear} 
+                selectedMonth={curMonth} 
+              />
             </View>
           </Card>
         </Animated.View>
@@ -1468,9 +1482,20 @@ export default function ExpensesScreen() {
                   try {
                     const { error } = await deleteExpense(transactionToDelete.id!)
                     if (error) throw error
+                    
+                    // Update items list
                     setItems(prev => prev.filter(i => i.id !== transactionToDelete.id))
+                    
+                    // Update month dataset for pie chart
+                    setAllMonthItems(prev => prev.filter(i => i.id !== transactionToDelete.id))
+                    
+                    // Force pie chart update
+                    setCategoryUpdateTrigger(prev => prev + 1)
+                    
                     setShowConfirmModal(false)
                     setTransactionToDelete(null)
+                    
+                    console.log('[Expenses] ✅ Transaction deleted, pie chart updated')
                   } catch (e) {
                     Alert.alert('Errore', 'Impossibile eliminare la transazione. Riprova.')
                   }

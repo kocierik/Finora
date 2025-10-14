@@ -78,6 +78,20 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
     ]).start();
   }, []);
 
+  // Update animations when data changes
+  useEffect(() => {
+    // Reset and re-animate when data changes
+    animatedValues.forEach(anim => anim.setValue(0));
+    
+    Animated.stagger(100, animatedValues.map(anim => 
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      })
+    )).start();
+  }, [items, selectedYear, selectedMonth]);
+
   // Filter for selected month only
   const sameMonth = (dateStr: string, year: number, monthIndex: number) => {
     if (!dateStr) return false;

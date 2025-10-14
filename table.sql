@@ -45,6 +45,12 @@ alter table public.expenses enable row level security;
 CREATE TABLE public.profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   display_name TEXT,
+  -- Financial settings
+  monthly_budget NUMERIC,
+  expense_threshold_moderate NUMERIC DEFAULT 1000,
+  expense_threshold_high NUMERIC DEFAULT 1500,
+  currency TEXT DEFAULT 'EUR',
+  hide_balances BOOLEAN DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -218,3 +224,27 @@ SELECT cron.schedule(
   $$CALL public.generate_recurring_expenses(60);$$
 )
 ON CONFLICT (jobname) DO NOTHING;
+
+-- Aggiungi colonne per le impostazioni finanziarie alla tabella profiles (per database esistenti)
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS monthly_budget NUMERIC,
+  ADD COLUMN IF NOT EXISTS expense_threshold_moderate NUMERIC DEFAULT 1000,
+  ADD COLUMN IF NOT EXISTS expense_threshold_high NUMERIC DEFAULT 1500,
+  ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'EUR',
+  ADD COLUMN IF NOT EXISTS hide_balances BOOLEAN DEFAULT false;
+
+-- Aggiorna updated_at quando si modificano le impostazioni
+CREATE OR REPLACE FUNCTION public.update_profile_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Crea trigger per aggiornare updated_at
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
+CREATE TRIGGER update_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_profile_updated_at();
