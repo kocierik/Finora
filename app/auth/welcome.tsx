@@ -1,6 +1,7 @@
 import { ThemedText } from '@/components/themed-text'
 import { Brand } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
+import { useSettings } from '@/context/SettingsContext'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { useEffect, useRef } from 'react'
@@ -10,6 +11,7 @@ const { width, height } = Dimensions.get('window')
 
 export default function WelcomeScreen() {
   const { signInWithGoogle } = useAuth()
+  const { t } = useSettings()
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(50)).current
   const scaleAnim = useRef(new Animated.Value(0.9)).current
@@ -102,7 +104,7 @@ export default function WelcomeScreen() {
             resizeMode="contain"
           />
           <ThemedText style={styles.appName}>{Brand.name}</ThemedText>
-          <ThemedText style={styles.tagline}>{Brand.tagline}</ThemedText>
+          <ThemedText style={styles.tagline}>{t('tagline')}</ThemedText>
         </View>
 
         {/* Action Buttons */}
@@ -114,7 +116,7 @@ export default function WelcomeScreen() {
               end={{ x: 1, y: 1 }}
               style={styles.buttonGradient}
             >
-              <ThemedText style={styles.buttonText}>Log in</ThemedText>
+              <ThemedText style={styles.buttonText}>{t('log_in')}</ThemedText>
             </LinearGradient>
           </Pressable>
 
@@ -125,7 +127,7 @@ export default function WelcomeScreen() {
               end={{ x: 1, y: 1 }}
               style={styles.signupButtonGradient}
             >
-              <ThemedText style={styles.signupButtonText}>Sign up</ThemedText>
+              <ThemedText style={styles.signupButtonText}>{t('sign_up')}</ThemedText>
             </LinearGradient>
           </Pressable>
 
@@ -137,7 +139,7 @@ export default function WelcomeScreen() {
               end={{ x: 1, y: 1 }}
               style={styles.signupButtonGradient}
             >
-              <ThemedText style={styles.signupButtonText}>Continue with Google</ThemedText>
+              <ThemedText style={styles.signupButtonText}>{t('continue_with_google')}</ThemedText>
             </LinearGradient>
           </Pressable>
         </View>

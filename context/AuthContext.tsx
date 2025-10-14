@@ -209,7 +209,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (setErr) console.log('[Auth] ❌ setSession error from auth session result:', setErr.message)
             else {
               console.log('[Auth] ✅ Session set from auth session result tokens')
-              // Let the main index route handle the redirect based on onboarding status
+              // Ensure onboarding for brand new users signing in with Google
+              try {
+                const me = (await supabase.auth.getUser()).data.user
+                if (me) {
+                  const { data: profile, error: profileErr } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('id', me.id)
+                    .maybeSingle()
+                  const serverSeen = (me as any)?.user_metadata?.onboarding_seen === true
+                  const localSeen = await AsyncStorage.getItem('@finora:onboardingSeen')
+                  const isNew = !profile && !serverSeen && !localSeen
+                  if (isNew) {
+                    await AsyncStorage.setItem('@finora:forceOnboarding', '1')
+                    await AsyncStorage.setItem('@finora:onboardingActive', '1')
+                    console.log('[Auth] 🎯 New Google user detected → forcing onboarding')
+                    try { router.replace('/onboarding') } catch {}
+                  }
+                }
+              } catch (e) {
+                console.log('[Auth] ⚠️ Onboarding check after Google setSession failed:', (e as any)?.message)
+              }
               return { error: undefined }
             }
           } else if (code) {
@@ -217,7 +238,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (exchErr) console.log('[Auth] ❌ exchangeCodeForSession error from auth session result:', exchErr.message)
             else {
               console.log('[Auth] ✅ Session established via code exchange from auth session result')
-              // Let the main index route handle the redirect based on onboarding status
+              // Ensure onboarding for brand new users signing in with Google
+              try {
+                const me = (await supabase.auth.getUser()).data.user
+                if (me) {
+                  const { data: profile, error: profileErr } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('id', me.id)
+                    .maybeSingle()
+                  const serverSeen = (me as any)?.user_metadata?.onboarding_seen === true
+                  const localSeen = await AsyncStorage.getItem('@finora:onboardingSeen')
+                  const isNew = !profile && !serverSeen && !localSeen
+                  if (isNew) {
+                    await AsyncStorage.setItem('@finora:forceOnboarding', '1')
+                    await AsyncStorage.setItem('@finora:onboardingActive', '1')
+                    console.log('[Auth] 🎯 New Google user detected → forcing onboarding')
+                    try { router.replace('/onboarding') } catch {}
+                  }
+                }
+              } catch (e) {
+                console.log('[Auth] ⚠️ Onboarding check after Google code exchange failed:', (e as any)?.message)
+              }
               return { error: undefined }
             }
           } else {

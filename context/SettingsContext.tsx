@@ -46,16 +46,48 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           if (typeof parsed.monthlyBudget === 'number') setMonthlyBudget(parsed.monthlyBudget)
           if (typeof parsed.enableBiometrics === 'boolean') setEnableBiometrics(parsed.enableBiometrics)
           if (typeof parsed.sessionTimeoutMinutes === 'number') setSessionTimeoutMinutes(parsed.sessionTimeoutMinutes)
+
+          // Also follow current device language on startup
+          // If device language differs from stored one, update to device language
+          try {
+            let deviceLang = 'en'
+            let deviceLocale = 'en-US'
+            const intlLocale = (Intl?.DateTimeFormat?.() as any)?.resolvedOptions?.()?.locale || ''
+            const navLang = (typeof navigator !== 'undefined' && (navigator as any).language) ? (navigator as any).language : ''
+            const guess = (intlLocale || navLang || '').toLowerCase()
+            if (guess.startsWith('it')) {
+              deviceLang = 'it'
+              deviceLocale = 'it-IT'
+            } else if (guess.startsWith('en')) {
+              deviceLang = 'en'
+              deviceLocale = 'en-US'
+            }
+
+            if (deviceLang !== parsed.language) {
+              setLanguage(deviceLang as LanguageCode)
+              setLocale(deviceLocale)
+            }
+          } catch {}
         } else {
-          // No stored settings: detect device language and default to EN unless Italian
-          const navLang = (typeof navigator !== 'undefined' && (navigator as any).language) ? (navigator as any).language : 'en-US'
-          if ((navLang || '').toLowerCase().startsWith('it')) {
-            setLanguage('it')
-            setLocale('it-IT')
-          } else {
-            setLanguage('en')
-            setLocale('en-US')
-          }
+          // No stored settings: detect device language using standard APIs with safe fallbacks
+          let deviceLang = 'en'
+          let deviceLocale = 'en-US'
+
+          try {
+            const intlLocale = (Intl?.DateTimeFormat?.() as any)?.resolvedOptions?.()?.locale || ''
+            const navLang = (typeof navigator !== 'undefined' && (navigator as any).language) ? (navigator as any).language : ''
+            const guess = (intlLocale || navLang || '').toLowerCase()
+            if (guess.startsWith('it')) {
+              deviceLang = 'it'
+              deviceLocale = 'it-IT'
+            } else if (guess.startsWith('en')) {
+              deviceLang = 'en'
+              deviceLocale = 'en-US'
+            }
+          } catch {}
+
+          setLanguage(deviceLang as LanguageCode)
+          setLocale(deviceLocale)
         }
       } catch {}
     })()
@@ -85,6 +117,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     t: (key: string, params?: Record<string, any>) => {
       const i18n: Record<LanguageCode, Record<string, string>> = {
         it: {
+          tagline: 'Il tuo futuro finanziario',
           monthly_expenses: 'Spese Mensili',
           this_month: 'Questo mese',
           vs_last_month: 'vs mese scorso',
@@ -142,6 +175,38 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           ,tutorial: 'Tutorial'
           ,review_tutorial: 'Rivedi il Tutorial'
           ,tutorial_desc: 'Scopri le funzioni dell\'app'
+          ,login_welcome_back: 'Bentornato'
+          ,login_subtitle: 'Accedi al tuo account'
+          ,email_label: 'Email'
+          ,password_label: 'Password'
+          ,email_placeholder: 'Inserisci la tua email'
+          ,password_placeholder: 'Inserisci la tua password'
+          ,sign_in: 'Accedi'
+          ,signing_in: 'Accesso in corso...'
+          ,dont_have_account: 'Non hai un account? '
+          ,sign_up: 'Registrati'
+          ,email_required: 'Email è richiesta'
+          ,password_required: 'Password è richiesta'
+          ,email_invalid: 'Email non valida'
+          ,login_error_generic: 'Errore durante il login'
+          ,create_account_title: 'Crea account'
+          ,create_account_subtitle: 'Unisciti al futuro della finanza'
+          ,name_label: 'Nome'
+          ,name_placeholder: 'Inserisci il tuo nome'
+          ,create_password_placeholder: 'Crea una password'
+          ,confirm_password_label: 'Conferma Password'
+          ,confirm_password_placeholder: 'Conferma la tua password'
+          ,creating_account: 'Creazione account...'
+          ,create_account: 'Crea account'
+          ,already_have_account: 'Hai già un account? '
+          ,log_in: 'Accedi'
+          ,continue_with_google: 'Continua con Google'
+          ,name_required: 'Nome è richiesto'
+          ,password_min_length: 'La password deve essere di almeno 6 caratteri'
+          ,passwords_do_not_match: 'Le password non coincidono'
+          ,must_accept_terms: 'Devi accettare i Termini e Condizioni'
+          ,terms_agree_text: 'Accetto i Termini & Condizioni e l’Informativa sulla Privacy'
+          ,signup_error_generic: 'Errore durante la registrazione'
           ,welcome_title: 'Benvenuto in Finora'
           ,welcome_subtitle: 'Il tuo assistente smart per gestire i tuoi risparmi.'
           ,tracking_title: 'Tracciamento Automatico'
@@ -191,6 +256,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           ,december: 'Dicembre'
         },
         en: {
+          tagline: 'Your Financial Future',
           monthly_expenses: 'Monthly Expenses',
           this_month: 'This month',
           vs_last_month: 'vs last month',
@@ -251,6 +317,38 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           ,tutorial: 'Tutorial'
           ,review_tutorial: 'Review Tutorial'
           ,tutorial_desc: 'Review the app features'
+          ,login_welcome_back: 'Welcome back'
+          ,login_subtitle: 'Sign in to your account'
+          ,email_label: 'Email'
+          ,password_label: 'Password'
+          ,email_placeholder: 'Enter your email'
+          ,password_placeholder: 'Enter your password'
+          ,sign_in: 'Sign in'
+          ,signing_in: 'Signing in...'
+          ,dont_have_account: "Don't have an account? "
+          ,sign_up: 'Sign up'
+          ,email_required: 'Email is required'
+          ,password_required: 'Password is required'
+          ,email_invalid: 'Invalid email address'
+          ,login_error_generic: 'Error during login'
+          ,create_account_title: 'Create account'
+          ,create_account_subtitle: 'Join the future of finance'
+          ,name_label: 'Name'
+          ,name_placeholder: 'Enter your name'
+          ,create_password_placeholder: 'Create a password'
+          ,confirm_password_label: 'Confirm Password'
+          ,confirm_password_placeholder: 'Confirm your password'
+          ,creating_account: 'Creating account...'
+          ,create_account: 'Create account'
+          ,already_have_account: 'Already have an account? '
+          ,log_in: 'Log in'
+          ,continue_with_google: 'Continue with Google'
+          ,name_required: 'Name is required'
+          ,password_min_length: 'Password must be at least 6 characters'
+          ,passwords_do_not_match: 'Passwords do not match'
+          ,must_accept_terms: 'You must accept the Terms & Conditions'
+          ,terms_agree_text: 'I agree to the Terms & Conditions and Privacy Policy'
+          ,signup_error_generic: 'Error during signup'
           ,welcome_title: 'Welcome to Finora'
           ,welcome_subtitle: 'Your smart assistant for managing your savings.'
           ,tracking_title: 'Automatic Tracking'

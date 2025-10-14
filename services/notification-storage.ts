@@ -123,5 +123,9 @@ export function filterNotificationsByDate(
  * Ordina le notifiche per data (più recenti prima)
  */
 export function sortNotificationsByDate(notifications: StoredNotification[]): StoredNotification[] {
-  return notifications.sort((a, b) => b.receivedAt - a.receivedAt)
+  return notifications.sort((a, b) => {
+    const aTime = typeof a.receivedAt === 'number' ? a.receivedAt : (Number((a as any).timestamp) || 0)
+    const bTime = typeof b.receivedAt === 'number' ? b.receivedAt : (Number((b as any).timestamp) || 0)
+    return bTime - aTime
+  })
 }

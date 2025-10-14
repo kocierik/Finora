@@ -59,9 +59,9 @@ export default function LoginScreen() {
 
     // Validation
     const newErrors: typeof errors = {}
-    if (!email.trim()) newErrors.email = 'Email è richiesta'
-    if (!password.trim()) newErrors.password = 'Password è richiesta'
-    if (!email.includes('@')) newErrors.email = 'Email non valida'
+    if (!email.trim()) newErrors.email = t('email_required')
+    if (!password.trim()) newErrors.password = t('password_required')
+    if (!email.includes('@')) newErrors.email = t('email_invalid')
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -81,7 +81,7 @@ export default function LoginScreen() {
       }
     } catch (error) {
       console.log('[Login] ❌ Login exception:', error)
-      setErrors({ general: 'Errore durante il login' })
+      setErrors({ general: t('login_error_generic') })
     } finally {
       setLoading(false)
     }
@@ -130,8 +130,8 @@ export default function LoginScreen() {
         <Pressable style={styles.backButton} onPress={handleBack}>
           <ThemedText style={styles.backButtonText}>←</ThemedText>
         </Pressable>
-        <ThemedText style={styles.title}>Welcome back</ThemedText>
-        <ThemedText style={styles.subtitle}>Sign in to your account</ThemedText>
+        <ThemedText style={styles.title}>{t('login_welcome_back')}</ThemedText>
+        <ThemedText style={styles.subtitle}>{t('login_subtitle')}</ThemedText>
       </Animated.View>
 
       {/* Form */}
@@ -151,13 +151,13 @@ export default function LoginScreen() {
         >
         {/* Email Field */}
         <View style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Email</ThemedText>
+          <ThemedText style={styles.inputLabel}>{t('email_label')}</ThemedText>
           <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
             <TextInput
               style={styles.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="Enter your email"
+              placeholder={t('email_placeholder')}
               placeholderTextColor={Brand.colors.text.tertiary}
               keyboardType="email-address"
               autoCapitalize="none"
@@ -169,13 +169,13 @@ export default function LoginScreen() {
 
         {/* Password Field */}
         <View style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Password</ThemedText>
+          <ThemedText style={styles.inputLabel}>{t('password_label')}</ThemedText>
           <View style={[styles.inputWrapper, errors.password && styles.inputError]}>
             <TextInput
               style={styles.input}
               value={password}
               onChangeText={setPassword}
-              placeholder="Enter your password"
+              placeholder={t('password_placeholder')}
               placeholderTextColor={Brand.colors.text.tertiary}
               secureTextEntry
               autoCapitalize="none"
@@ -210,16 +210,16 @@ export default function LoginScreen() {
             style={styles.buttonGradient}
           >
             <ThemedText style={styles.loginButtonText}>
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? t('signing_in') : t('sign_in')}
             </ThemedText>
           </LinearGradient>
         </Pressable>
 
         {/* Sign Up Link */}
         <View style={styles.signupContainer}>
-          <ThemedText style={styles.signupText}>Don't have an account? </ThemedText>
+          <ThemedText style={styles.signupText}>{t('dont_have_account')}</ThemedText>
           <Pressable onPress={() => router.push('/auth/signup')}>
-            <ThemedText style={styles.signupLink}>Sign up</ThemedText>
+            <ThemedText style={styles.signupLink}>{t('sign_up')}</ThemedText>
           </Pressable>
         </View>
         </Animated.View>

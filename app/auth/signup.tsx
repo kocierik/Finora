@@ -1,6 +1,7 @@
 import { ThemedText } from '@/components/themed-text'
 import { Brand } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
+import { useSettings } from '@/context/SettingsContext'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
@@ -10,6 +11,7 @@ const { width, height } = Dimensions.get('window')
 
 export default function SignupScreen() {
   const { signUp } = useAuth()
+  const { t } = useSettings()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -66,13 +68,13 @@ export default function SignupScreen() {
 
     // Validation
     const newErrors: typeof errors = {}
-    if (!name.trim()) newErrors.name = 'Nome è richiesto'
-    if (!email.trim()) newErrors.email = 'Email è richiesta'
-    if (!email.includes('@')) newErrors.email = 'Email non valida'
-    if (!password.trim()) newErrors.password = 'Password è richiesta'
-    if (password.length < 6) newErrors.password = 'Password deve essere di almeno 6 caratteri'
-    if (password !== confirmPassword) newErrors.confirmPassword = 'Le password non coincidono'
-    if (!agreeToTerms) newErrors.terms = 'Devi accettare i Termini e Condizioni'
+    if (!name.trim()) newErrors.name = t('name_required')
+    if (!email.trim()) newErrors.email = t('email_required')
+    if (!email.includes('@')) newErrors.email = t('email_invalid')
+    if (!password.trim()) newErrors.password = t('password_required')
+    if (password.length < 6) newErrors.password = t('password_min_length')
+    if (password !== confirmPassword) newErrors.confirmPassword = t('passwords_do_not_match')
+    if (!agreeToTerms) newErrors.terms = t('must_accept_terms')
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -96,7 +98,7 @@ export default function SignupScreen() {
       }
     } catch (error) {
       console.log('[Signup] ❌ Signup exception:', error)
-      setErrors({ general: 'Errore durante la registrazione' })
+      setErrors({ general: t('signup_error_generic') })
     } finally {
       setLoading(false)
     }
@@ -132,8 +134,8 @@ export default function SignupScreen() {
         <Pressable style={styles.backButton} onPress={handleBack}>
           <ThemedText style={styles.backButtonText}>←</ThemedText>
         </Pressable>
-        <ThemedText style={styles.title}>Create account</ThemedText>
-        <ThemedText style={styles.subtitle}>Join the future of finance</ThemedText>
+        <ThemedText style={styles.title}>{t('create_account_title')}</ThemedText>
+        <ThemedText style={styles.subtitle}>{t('create_account_subtitle')}</ThemedText>
       </Animated.View>
 
       {/* Form */}
@@ -153,13 +155,13 @@ export default function SignupScreen() {
         >
         {/* Name Field */}
         <View style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Name</ThemedText>
+          <ThemedText style={styles.inputLabel}>{t('name_label')}</ThemedText>
           <View style={[styles.inputWrapper, errors.name && styles.inputError]}>
             <TextInput
               style={styles.input}
               value={name}
               onChangeText={setName}
-              placeholder="Enter your name"
+              placeholder={t('name_placeholder')}
               placeholderTextColor={Brand.colors.text.tertiary}
               autoCapitalize="words"
               autoCorrect={false}
@@ -170,13 +172,13 @@ export default function SignupScreen() {
 
         {/* Email Field */}
         <View style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Email</ThemedText>
+          <ThemedText style={styles.inputLabel}>{t('email_label')}</ThemedText>
           <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
             <TextInput
               style={styles.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="Enter your email"
+              placeholder={t('email_placeholder')}
               placeholderTextColor={Brand.colors.text.tertiary}
               keyboardType="email-address"
               autoCapitalize="none"
@@ -188,13 +190,13 @@ export default function SignupScreen() {
 
         {/* Password Field */}
         <View style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Password</ThemedText>
+          <ThemedText style={styles.inputLabel}>{t('password_label')}</ThemedText>
           <View style={[styles.inputWrapper, errors.password && styles.inputError]}>
             <TextInput
               style={styles.input}
               value={password}
               onChangeText={setPassword}
-              placeholder="Create a password"
+              placeholder={t('create_password_placeholder')}
               placeholderTextColor={Brand.colors.text.tertiary}
               secureTextEntry
               autoCapitalize="none"
@@ -206,13 +208,13 @@ export default function SignupScreen() {
 
         {/* Confirm Password Field */}
         <View style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Confirm Password</ThemedText>
+          <ThemedText style={styles.inputLabel}>{t('confirm_password_label')}</ThemedText>
           <View style={[styles.inputWrapper, errors.confirmPassword && styles.inputError]}>
             <TextInput
               style={styles.input}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              placeholder="Confirm your password"
+              placeholder={t('confirm_password_placeholder')}
               placeholderTextColor={Brand.colors.text.tertiary}
               secureTextEntry
               autoCapitalize="none"
@@ -231,12 +233,7 @@ export default function SignupScreen() {
             {agreeToTerms && <ThemedText style={styles.checkmark}>✓</ThemedText>}
           </View>
           <View style={styles.termsTextContainer}>
-            <ThemedText style={styles.termsText}>
-              I agree to the{' '}
-              <ThemedText style={styles.termsLink}>Terms & Conditions</ThemedText>
-              {' '}and{' '}
-              <ThemedText style={styles.termsLink}>Privacy Policy</ThemedText>
-            </ThemedText>
+            <ThemedText style={styles.termsText}>{t('terms_agree_text')}</ThemedText>
           </View>
         </Pressable>
         {errors.terms && <ThemedText style={styles.errorText}>{errors.terms}</ThemedText>}
@@ -261,16 +258,16 @@ export default function SignupScreen() {
             style={styles.buttonGradient}
           >
             <ThemedText style={styles.signupButtonText}>
-              {loading ? 'Creating account...' : 'Create account'}
+              {loading ? t('creating_account') : t('create_account')}
             </ThemedText>
           </LinearGradient>
         </Pressable>
 
         {/* Login Link */}
         <View style={styles.loginContainer}>
-          <ThemedText style={styles.loginText}>Already have an account? </ThemedText>
+          <ThemedText style={styles.loginText}>{t('already_have_account')}</ThemedText>
           <Pressable onPress={() => router.push('/auth/login')}>
-            <ThemedText style={styles.loginLink}>Log in</ThemedText>
+            <ThemedText style={styles.loginLink}>{t('log_in')}</ThemedText>
           </Pressable>
         </View>
         </Animated.View>

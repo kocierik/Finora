@@ -30,7 +30,18 @@ export default function OnboardingScreen() {
   const [notifPreview, setNotifPreview] = useState<StoredNotification[]>([])
   const [notifReadStatus, setNotifReadStatus] = useState<NotificationPermissionStatus>('unknown')
   const sessionStartRef = useRef<number>(Date.now())
+  const permissionIntervalRef = useRef<any>(null)
+  const previewIntervalRef = useRef<any>(null)
+  const previewTimeoutRef = useRef<any>(null)
   const params = useLocalSearchParams()
+
+  const getSafeTimestamp = (n: any): number => {
+    const receivedAt = typeof n?.receivedAt === 'number' ? n.receivedAt : Number(n?.receivedAt)
+    if (!isNaN(receivedAt) && receivedAt > 0) return receivedAt
+    const ts = typeof n?.timestamp === 'number' ? n.timestamp : Number(n?.timestamp)
+    if (!isNaN(ts) && ts > 0) return ts
+    return 0
+  }
   useEffect(() => {
     // Ensure local notifications can show alerts when app is foreground
     try {
@@ -96,19 +107,7 @@ export default function OnboardingScreen() {
     })()
   }, [params])
 
-  // Periodically re-check permission while on this screen
-  useEffect(() => {
-    let timer: any
-    const poll = async () => {
-      try {
-        const status = await checkNotificationPermission()
-        setNotifReadStatus(status)
-      } catch {}
-    }
-    timer = setInterval(poll, 3000)
-    return () => clearInterval(timer)
-  }, [])
-
+  // Pages configuration (depends on translations)
   const pages = useMemo(
     () => [
       {
@@ -149,8 +148,40 @@ export default function OnboardingScreen() {
         subtitle: t('confirm_subtitle')
       }
     ],
-    []
+    [t]
   )
+
+  // Periodically re-check permission only while on the confirm page
+  useEffect(() => {
+    // clear any existing interval first
+    if (permissionIntervalRef.current) {
+      clearInterval(permissionIntervalRef.current)
+      permissionIntervalRef.current = null
+    }
+    let active = true
+    const poll = async () => {
+      try {
+        const status = await checkNotificationPermission()
+        if (!active) return
+        // update only if still on last page
+        if (index === pages.length - 1) {
+          setNotifReadStatus(status)
+        }
+      } catch {}
+    }
+    if (index === pages.length - 1) {
+      permissionIntervalRef.current = setInterval(poll, 3000)
+    }
+    return () => {
+      active = false
+      if (permissionIntervalRef.current) {
+        clearInterval(permissionIntervalRef.current)
+        permissionIntervalRef.current = null
+      }
+    }
+  }, [index, pages.length])
+
+  
 
   const onScrollListener = (e: any) => {
     const x = e.nativeEvent.contentOffset.x
@@ -211,101 +242,150 @@ export default function OnboardingScreen() {
   }
 
   const sendTestNotification = async () => {
-    try {
-      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
-      // Validate read-notifications permission to avoid false positives in preview
+    // Haptics feedback (non-blocking)
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+
+    // Ensure Android notification channel exists before scheduling
+    if (Platform.OS === 'android') {
       try {
-        const status = await checkNotificationPermission()
-        setNotifReadStatus(status)
-      } catch {}
-      // Ensure Android notification channel exists
-      if (Platform.OS === 'android') {
-        try {
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'Default',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#06b6d4'
-          })
-        } catch {}
-      }
-
-      // Request permission if needed (Android 13+ / iOS)
-      try {
-        const { status } = await Notifications.getPermissionsAsync()
-        if (status !== 'granted') {
-          await Notifications.requestPermissionsAsync()
-        }
-      } catch {}
-
-      // Send a real local notification
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: t('test_notif_title'),
-          body: t('test_notif_body'),
-          subtitle: 'Finora',
-        },
-        trigger: null
-      })
-
-      // Persist synthetic entry only if permission is authorized
-      if (notifReadStatus === 'authorized') {
-        try {
-          const now = Date.now()
-          const synthetic: NotificationData = {
-            id: `finora-test-${now}`,
-            app: 'Finora',
-            title: t('test_notif_title'),
-            text: t('test_notif_body'),
-            time: new Date(now).toISOString(),
-            timestamp: now
-          }
-          await saveNotification(synthetic)
-        } catch {}
-      }
-
-      // Toast feedback
-      if (Platform.OS === 'android') {
-        try { ToastAndroid.show(t('notification_sent'), ToastAndroid.SHORT) } catch {}
-      }
-
-      // Give the system a short moment to deliver, then refresh preview (only Finora/test notif)
-      setTimeout(async () => {
-        const all = await loadNotifications()
-        const sorted = sortNotificationsByDate(all)
-        const onlyTest = sorted.filter(n => {
-          const isAppTest = (n.app || '').toLowerCase().includes('finora') || n.title === t('test_notif_title')
-          const isCurrentSession = typeof n.receivedAt === 'number' ? n.receivedAt >= sessionStartRef.current : true
-          return isAppTest && isCurrentSession
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#06b6d4'
         })
-        setNotifPreview(onlyTest.slice(0, 1))
-      }, 600)
-    } catch (e) {
-      // no-op
+      } catch {}
     }
+
+    // Request/verify permissions first
+    let granted = false
+    try {
+      const current = await Notifications.getPermissionsAsync()
+      if (current.status === 'granted') {
+        granted = true
+      } else {
+        const req = await Notifications.requestPermissionsAsync()
+        granted = req.status === 'granted'
+      }
+    } catch {
+      // If permission APIs fail, do not attempt to schedule
+      granted = false
+    }
+
+    // Update read-notifications permission snapshot (used for preview save)
+    try {
+      const status = await checkNotificationPermission()
+      setNotifReadStatus(status)
+    } catch {}
+
+    // Schedule only if permissions granted
+    if (granted) {
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: t('test_notif_title') || 'Hello!',
+            body: t('test_notif_body') || 'Can you see me inside the Finora app?',
+            subtitle: 'Finora',
+          },
+          trigger: null
+        })
+      } catch {}
+    }
+
+    // Persist synthetic entry only if permission is authorized
+    if (notifReadStatus === 'authorized') {
+      try {
+        const now = Date.now()
+        const synthetic: NotificationData = {
+          id: `finora-test-${now}`,
+          app: 'Finora',
+          title: t('test_notif_title') || 'Hello!',
+          text: t('test_notif_body') || 'Can you see me inside the Finora app?',
+          time: new Date(now).toISOString(),
+          timestamp: now
+        }
+        await saveNotification(synthetic)
+      } catch {}
+    }
+
+    // Toast feedback (best-effort)
+    if (Platform.OS === 'android') {
+      try { ToastAndroid.show(t('notification_sent') || 'Notification sent', ToastAndroid.SHORT) } catch {}
+    }
+
+    // Give the system a short moment to deliver, then refresh preview (only Finora/test notif)
+    try {
+      if (previewTimeoutRef.current) {
+        clearTimeout(previewTimeoutRef.current)
+        previewTimeoutRef.current = null
+      }
+      previewTimeoutRef.current = setTimeout(async () => {
+        try {
+          // avoid running if we left the last page
+          if (index !== pages.length - 1) return
+          const all = await loadNotifications()
+          const sorted = sortNotificationsByDate(all)
+          const onlyTest = sorted.filter(n => {
+            const isAppTest = (n.app || '').toLowerCase().includes('finora') || n.title === t('test_notif_title')
+            const ts = getSafeTimestamp(n)
+            const isCurrentSession = ts > 0 ? ts >= sessionStartRef.current : true
+            return isAppTest && isCurrentSession
+          })
+          setNotifPreview(onlyTest.slice(0, 1))
+        } catch {}
+      }, 600)
+    } catch {}
   }
 
-  // Load a small preview of recent notifications (top 5)
+  // Load a small preview of recent notifications (top 1) only on confirm page
   useEffect(() => {
-    let timer: any
+    // when leaving the final page, clear preview to avoid rendering stale data
+    if (index !== pages.length - 1 && notifPreview.length > 0) {
+      setNotifPreview([])
+    }
+    // clear any existing interval/timeout first
+    if (previewIntervalRef.current) {
+      clearInterval(previewIntervalRef.current)
+      previewIntervalRef.current = null
+    }
+    if (previewTimeoutRef.current) {
+      clearTimeout(previewTimeoutRef.current)
+      previewTimeoutRef.current = null
+    }
+    let active = true
     const loadPreview = async () => {
       try {
         const all = await loadNotifications()
+        if (!active) return
         const sorted = sortNotificationsByDate(all)
         const onlyTest = sorted.filter(n => {
           const isAppTest = (n.app || '').toLowerCase().includes('finora') || n.title === t('test_notif_title')
-          const isCurrentSession = typeof n.receivedAt === 'number' ? n.receivedAt >= sessionStartRef.current : true
+          const ts = getSafeTimestamp(n)
+          const isCurrentSession = ts > 0 ? ts >= sessionStartRef.current : true
           return isAppTest && isCurrentSession
         })
-        setNotifPreview(onlyTest.slice(0, 1))
+        // set only if still on last page
+        if (index === pages.length - 1) {
+          setNotifPreview(onlyTest.slice(0, 1))
+        }
       } catch {}
     }
-    // initial load
-    loadPreview()
-    // refresh periodically while on onboarding (lightweight)
-    timer = setInterval(loadPreview, 3000)
-    return () => clearInterval(timer)
-  }, [])
+    if (index === pages.length - 1) {
+      loadPreview()
+      previewIntervalRef.current = setInterval(loadPreview, 3000)
+    }
+    return () => {
+      active = false
+      if (previewIntervalRef.current) {
+        clearInterval(previewIntervalRef.current)
+        previewIntervalRef.current = null
+      }
+      if (previewTimeoutRef.current) {
+        clearTimeout(previewTimeoutRef.current)
+        previewTimeoutRef.current = null
+      }
+    }
+  }, [index, pages.length, t])
 
   if (loading || checking || (!user && !forceShow)) {
     return (
@@ -348,7 +428,19 @@ export default function OnboardingScreen() {
                               <ThemedText style={styles.previewItemTitle} numberOfLines={1}>{n.title || t('no_title')}</ThemedText>
                               <ThemedText style={styles.previewItemText} numberOfLines={1}>{n.text || t('no_text')}</ThemedText>
                             </View>
-                            <ThemedText style={styles.previewTime}>{new Date(n.receivedAt).toLocaleTimeString(locale || (language === 'it' ? 'it-IT' : 'en-US'), { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</ThemedText>
+                          <ThemedText style={styles.previewTime}>{
+                            (() => {
+                              const ts = typeof n.receivedAt === 'number' ? n.receivedAt : (typeof (n as any).timestamp === 'number' ? (n as any).timestamp : undefined)
+                              if (!ts) return '--:--'
+                              const d = new Date(ts)
+                              if (isNaN(d.getTime())) return '--:--'
+                              try {
+                                return d.toLocaleTimeString(locale || (language === 'it' ? 'it-IT' : 'en-US'), { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                              } catch {
+                                return '--:--'
+                              }
+                            })()
+                          }</ThemedText>
                           </View>
                         ))}
                       </View>

@@ -5,7 +5,7 @@
 
 export const Brand = {
   name: 'Finora',
-  tagline: 'Your Financial Future',
+  tagline: 'Il tuo futuro finanziario',
   
   colors: {
     // Primary Palette
