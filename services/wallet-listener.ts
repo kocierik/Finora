@@ -1,14 +1,18 @@
 import { useAuth } from '@/context/AuthContext'
-import { parseBBVANotification, parseWalletNotification, saveExpense } from '@/services/expenses'
+import { saveExpense } from '@/services/expenses'
 import { Expense } from '@/types'
 import * as FileSystem from 'expo-file-system'
 import { useEffect } from 'react'
 import { DeviceEventEmitter, Platform } from 'react-native'
+import { logger } from './logger'
 import { checkNotificationPermission, requestNotificationPermission } from './notification-service'
 
 const CACHE_FILE = (FileSystem as any).documentDirectory 
   ? `${(FileSystem as any).documentDirectory}offline-expenses.json` 
   : ''
+
+// Cache in-memory per deduplication
+const processedExpenses = new Set<string>()
 
 async function readCache(): Promise<Expense[]> {
   try {
@@ -50,6 +54,9 @@ export function useWalletListener() {
       return
     }
 
+    if (logger && logger.info) {
+      logger.info('Initializing wallet listener', { userId: user.id }, 'WalletListener')
+    }
     console.log('[WalletListener] 🚀 Initializing wallet listener for user:', user.id)
 
     const handlePayload = async (payload: any) => {
@@ -72,80 +79,17 @@ export function useWalletListener() {
         console.log('[WalletListener] 📱 Incoming notification (non-serializable)')
       }
       
-      // Il headless task salva già le notifiche in memoria quando l'app è chiusa
+      // Il headless task salva già le notifiche E le spese in memoria quando l'app è chiusa
       // Quando l'app è aperta, le notifiche arrivano tramite DeviceEventEmitter
-      // e vengono già salvate dal headless task, quindi non duplichiamo
+      // ma il headless task continua a funzionare e salva tutto, quindi evitiamo duplicati
       console.log('[WalletListener] ℹ️  Notification received via DeviceEventEmitter (app is open)')
-      console.log('[WalletListener] ℹ️  Headless task should have already saved this notification')
+      console.log('[WalletListener] ℹ️  Headless task should have already saved this notification and expense')
       
-      // Filtra per Google Wallet o BBVA per il salvataggio delle spese
-      const pkg = payload?.packageName || payload?.package || payload?.app || ''
-      console.log('[WalletListener] 🔍 Package name detected:', pkg)
-      console.log('[WalletListener] 🔍 Checking if it contains "wallet", "com.google.android.apps.wallet" or "bbva"...')
-      
-      // Debug più dettagliato per capire il formato delle notifiche
-      console.log('[WalletListener] 🔍 Full payload keys:', Object.keys(payload || {}))
-      console.log('[WalletListener] 🔍 Payload structure:', {
-        packageName: payload?.packageName,
-        package: payload?.package,
-        app: payload?.app,
-        android: payload?.android,
-        notification: payload?.notification
-      })
-      
-      const isWallet = pkg && (pkg.includes('com.google.android.apps.wallet') || pkg.includes('wallet'))
-      const isBBVA = pkg && pkg.toLowerCase().includes('bbva')
-      
-      if (!isWallet && !isBBVA) {
-        console.log('[WalletListener] ⏭️  Not a supported finance app notification (package: ' + pkg + '), skipping expense save')
-        console.log('[WalletListener] ℹ️  Notification should be saved to memory by headless task!')
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-        return
-      }
-      console.log(`[WalletListener] 🎯 ${isWallet ? 'Google Wallet' : 'BBVA'} notification detected!`)
-      
-      // Estrai il testo della notifica
-      const title = payload?.title || ''
-      const text = payload?.text || payload?.bigText || payload?.android?.text || ''
-      console.log('[WalletListener] 📝 Notification title:', title)
-      console.log('[WalletListener] 📝 Notification text:', text)
-      
-      // Parsa la notifica in base all'origine
-      const parsed = isWallet ? parseWalletNotification(title, text) : parseBBVANotification(title, text)
-      console.log('[WalletListener] 🔍 Parsed data:', parsed)
-      
-      if (!parsed.amount || !parsed.date) {
-        console.log('[WalletListener] ⚠️  Missing amount or date, skipping expense save')
-        console.log('[WalletListener] ℹ️  Notification should be saved to memory by headless task!')
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-        return
-      }
-      
-      const expense: Expense = {
-        user_id: user.id,
-        amount: parsed.amount!,
-        currency: parsed.currency,
-        merchant: parsed.merchant ?? (isWallet ? 'Google Wallet' : 'BBVA'),
-        date: parsed.date!,
-        raw_notification: text,
-      }
-      
-      console.log('[WalletListener] 💾 Saving expense:', expense)
-      
-      const { error } = await saveExpense(expense)
-      
-      if (error) {
-        console.log('[WalletListener] ❌ Error saving expense:', error)
-        console.log('[WalletListener] 💾 Caching expense for later...')
-        const cached = await readCache()
-        cached.push(expense)
-        await writeCache(cached)
-      } else {
-        console.log('[WalletListener] ✅ Expense saved successfully!')
-      }
-      
-      console.log('[WalletListener] ℹ️  Notification should be saved to memory by headless task!')
+      // DISABILITATO: Non salvare quando l'app è aperta per evitare duplicati
+      // Il headless task si occupa di tutto sia quando l'app è chiusa che aperta
+      console.log('[WalletListener] ⏭️  Skipping expense save to avoid duplicates with headless task')
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+      return
     }
 
     // Listener per notifiche simulate (test)
@@ -186,11 +130,33 @@ export function useWalletListener() {
       }
     })()
 
+    // Listen for headless logs
+    const headlessLogSubscription = DeviceEventEmitter.addListener('headless_log', (logData) => {
+      if (logger && logger.info) {
+        const { level, message, source, timestamp, data } = logData
+        const logEntry = {
+          id: `${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp,
+          level,
+          message,
+          data,
+          source
+        }
+        
+        // Add directly to logger
+        if (level === 'INFO') logger.info(message, data, source)
+        else if (level === 'WARN') logger.warn(message, data, source)
+        else if (level === 'ERROR') logger.error(message, data, source)
+        else if (level === 'DEBUG') logger.debug(message, data, source)
+      }
+    })
+
     console.log('[WalletListener] ✅ Wallet listener initialized\n')
 
     return () => {
       console.log('[WalletListener] 🛑 Cleaning up wallet listener...')
       devEmitterSub.remove()
+      headlessLogSubscription.remove()
       console.log('[WalletListener] ✅ Wallet listener cleaned up\n')
     }
   }, [user?.id, loading])

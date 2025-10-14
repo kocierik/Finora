@@ -118,6 +118,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       const i18n: Record<LanguageCode, Record<string, string>> = {
         it: {
           tagline: 'Il tuo futuro finanziario',
+          recurring: 'Ricorrente',
+          recurring_transaction: 'Transazione ricorrente',
+          frequency: 'Frequenza',
+          occurrences: 'Occorrenze',
+          weekly: 'Settimanale',
+          monthly: 'Mensile',
           monthly_expenses: 'Spese Mensili',
           this_month: 'Questo mese',
           vs_last_month: 'vs mese scorso',
@@ -254,9 +260,25 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           ,october: 'Ottobre'
           ,november: 'Novembre'
           ,december: 'Dicembre'
+          ,logs: 'Log'
+          ,all: 'Tutti'
+          ,search_logs: 'Cerca nei log...'
+          ,total_logs: 'Log totali'
+          ,filtered: 'Filtrati'
+          ,no_logs: 'Nessun log disponibile'
+          ,clear_logs: 'Cancella log'
+          ,clear_logs_confirm: 'Sei sicuro di voler cancellare tutti i log?'
+          ,clear: 'Cancella'
+          ,cancel: 'Annulla'
         },
         en: {
           tagline: 'Your Financial Future',
+          recurring: 'Recurring',
+          recurring_transaction: 'Recurring transaction',
+          frequency: 'Frequency',
+          occurrences: 'Occurrences',
+          weekly: 'Weekly',
+          monthly: 'Monthly',
           monthly_expenses: 'Monthly Expenses',
           this_month: 'This month',
           vs_last_month: 'vs last month',
@@ -392,6 +414,16 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           ,october: 'October'
           ,november: 'November'
           ,december: 'December'
+          ,logs: 'Logs'
+          ,all: 'All'
+          ,search_logs: 'Search logs...'
+          ,total_logs: 'Total logs'
+          ,filtered: 'Filtered'
+          ,no_logs: 'No logs available'
+          ,clear_logs: 'Clear logs'
+          ,clear_logs_confirm: 'Are you sure you want to clear all logs?'
+          ,clear: 'Clear'
+          ,cancel: 'Cancel'
         }
       }
       const dict = i18n[language] || i18n.it

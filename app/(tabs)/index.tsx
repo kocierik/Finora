@@ -6,12 +6,13 @@ import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/lib/supabase';
 import { syncPendingExpenses } from '@/services/expense-sync';
 import { fetchExpenses } from '@/services/expenses';
+import { logger } from '@/services/logger';
 import { fetchInvestments } from '@/services/portfolio';
 import { Expense } from '@/types';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Dimensions, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, DeviceEventEmitter, Dimensions, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -51,6 +52,12 @@ export default function HomeScreen() {
   })
   const [toast, setToast] = useState<{ visible: boolean; text: string }>({ visible: false, text: '' })
   const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  // Recurring fields
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [recurringFrequency, setRecurringFrequency] = useState<'weekly' | 'monthly'>('monthly')
+  const [recurringOccurrences, setRecurringOccurrences] = useState<string>('6')
+  const [recurringInfinite, setRecurringInfinite] = useState<boolean>(false)
 
   // Animation values - MUST be before any conditional returns
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -62,10 +69,21 @@ export default function HomeScreen() {
   const loadData = useCallback(async () => {
       if (!user) return
     
+    // Test log per verificare che il logger funzioni
+    if (logger && logger.info) {
+      logger.info('Home screen loadData started', { userId: user.id, timestamp: Date.now() }, 'Home')
+    }
+    
     // Sincronizza le spese pendenti dalle notifiche Google Wallet
+    if (logger && logger.info) {
+      logger.info('Syncing pending expenses from notifications', { userId: user.id }, 'Home')
+    }
     console.log('[Home] 🔄 Syncing pending expenses from notifications...')
     const syncResult = await syncPendingExpenses(user.id)
     if (syncResult.synced > 0) {
+      if (logger && logger.info) {
+        logger.info(`Synced ${syncResult.synced} new expenses from Google Wallet`, { synced: syncResult.synced }, 'Home')
+      }
       console.log(`[Home] ✅ Synced ${syncResult.synced} new expenses from Google Wallet`)
     }
     
@@ -93,6 +111,11 @@ export default function HomeScreen() {
 
   // Carica i dati al mount
   useEffect(() => {
+    // Test log per verificare che il logger funzioni
+    if (logger && logger.info) {
+      logger.info('Home screen mounted', { timestamp: Date.now() }, 'Home')
+    }
+    
     loadData()
     
     // Entrance animations
@@ -371,6 +394,11 @@ export default function HomeScreen() {
                 <ThemedText style={styles.addModalCloseText}>✕</ThemedText>
               </Pressable>
             </View>
+            {!!formError && (
+              <View style={styles.errorBox}>
+                <ThemedText style={styles.errorTitle}>{t('error_prefix')}{formError}</ThemedText>
+              </View>
+            )}
             <View style={styles.formRow}>
               <ThemedText style={styles.formLabel}>{t('title')}</ThemedText>
               <TextInput
@@ -412,6 +440,71 @@ export default function HomeScreen() {
                 <ThemedText style={{ color: '#E8EEF8' }}>{newDate}</ThemedText>
               </Pressable>
             </View>
+
+            {/* Recurring Controls */}
+            <View style={styles.formRow}>
+              <TouchableOpacity
+                onPress={() => setIsRecurring(!isRecurring)}
+                style={[styles.toggleRow, isRecurring && styles.toggleRowActive]}
+              >
+                <View style={[styles.toggleIndicator, isRecurring && styles.toggleIndicatorOn]} />
+                <ThemedText style={[styles.toggleLabel, isRecurring && styles.toggleLabelActive]}>
+                  {t('recurring_transaction')}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            {isRecurring && (
+              <>
+                <View style={styles.formRow}>
+                  <ThemedText style={styles.formLabel}>{t('frequency')}</ThemedText>
+                  <View style={styles.categoryRow}>
+                    {(['monthly','weekly'] as const).map((freq) => (
+                      <TouchableOpacity
+                        key={freq}
+                        style={[styles.categoryChip, recurringFrequency === freq && !recurringInfinite && styles.categoryChipActive]}
+                        onPress={() => {
+                          setRecurringFrequency(freq);
+                          setRecurringInfinite(false);
+                        }}
+                      >
+                        <ThemedText style={[styles.categoryChipText, recurringFrequency === freq && !recurringInfinite && styles.categoryChipTextActive]}>
+                          {t(freq)}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    ))}
+                    {/* Infinite toggle chip */}
+                    <TouchableOpacity
+                      key="infinite"
+                      style={[styles.categoryChip, recurringInfinite && styles.categoryChipActive]}
+                      onPress={() => {
+                        setRecurringInfinite(!recurringInfinite);
+                        if (!recurringInfinite) {
+                          setRecurringFrequency('monthly'); // Reset to default when enabling infinite
+                        }
+                      }}
+                    >
+                      <ThemedText style={[styles.categoryChipText, recurringInfinite && styles.categoryChipTextActive]}>
+                        {language === 'it' ? 'Senza fine' : 'Never ends'}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                {!recurringInfinite && (
+                  <View style={styles.formRow}>
+                    <ThemedText style={styles.formLabel}>{t('occurrences')}</ThemedText>
+                    <TextInput
+                      style={styles.input}
+                      keyboardType="number-pad"
+                      placeholder="6"
+                      placeholderTextColor="#94a3b8"
+                      value={recurringOccurrences}
+                      onChangeText={setRecurringOccurrences}
+                    />
+                  </View>
+                )}
+              </>
+            )}
 
       {/* Calendar Modal */}
       <Modal
@@ -498,20 +591,77 @@ export default function HomeScreen() {
                 setSubmitting(true)
                 try {
                   const amountNum = parseFloat((newAmount || '').replace(',', '.'))
-                  if (!newTitle || newTitle.trim().length === 0) throw new Error('Titolo obbligatorio')
-                  if (!amountNum || isNaN(amountNum) || amountNum <= 0) throw new Error('Importo non valido')
-                  if (!newDate) throw new Error('Data obbligatoria')
-                  const { error } = await supabase.from('expenses').insert([
-                    {
+                  if (!newTitle || newTitle.trim().length === 0) {
+                    setFormError('Titolo obbligatorio')
+                    return
+                  }
+                  if (!amountNum || isNaN(amountNum) || amountNum <= 0) {
+                    setFormError('Importo non valido')
+                    return
+                  }
+                  if (!newDate) {
+                    setFormError('Data obbligatoria')
+                    return
+                  }
+                  const items: any[] = []
+                  if (isRecurring) {
+                    const count = recurringInfinite ? 1 : Math.min(36, Math.max(1, parseInt(recurringOccurrences || '1', 10) || 1))
+                    const start = new Date(newDate)
+                    const groupId = `rec-${user.id}-${Date.now()}`
+                    for (let i = 0; i < count; i++) {
+                      const d = new Date(start)
+                      if (recurringFrequency === 'monthly') {
+                        d.setMonth(d.getMonth() + i)
+                      } else {
+                        d.setDate(d.getDate() + i * 7)
+                      }
+                      const yyyy = d.getFullYear()
+                      const mm = String(d.getMonth() + 1).padStart(2, '0')
+                      const dd = String(d.getDate()).padStart(2, '0')
+                      items.push({
+                        user_id: user.id,
+                        amount: amountNum,
+                        category: newCategory.toLowerCase(),
+                        date: `${yyyy}-${mm}-${dd}`,
+                        raw_notification: 'manual',
+                        merchant: newTitle || 'Manual',
+                        is_recurring: true,
+                        recurring_group_id: groupId,
+                        recurring_frequency: recurringFrequency,
+                        recurring_total_occurrences: recurringInfinite ? null : count,
+                        recurring_index: i + 1,
+                        recurring_infinite: recurringInfinite,
+                      })
+                    }
+                  } else {
+                    items.push({
                       user_id: user.id,
                       amount: amountNum,
                       category: newCategory.toLowerCase(),
                       date: newDate,
                       raw_notification: 'manual',
                       merchant: newTitle || 'Manual',
+                      is_recurring: false,
+                    })
+                  }
+                  const { error } = await supabase.from('expenses').insert(items)
+                  if (error) {
+                    if (logger && logger.error) {
+                      logger.error('Failed to save transaction', { error: error.message, items }, 'Home')
                     }
-                  ])
-                  if (error) throw error
+                    setFormError(error.message || 'Errore durante il salvataggio')
+                    return
+                  }
+                  
+                  if (logger && logger.info) {
+                    logger.info('Transaction saved successfully', { 
+                      count: items.length, 
+                      isRecurring, 
+                      amount: amountNum,
+                      category: newCategory 
+                    }, 'Home')
+                  }
+                  
                   await loadData()
                   // notify Expenses screen to refresh immediately
                   DeviceEventEmitter.emit('expenses:externalUpdate')
@@ -519,13 +669,18 @@ export default function HomeScreen() {
                   setNewCategory('Other')
                   setNewTitle('')
                   setNewDate(new Date().toISOString().split('T')[0])
+                  setIsRecurring(false)
+                  setRecurringFrequency('monthly')
+                  setRecurringOccurrences('6')
+                  setRecurringInfinite(false)
+                  setFormError(null)
                   setShowAddModal(false)
                   // Show toast
                   setToast({ visible: true, text: 'Transazione aggiunta ✅' })
                   setTimeout(() => setToast({ visible: false, text: '' }), 2000)
                 } catch (e: any) {
                   console.log('[Home] add expense error', e)
-                  Alert.alert('Errore', e?.message || 'Impossibile salvare la transazione')
+                  setFormError(e?.message || 'Impossibile salvare la transazione')
                 } finally {
                   setSubmitting(false)
                 }
@@ -965,6 +1120,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     color: '#E8EEF8',
   },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  toggleRowActive: {
+    backgroundColor: 'rgba(6,182,212,0.12)',
+    borderColor: 'rgba(6,182,212,0.35)'
+  },
+  toggleIndicator: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)'
+  },
+  toggleIndicatorOn: {
+    backgroundColor: '#06b6d4',
+    borderColor: '#06b6d4'
+  },
+  toggleLabel: {
+    color: '#cbd5e1',
+    fontWeight: '700'
+  },
+  toggleLabelActive: {
+    color: '#06b6d4'
+  },
   categoryRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1003,6 +1191,19 @@ const styles = StyleSheet.create({
     color: '#E8EEF8',
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  errorBox: {
+    marginTop: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.10)',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  errorTitle: {
+    color: '#ef4444',
+    fontWeight: '700'
   },
   // Toast
   toast: {

@@ -13,9 +13,25 @@ const headlessNotificationListener = async ({ notification }) => {
   console.log(`[HEADLESS] ${timestamp}`)
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   
+  // Invia log al logger dell'app
+  DeviceEventEmitter.emit('headless_log', {
+    level: 'INFO',
+    message: 'Headless task started',
+    source: 'HeadlessTask',
+    timestamp: Date.now(),
+    data: { timestamp }
+  })
+  
   if (!notification) {
     console.log('[HEADLESS] ❌ No notification data received')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+    
+    DeviceEventEmitter.emit('headless_log', {
+      level: 'WARN',
+      message: 'No notification data received',
+      source: 'HeadlessTask',
+      timestamp: Date.now()
+    })
     return
   }
 
@@ -43,6 +59,14 @@ const headlessNotificationListener = async ({ notification }) => {
     
     if (isWallet) {
       console.log('[HEADLESS] 🎯 GOOGLE WALLET NOTIFICATION DETECTED!')
+      
+      DeviceEventEmitter.emit('headless_log', {
+        level: 'INFO',
+        message: 'Google Wallet notification detected',
+        source: 'HeadlessTask',
+        timestamp: Date.now(),
+        data: { app: appPackage, title: notifData.title }
+      })
       
       // Parse la spesa dalla notifica
       try {
@@ -75,7 +99,14 @@ const headlessNotificationListener = async ({ notification }) => {
                  }
           
           console.log('[HEADLESS] 💰 Parsed expense:', JSON.stringify(expenseData))
-          console.log('[HEADLESS] 💾 Saving expense to cache for later sync...')
+          
+          DeviceEventEmitter.emit('headless_log', {
+            level: 'INFO',
+            message: 'Expense parsed successfully',
+            source: 'HeadlessTask',
+            timestamp: Date.now(),
+            data: expenseData
+          })
           
           // Salva la spesa in un file cache per sincronizzarla quando l'app si apre
           const expensesFile = `${cacheDirectory}pending_expenses.json`
@@ -88,6 +119,31 @@ const headlessNotificationListener = async ({ notification }) => {
             console.log('[HEADLESS] No pending expenses file, creating new one')
           }
           
+          // Controlla duplicati: stessa spesa negli ultimi 30 secondi
+          const thirtySecondsAgo = Date.now() - 30 * 1000
+          const isDuplicate = pendingExpenses.some(exp => 
+            exp.amount === amount && 
+            exp.merchant === merchant && 
+            exp.date === expenseData.date &&
+            exp.timestamp > thirtySecondsAgo
+          )
+          
+          if (isDuplicate) {
+            console.log('[HEADLESS] ⚠️  Duplicate expense detected, skipping save')
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+            
+            DeviceEventEmitter.emit('headless_log', {
+              level: 'WARN',
+              message: 'Duplicate expense detected, skipping save',
+              source: 'HeadlessTask',
+              timestamp: Date.now(),
+              data: expenseData
+            })
+            return
+          }
+          
+          console.log('[HEADLESS] 💾 Saving expense to cache for later sync...')
+          
           pendingExpenses.push({
             ...expenseData,
             timestamp: Date.now(),
@@ -96,16 +152,48 @@ const headlessNotificationListener = async ({ notification }) => {
           
           await writeAsStringAsync(expensesFile, JSON.stringify(pendingExpenses))
           console.log('[HEADLESS] ✅ Expense saved to pending queue')
+          
+          DeviceEventEmitter.emit('headless_log', {
+            level: 'INFO',
+            message: 'Expense saved to pending queue',
+            source: 'HeadlessTask',
+            timestamp: Date.now(),
+            data: { amount: expenseData.amount, merchant: expenseData.merchant }
+          })
         } else {
           console.log('[HEADLESS] ⚠️  Could not parse amount from notification text')
+          
+          DeviceEventEmitter.emit('headless_log', {
+            level: 'WARN',
+            message: 'Could not parse amount from notification text',
+            source: 'HeadlessTask',
+            timestamp: Date.now(),
+            data: { text: notifData.text }
+          })
         }
       } catch (parseError) {
         console.log('[HEADLESS] ❌ Error parsing expense:', parseError.message)
+        
+        DeviceEventEmitter.emit('headless_log', {
+          level: 'ERROR',
+          message: 'Error parsing expense',
+          source: 'HeadlessTask',
+          timestamp: Date.now(),
+          data: { error: parseError.message, text: notifData.text }
+        })
       }
     } else {
       console.log('[HEADLESS] ℹ️  Not a Google Wallet notification (app: ' + appPackage + ')')
       console.log('[HEADLESS] ℹ️  Skipping expense parsing and database save')
       console.log('[HEADLESS] ℹ️  Notification was captured but not processed')
+      
+      DeviceEventEmitter.emit('headless_log', {
+        level: 'DEBUG',
+        message: 'Non-Wallet notification received',
+        source: 'HeadlessTask',
+        timestamp: Date.now(),
+        data: { app: appPackage, title: notifData.title }
+      })
     }
     
     // Salva TUTTE le notifiche in memoria per la visualizzazione

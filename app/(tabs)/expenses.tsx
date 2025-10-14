@@ -31,6 +31,11 @@ export default function ExpensesScreen() {
   const [expenseThresholds, setExpenseThresholds] = useState<ExpenseThresholds>({ moderate: 1000, high: 1500 })
   const [allMonthItems, setAllMonthItems] = useState<Expense[]>([])
   const [visibleTransactionsCount, setVisibleTransactionsCount] = useState(10)
+  // Category history modal state
+  const [showCategoryHistoryModal, setShowCategoryHistoryModal] = useState(false)
+  const [selectedHistoryCategory, setSelectedHistoryCategory] = useState<string | null>(null)
+  const [categoryHistory, setCategoryHistory] = useState<Expense[]>([])
+  const [categoryHistoryLoading, setCategoryHistoryLoading] = useState(false)
   
   // Month navigation state
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0) // 0 = current month, -1 = previous, 1 = next
@@ -350,6 +355,47 @@ export default function ExpensesScreen() {
     setShowCategoryModal(true)
   }, [])
 
+  // Category card pulse animation state
+  const [pulsingCategory, setPulsingCategory] = useState<string | null>(null)
+  const [scalingCategory, setScalingCategory] = useState<string | null>(null)
+  const categoryPulseAnim = useRef(new Animated.Value(1)).current
+  const categoryScaleAnim = useRef(new Animated.Value(1)).current
+
+  // Pulse a specific category card with a smooth spring animation (uniform intensity)
+  const pulseCategoryCard = useCallback((categoryName: string) => {
+    setPulsingCategory(categoryName)
+    categoryPulseAnim.setValue(1)
+    Animated.sequence([
+      Animated.spring(categoryPulseAnim, { toValue: 0.96, friction: 4, tension: 5, useNativeDriver: true }),
+      Animated.spring(categoryPulseAnim, { toValue: 1, friction: 5, tension: 5, useNativeDriver: true })
+    ]).start(() => {
+      setPulsingCategory(null)
+    })
+  }, [categoryPulseAnim])
+
+  // Open category history modal and fetch all-time history for that category
+  const openCategoryHistory = useCallback(async (categoryName: string) => {
+    if (!user) return
+    setSelectedHistoryCategory(categoryName)
+    setShowCategoryHistoryModal(true)
+    setCategoryHistory([])
+    setCategoryHistoryLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('category', categoryName.toLowerCase())
+        .order('date', { ascending: false })
+      if (error) throw error
+      setCategoryHistory((data as any) ?? [])
+    } catch (e) {
+      console.error('[Expenses] ❌ Error fetching category history', e)
+    } finally {
+      setCategoryHistoryLoading(false)
+    }
+  }, [user])
+
   const handleCategorySelect = useCallback(async (category: string) => {
     if (!selectedTransaction || !user) return
 
@@ -407,6 +453,32 @@ export default function ExpensesScreen() {
     setShowConfirmModal(true)
     setTransactionToDelete(transaction)
   }, [])
+
+  // Stop recurring series from a transaction
+  const handleStopRecurring = useCallback(async (transaction: Expense) => {
+    if (!user || !transaction) return
+    try {
+      if (!(transaction as any).recurring_group_id) return
+      const groupId = (transaction as any).recurring_group_id as string
+      const { error } = await supabase
+        .from('expenses')
+        .update({ recurring_stopped: true })
+        .eq('user_id', user.id)
+        .eq('recurring_group_id', groupId)
+      if (error) throw error
+      // Update local state to reflect stopped series
+      setItems(prev => prev.map(it =>
+        (it as any).recurring_group_id === groupId ? ({ ...it, recurring_stopped: true } as any) : it
+      ))
+      setAllMonthItems(prev => prev.map(it =>
+        (it as any).recurring_group_id === groupId ? ({ ...it, recurring_stopped: true } as any) : it
+      ))
+      setShowCategoryModal(false)
+      setSelectedTransaction(null)
+    } catch (e) {
+      console.error('[Expenses] ❌ Error stopping recurring series', e)
+    }
+  }, [user])
 
   // Month navigation functions
   const navigateToMonth = useCallback((direction: 'prev' | 'next') => {
@@ -830,24 +902,17 @@ export default function ExpensesScreen() {
                   {/* Main Content */}
                   <View style={styles.summaryContent}>
                     {/* Total Amount */}
-                    <Animated.View style={[
-                      styles.summaryAmountContainer,
-                      { 
-                        transform: [{ 
-                          scale: balanceAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [1, 1.01]
-                          })
-                        }] 
-                      }
-                    ]}>
-                      <ThemedText style={styles.summaryAmount}>
-                        {hideBalances ? '••••• €' : monthTotal.toLocaleString(locale, { style: 'currency', currency })}
+                    <View style={styles.summaryAmountContainer}>
+                      <ThemedText style={[
+                        styles.summaryAmount,
+                        monthTotal > 0 ? { color: '#ef4444' } : { color: '#22c55e' }
+                      ]}>
+                        {hideBalances ? '••••• €' : Math.abs(monthTotal).toLocaleString(locale, { style: 'currency', currency })}
                         {typeof monthlyBudget === 'number' && monthlyBudget > 0 && (
                           <ThemedText style={{ fontSize: 12, color: Brand.colors.text.tertiary }}> / {monthlyBudget.toLocaleString(locale, { style: 'currency', currency })}</ThemedText>
                         )}
                       </ThemedText>
-                    </Animated.View>
+                    </View>
 
                     {/* Stats Row */}
                     <View style={styles.summaryStats}>
@@ -936,40 +1001,70 @@ export default function ExpensesScreen() {
                 <Pressable
                   style={styles.categoryPressable}
                   onPressIn={() => {
-                    Animated.spring(scaleAnim1, { toValue: 0.95, useNativeDriver: true }).start()
+                    setScalingCategory(category.name)
+                    Animated.spring(categoryScaleAnim, { toValue: 0.95, useNativeDriver: true }).start()
+                    // Smooth pulse for this specific card (uniform intensity)
+                    pulseCategoryCard(category.name)
                   }}
                   onPressOut={() => {
-                    Animated.spring(scaleAnim1, { toValue: 1, useNativeDriver: true }).start()
+                    setScalingCategory(null)
+                    Animated.spring(categoryScaleAnim, { toValue: 1, useNativeDriver: true }).start()
+                    // Stop the pulse animation when releasing
+                    setPulsingCategory(null)
+                    categoryPulseAnim.setValue(1)
+                  }}
+                  onPress={() => {
+                    openCategoryHistory(category.name)
                   }}
                 >
-                  <LinearGradient
-                    colors={[`${category.color}15`, `${category.color}08`]}
-                    style={styles.categoryGradient}
+                  <Animated.View
+                    style={[
+                      scalingCategory === category.name && {
+                        transform: [{ scale: categoryScaleAnim }]
+                      }
+                    ]}
                   >
-                    <View style={[styles.categoryIcon, { backgroundColor: `${category.color}20` }]}>
-                      <ThemedText style={styles.categoryIconText}>{category.icon}</ThemedText>
-                    </View>
-                  <ThemedText style={styles.categoryName}>{translateCategory(category.name)}</ThemedText>
-                    <ThemedText style={styles.categoryAmount}>
-                      € {category.amount.toFixed(0)}
-              </ThemedText>
-                    <View style={styles.progressContainer}>
-                      <View style={[styles.progressBar, { backgroundColor: `${category.color}20` }]}>
-                        <Animated.View 
-                          style={[
-                            styles.progressFill, 
-                            { 
-                              backgroundColor: category.color,
-                              width: `${category.percentage}%`
-                            }
-                          ]} 
-                        />
-          </View>
-                      <ThemedText style={styles.progressText}>
-                        {category.percentage.toFixed(0)}%
-                      </ThemedText>
-                    </View>
-                  </LinearGradient>
+                    <Animated.View
+                      style={[
+                        pulsingCategory === category.name && {
+                          transform: [{ scale: categoryPulseAnim }]
+                        }
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={['rgba(139, 69, 19, 0.08)', 'rgba(139, 69, 19, 0.04)']}
+                        style={styles.categoryGradient}
+                      >
+                      <View style={[styles.categoryIcon, { backgroundColor: 'rgba(139, 69, 19, 0.10)' }]}>
+                        <ThemedText style={styles.categoryIconText}>{category.icon}</ThemedText>
+                      </View>
+                    <ThemedText style={styles.categoryName}>{translateCategory(category.name)}</ThemedText>
+                      <ThemedText style={[
+                        styles.categoryAmount,
+                        // Positive totals are outgoing costs → red; zero/negative → green
+                        category.amount > 0 ? { color: '#ef4444' } : { color: '#22c55e' }
+                      ]}>
+                        € {category.amount.toFixed(0)}
+                </ThemedText>
+                      <View style={styles.progressContainer}>
+                        <View style={[styles.progressBar, { backgroundColor: 'rgba(139, 69, 19, 0.10)' }]}>
+                          <Animated.View 
+                            style={[
+                              styles.progressFill, 
+                              { 
+                                backgroundColor: '#8b4513',
+                                width: `${category.percentage}%`
+                              }
+                            ]} 
+                          />
+            </View>
+                        <ThemedText style={styles.progressText}>
+                          {category.percentage.toFixed(0)}%
+                        </ThemedText>
+                      </View>
+                      </LinearGradient>
+                    </Animated.View>
+                  </Animated.View>
                 </Pressable>
               </Animated.View>
             ))}
@@ -1130,8 +1225,8 @@ export default function ExpensesScreen() {
                           </View>
                         </View>
                         <View style={styles.transactionRight}>
-                          <ThemedText style={styles.transactionAmount}>
-              {item.amount?.toLocaleString(locale, { style: 'currency', currency })}
+                          <ThemedText style={[styles.transactionAmount, item.amount > 0 ? { color: '#ef4444' } : { color: '#22c55e' }]}>
+              {Math.abs(item.amount ?? 0).toLocaleString(locale, { style: 'currency', currency })}
             </ThemedText>
                           <TouchableOpacity
                             style={styles.deleteButton}
@@ -1211,9 +1306,21 @@ export default function ExpensesScreen() {
                 <ThemedText style={styles.transactionInfoMerchant}>
                   {selectedTransaction?.merchant ?? '—'}
                 </ThemedText>
-                <ThemedText style={styles.transactionInfoAmount}>
-                  {selectedTransaction?.amount?.toLocaleString(locale, { style: 'currency', currency })}
-                </ThemedText>
+                <View style={styles.transactionAmountRow}>
+                  <ThemedText style={[styles.transactionInfoAmount, (selectedTransaction?.amount ?? 0) > 0 ? { color: '#ef4444' } : { color: '#22c55e' }]}>
+                    {Math.abs(selectedTransaction?.amount ?? 0).toLocaleString(locale, { style: 'currency', currency })}
+                  </ThemedText>
+                  {(selectedTransaction as any)?.is_recurring && (
+                    <Pressable 
+                      onPress={() => handleStopRecurring(selectedTransaction!)} 
+                      style={styles.stopRecurringButton}
+                    >
+                      <ThemedText style={styles.stopRecurringButtonText}>
+                        {language === 'it' ? 'Ferma Ricorrenza' : 'Stop Recurring'}
+                      </ThemedText>
+                    </Pressable>
+                  )}
+                </View>
                 <ThemedText style={styles.transactionInfoNote}>
                   La categoria verrà applicata a {items.filter(item => item.merchant === selectedTransaction?.merchant).length} transazioni di questo merchant
                 </ThemedText>
@@ -1261,6 +1368,69 @@ export default function ExpensesScreen() {
                     </Animated.View>
                   ))}
                 </View>
+              </ScrollView>
+            </Card>
+          </Animated.View>
+        </View>
+      </Modal>
+
+      {/* Category History Modal */}
+      <Modal
+        visible={showCategoryHistoryModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCategoryHistoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}> 
+            <Card style={styles.modalCard}>
+              <LinearGradient
+                colors={['rgba(6, 181, 212, 0)', 'rgba(4, 32, 29, 0.06)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalGradient}
+              />
+              <View style={styles.modalHeader}>
+                <ThemedText style={styles.modalTitle}>
+                  {language === 'it' ? 'Storico categoria' : 'Category history'}{selectedHistoryCategory ? `: ${translateCategory(selectedHistoryCategory)}` : ''}
+                </ThemedText>
+                <Pressable onPress={() => setShowCategoryHistoryModal(false)} style={styles.closeButton}>
+                  <ThemedText style={styles.closeButtonText}>✕</ThemedText>
+                </Pressable>
+              </View>
+
+              <ScrollView 
+                style={styles.modalScrollView}
+                contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {categoryHistoryLoading ? (
+                  <View style={{ padding: 16, alignItems: 'center' }}>
+                    <ActivityIndicator color="#06b6d4" />
+                  </View>
+                ) : categoryHistory.length === 0 ? (
+                  <View style={{ padding: 16 }}>
+                    <ThemedText style={{ color: Brand.colors.text.secondary }}>
+                      {language === 'it' ? 'Nessuna transazione trovata' : 'No transactions found'}
+                    </ThemedText>
+                  </View>
+                ) : (
+                  categoryHistory.map(tx => (
+                    <View key={tx.id} style={[styles.listItemCard, { marginBottom: 10 }]}> 
+                      <View style={styles.listItemRow}>
+                        <View style={{ flex: 1 }}>
+                          <ThemedText style={styles.listItemMerchant}>{tx.merchant || '—'}</ThemedText>
+                          <ThemedText style={styles.listItemDate}>
+                            {new Date(tx.date).toLocaleDateString(locale)}
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={[styles.listItemAmount, { color: tx.amount > 0 ? '#ef4444' : '#22c55e' }]}> 
+                          {Math.abs(tx.amount).toLocaleString(locale, { style: 'currency', currency })}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  ))
+                )}
               </ScrollView>
             </Card>
           </Animated.View>
@@ -1890,7 +2060,8 @@ const styles = StyleSheet.create({
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgb(5, 5, 5)',
+    opacity: 0.95,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -1914,7 +2085,7 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
@@ -1978,10 +2149,29 @@ const styles = StyleSheet.create({
     color: Brand.colors.text.primary,
     marginBottom: 4,
   },
+  transactionAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   transactionInfoAmount: {
     fontSize: 18,
     fontWeight: '700',
     color: '#06b6d4',
+  },
+  stopRecurringButton: {
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    borderColor: 'rgba(255, 59, 48, 0.3)',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  stopRecurringButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ff3b30',
   },
   transactionInfoNote: {
     fontSize: 12,
@@ -2237,6 +2427,35 @@ const styles = StyleSheet.create({
   summaryActivityTextTransitioning: {
     color: 'rgba(6, 182, 212, 0.8)',
     fontWeight: '600',
+  },
+  // Simple list item styles reused in category history modal
+  listItemCard: {
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)'
+  },
+  listItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  listItemMerchant: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Brand.colors.text.primary,
+  },
+  listItemDate: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Brand.colors.text.secondary,
+    marginTop: 2,
+  },
+  listItemAmount: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   categoryOptionButton: {
     borderRadius: 16,

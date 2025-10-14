@@ -2,16 +2,16 @@ import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
 import { useSettings } from '@/context/SettingsContext'
 import {
-  checkNotificationPermission,
-  requestNotificationPermission,
-  type NotificationPermissionStatus
+    checkNotificationPermission,
+    requestNotificationPermission,
+    type NotificationPermissionStatus
 } from '@/services/notification-service'
 import {
-  clearNotifications,
-  getWalletNotifications,
-  loadNotifications,
-  sortNotificationsByDate,
-  type StoredNotification
+    clearNotifications,
+    getWalletNotifications,
+    loadNotifications,
+    sortNotificationsByDate,
+    type StoredNotification
 } from '@/services/notification-storage'
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
 import * as Notifications from 'expo-notifications'
@@ -324,13 +324,15 @@ export default function NotificationsScreen() {
 
   const renderInfoCard = () => null
 
-  const displayedNotifications = filteredNotifications.slice(0, 1)
+  const displayedNotifications = filteredNotifications.slice(0, 100)
 
   return (
     <FlatList
       data={displayedNotifications}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={true}
+      style={{ flex: 1 }}
       ListHeaderComponent={
         <View style={{ gap: 12 }}>
           <View style={styles.headerRow}>
@@ -349,6 +351,14 @@ export default function NotificationsScreen() {
             onPress={handleSendLocalTest}
           >
             <ThemedText style={styles.primaryButtonText}>🔔 {t('try_send_test')}</ThemedText>
+          </Pressable>
+          
+          {/* Bottone di test aggiuntivo per debug */}
+          <Pressable 
+            style={[styles.primaryButton, { marginTop: 8, backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.35)' }]}
+            onPress={handleTestNotification}
+          >
+            <ThemedText style={styles.primaryButtonText}>🧪 Test Wallet Notification</ThemedText>
           </Pressable>
         </View>
       }
@@ -395,8 +405,8 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 16,
     backgroundColor: '#0a0a0f',
-    flex: 1,
     paddingTop: 40,
+    paddingBottom: 20,
   },
   card: {
     gap: 8,

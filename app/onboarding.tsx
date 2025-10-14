@@ -243,19 +243,19 @@ export default function OnboardingScreen() {
 
   const sendTestNotification = async () => {
     // Haptics feedback (non-blocking)
-    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
 
     // Ensure Android notification channel exists before scheduling
     if (Platform.OS === 'android') {
-      try {
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'Default',
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#06b6d4'
-        })
-      } catch {}
-    }
+        try {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'Default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#06b6d4'
+          })
+        } catch {}
+      }
 
     // Request/verify permissions first
     let granted = false
@@ -276,44 +276,44 @@ export default function OnboardingScreen() {
     try {
       const status = await checkNotificationPermission()
       setNotifReadStatus(status)
-    } catch {}
+      } catch {}
 
     // Schedule only if permissions granted
     if (granted) {
       try {
-        await Notifications.scheduleNotificationAsync({
-          content: {
+      await Notifications.scheduleNotificationAsync({
+        content: {
             title: t('test_notif_title') || 'Hello!',
             body: t('test_notif_body') || 'Can you see me inside the Finora app?',
-            subtitle: 'Finora',
-          },
-          trigger: null
-        })
+          subtitle: 'Finora',
+        },
+        trigger: null
+      })
       } catch {}
     }
 
-    // Persist synthetic entry only if permission is authorized
-    if (notifReadStatus === 'authorized') {
-      try {
-        const now = Date.now()
-        const synthetic: NotificationData = {
-          id: `finora-test-${now}`,
-          app: 'Finora',
+      // Persist synthetic entry only if permission is authorized
+      if (notifReadStatus === 'authorized') {
+        try {
+          const now = Date.now()
+          const synthetic: NotificationData = {
+            id: `finora-test-${now}`,
+            app: 'Finora',
           title: t('test_notif_title') || 'Hello!',
           text: t('test_notif_body') || 'Can you see me inside the Finora app?',
-          time: new Date(now).toISOString(),
-          timestamp: now
-        }
-        await saveNotification(synthetic)
-      } catch {}
-    }
+            time: new Date(now).toISOString(),
+            timestamp: now
+          }
+          await saveNotification(synthetic)
+        } catch {}
+      }
 
     // Toast feedback (best-effort)
-    if (Platform.OS === 'android') {
+      if (Platform.OS === 'android') {
       try { ToastAndroid.show(t('notification_sent') || 'Notification sent', ToastAndroid.SHORT) } catch {}
-    }
+      }
 
-    // Give the system a short moment to deliver, then refresh preview (only Finora/test notif)
+      // Give the system a short moment to deliver, then refresh preview (only Finora/test notif)
     try {
       if (previewTimeoutRef.current) {
         clearTimeout(previewTimeoutRef.current)
@@ -323,15 +323,15 @@ export default function OnboardingScreen() {
         try {
           // avoid running if we left the last page
           if (index !== pages.length - 1) return
-          const all = await loadNotifications()
-          const sorted = sortNotificationsByDate(all)
-          const onlyTest = sorted.filter(n => {
-            const isAppTest = (n.app || '').toLowerCase().includes('finora') || n.title === t('test_notif_title')
+        const all = await loadNotifications()
+        const sorted = sortNotificationsByDate(all)
+        const onlyTest = sorted.filter(n => {
+          const isAppTest = (n.app || '').toLowerCase().includes('finora') || n.title === t('test_notif_title')
             const ts = getSafeTimestamp(n)
             const isCurrentSession = ts > 0 ? ts >= sessionStartRef.current : true
-            return isAppTest && isCurrentSession
-          })
-          setNotifPreview(onlyTest.slice(0, 1))
+          return isAppTest && isCurrentSession
+        })
+        setNotifPreview(onlyTest.slice(0, 1))
         } catch {}
       }, 600)
     } catch {}
@@ -366,12 +366,12 @@ export default function OnboardingScreen() {
         })
         // set only if still on last page
         if (index === pages.length - 1) {
-          setNotifPreview(onlyTest.slice(0, 1))
+        setNotifPreview(onlyTest.slice(0, 1))
         }
       } catch {}
     }
     if (index === pages.length - 1) {
-      loadPreview()
+    loadPreview()
       previewIntervalRef.current = setInterval(loadPreview, 3000)
     }
     return () => {

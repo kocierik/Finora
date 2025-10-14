@@ -25,6 +25,14 @@ create table if not exists public.expenses (
   currency text,
   date date not null,
   raw_notification text,
+  -- Recurring transaction support
+  is_recurring boolean not null default false,
+  recurring_group_id text,
+  recurring_frequency text,
+  recurring_total_occurrences integer,
+  recurring_index integer,
+  recurring_infinite boolean not null default false,
+  recurring_stopped boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -67,3 +75,146 @@ CREATE TRIGGER set_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at();
+
+
+-- Ensure recurring columns exist on public.expenses for existing databases
+ALTER TABLE public.expenses
+  ADD COLUMN IF NOT EXISTS is_recurring boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS recurring_group_id text,
+  ADD COLUMN IF NOT EXISTS recurring_frequency text,
+  ADD COLUMN IF NOT EXISTS recurring_total_occurrences integer,
+  ADD COLUMN IF NOT EXISTS recurring_index integer,
+  ADD COLUMN IF NOT EXISTS recurring_infinite boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS recurring_stopped boolean DEFAULT false;
+
+-- Backfill nulls for is_recurring and enforce NOT NULL
+UPDATE public.expenses SET is_recurring = COALESCE(is_recurring, false) WHERE is_recurring IS NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'expenses' AND column_name = 'is_recurring'
+  ) THEN
+    ALTER TABLE public.expenses ALTER COLUMN is_recurring SET NOT NULL;
+  END IF;
+END $$;
+
+-- Helpful index for grouping recurring entries
+CREATE INDEX IF NOT EXISTS expenses_recurring_group_idx ON public.expenses(recurring_group_id);
+
+-- Enable pg_cron for scheduled jobs
+create extension if not exists pg_cron;
+
+-- Function: generate missing future occurrences for recurring expenses
+CREATE OR REPLACE FUNCTION public.generate_recurring_expenses(horizon_days integer DEFAULT 60)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  horizon_date date := (CURRENT_DATE + make_interval(days => horizon_days))::date;
+  rec RECORD;
+  target_count integer;
+  existing_count integer;
+  i integer;
+  next_date date;
+BEGIN
+  -- Iterate each recurring group that is not stopped
+  FOR rec IN
+    SELECT DISTINCT ON (e.recurring_group_id)
+      e.recurring_group_id,
+      e.user_id,
+      e.merchant,
+      e.category,
+      e.currency,
+      e.amount,
+      e.raw_notification,
+      e.date AS start_date,
+      e.recurring_frequency,
+      e.recurring_total_occurrences,
+      e.recurring_infinite
+    FROM public.expenses e
+    WHERE e.is_recurring = true
+      AND COALESCE(e.recurring_stopped, false) = false
+    ORDER BY e.recurring_group_id, COALESCE(e.recurring_index, 1), e.created_at
+  LOOP
+    -- How many occurrences already exist for this group
+    SELECT COUNT(*), MAX(date) INTO existing_count, next_date
+    FROM public.expenses
+    WHERE recurring_group_id = rec.recurring_group_id;
+
+    -- Decide target count
+    IF rec.recurring_infinite THEN
+      -- Generate until horizon_date
+      i := existing_count; -- next index (0-based for math)
+      LOOP
+        -- compute next occurrence date from start_date and i
+        IF rec.recurring_frequency = 'monthly' THEN
+          next_date := (rec.start_date + (i || ' month')::interval)::date;
+        ELSE
+          next_date := (rec.start_date + (i * 7 || ' days')::interval)::date;
+        END IF;
+
+        EXIT WHEN next_date IS NULL OR next_date > horizon_date;
+
+        -- Insert only if not already present
+        IF NOT EXISTS (
+          SELECT 1 FROM public.expenses 
+          WHERE recurring_group_id = rec.recurring_group_id AND date = next_date
+        ) THEN
+          INSERT INTO public.expenses (
+            user_id, amount, merchant, category, currency, date, raw_notification,
+            is_recurring, recurring_group_id, recurring_frequency,
+            recurring_total_occurrences, recurring_index, recurring_infinite, recurring_stopped
+          ) VALUES (
+            rec.user_id, rec.amount, rec.merchant, rec.category, rec.currency, next_date, COALESCE(rec.raw_notification, 'manual'),
+            true, rec.recurring_group_id, rec.recurring_frequency,
+            NULL, i + 1, true, false
+          );
+        END IF;
+
+        i := i + 1;
+      END LOOP;
+    ELSE
+      -- Finite series: ensure up to total_occurrences exist
+      IF rec.recurring_total_occurrences IS NULL OR rec.recurring_total_occurrences <= 0 THEN
+        CONTINUE;
+      END IF;
+      target_count := rec.recurring_total_occurrences;
+      i := existing_count; -- start from existing count
+      WHILE i < target_count LOOP
+        -- compute next occurrence date
+        IF rec.recurring_frequency = 'monthly' THEN
+          next_date := (rec.start_date + (i || ' month')::interval)::date;
+        ELSE
+          next_date := (rec.start_date + (i * 7 || ' days')::interval)::date;
+        END IF;
+
+        -- Insert if missing
+        IF NOT EXISTS (
+          SELECT 1 FROM public.expenses 
+          WHERE recurring_group_id = rec.recurring_group_id AND date = next_date
+        ) THEN
+          INSERT INTO public.expenses (
+            user_id, amount, merchant, category, currency, date, raw_notification,
+            is_recurring, recurring_group_id, recurring_frequency,
+            recurring_total_occurrences, recurring_index, recurring_infinite, recurring_stopped
+          ) VALUES (
+            rec.user_id, rec.amount, rec.merchant, rec.category, rec.currency, next_date, COALESCE(rec.raw_notification, 'manual'),
+            true, rec.recurring_group_id, rec.recurring_frequency,
+            target_count, i + 1, false, false
+          );
+        END IF;
+        i := i + 1;
+      END LOOP;
+    END IF;
+  END LOOP;
+END;
+$$;
+
+-- Schedule the generator daily at 02:00 UTC with 60-day horizon
+SELECT cron.schedule(
+  'generate_recurring_expenses_daily',
+  '0 2 * * *',
+  $$CALL public.generate_recurring_expenses(60);$$
+)
+ON CONFLICT (jobname) DO NOTHING;
