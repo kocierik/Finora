@@ -1144,7 +1144,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(6, 182, 212, 0.1)',
-    backgroundColor: 'rgba(15, 15, 20, 0.6)',
+    backgroundColor: 'rgba(6, 167, 207, 0.05)',
     minHeight: 120,
   },
   overviewCardHeader: {
@@ -1223,7 +1223,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(6, 182, 212, 0.12)',
-    backgroundColor: 'rgba(255,255,255,0.04)'
+    backgroundColor: 'rgba(6, 167, 207, 0.07)'
   },
   recentHeader: {
     flexDirection: 'row',
