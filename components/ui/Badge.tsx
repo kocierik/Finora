@@ -1,11 +1,12 @@
 import { ThemedText } from '@/components/themed-text';
+import { UI as UI_CONSTANTS } from '@/constants/branding';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { StyleSheet, View } from 'react-native';
 
 export function Badge({ label, accent }: { label: string; accent?: string }) {
   const bg = useThemeColor({}, 'background')
   return (
-    <View style={[styles.badge, { backgroundColor: accent ? withAlpha(accent, 0.12) : shade(bg, 0.06), borderColor: accent ? withAlpha(accent, 0.35) : 'rgba(255,255,255,0.06)' }]}>
+    <View style={[styles.badge, { backgroundColor: accent ? withAlpha(accent, 0.12) : shade(bg, 0.06), borderColor: accent ? withAlpha(accent, 0.35) : UI_CONSTANTS.GLASS_BORDER_MD }]}> 
       <ThemedText style={{ color: accent ?? '#E8EEF8', fontSize: 12 }}>{label}</ThemedText>
     </View>
   )

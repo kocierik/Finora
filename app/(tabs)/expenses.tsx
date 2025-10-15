@@ -2,7 +2,7 @@ import { ExpensesPie } from '@/components/charts/ExpensesPie'
 import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
 import { DatePickerModal } from '@/components/ui/DatePickerModal'
-import { Brand } from '@/constants/branding'
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
@@ -907,7 +907,7 @@ export default function ExpensesScreen() {
                             : 'rgba(20,184,166,0.06)',
                           borderRadius: 14,
                           borderWidth: 1,
-                          borderColor: 'rgba(6,182,212,0.12)',
+                          borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
                           justifyContent: 'center',
                           alignItems: 'center',
                           paddingHorizontal: 12,
@@ -1490,7 +1490,7 @@ export default function ExpensesScreen() {
                             {new Date(tx.date).toLocaleDateString(locale)}
                           </ThemedText>
                         </View>
-                        <ThemedText style={[styles.listItemAmount, { color: tx.amount > 0 ? '#ef4444' : '#22c55e' }]}> 
+                        <ThemedText style={[styles.listItemAmount, { color: tx.amount > 0 ? '#ef4444' : UI_CONSTANTS.SUCCESS_TEXT }]}> 
                           {Math.abs(tx.amount).toLocaleString(locale, { style: 'currency', currency })}
                         </ThemedText>
                       </View>
@@ -1526,7 +1526,7 @@ export default function ExpensesScreen() {
                 <ThemedText style={styles.modalMessage}>{t('delete_confirm_text')}</ThemedText>
               </View>
               <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'flex-end' }}>
-                <Pressable onPress={() => { setShowConfirmModal(false); setTransactionToDelete(null) }} style={[styles.modalButton, { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.15)' }] }>
+                <Pressable onPress={() => { setShowConfirmModal(false); setTransactionToDelete(null) }} style={[styles.modalButton, { backgroundColor: UI_CONSTANTS.GLASS_BG_SM, borderColor: UI_CONSTANTS.GLASS_BORDER_SM }] }>
                   <ThemedText style={styles.modalButtonText}>{t('cancel')}</ThemedText>
                 </Pressable>
                 <Pressable onPress={async () => {
@@ -1551,7 +1551,7 @@ export default function ExpensesScreen() {
                   } catch (e) {
                     Alert.alert('Errore', 'Impossibile eliminare la transazione. Riprova.')
                   }
-                }} style={[styles.modalButton, { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}>
+                }} style={[styles.modalButton, { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}> 
                   <ThemedText style={[styles.modalButtonText, { color: '#ef4444' }]}>{t('delete')}</ThemedText>
                 </Pressable>
               </View>
@@ -1668,8 +1668,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    borderColor: UI_CONSTANTS.SUCCESS_BORDER,
+    backgroundColor: UI_CONSTANTS.SUCCESS_BG,
   },
   autoAssignContent: {
     flexDirection: 'row',
@@ -1682,16 +1682,16 @@ const styles = StyleSheet.create({
   autoAssignText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#10b981',
+    color: UI_CONSTANTS.SUCCESS_TEXT,
     flex: 1,
   },
   hideButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1812,9 +1812,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
@@ -1857,9 +1857,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1892,7 +1892,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
   },
   categoryIcon: {
     width: 48,
@@ -2007,8 +2007,8 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.3)',
-    backgroundColor: 'rgba(6, 182, 212, 0.05)',
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     marginBottom: 1,
   },
   transactionContent: {
@@ -2026,7 +2026,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: 'rgba(6, 182, 212, 0.25)',
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.5)',
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -2055,7 +2055,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER,
   },
   categoryBadgeText: {
     fontSize: 9,
@@ -2201,7 +2201,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2211,12 +2211,12 @@ const styles = StyleSheet.create({
     color: Brand.colors.text.secondary,
   },
   transactionInfo: {
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     borderRadius: 12,
     padding: 16,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.2)',
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
     zIndex: 1,
   },
   transactionInfoMerchant: {
@@ -2293,15 +2293,15 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
     justifyContent: 'center',
     alignItems: 'center',
   },
   summaryNavButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_XS,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_XS,
   },
   summaryNavIcon: {
     fontSize: 18,
@@ -2337,9 +2337,9 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2379,9 +2379,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2420,9 +2420,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2459,7 +2459,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     marginBottom: 6,
@@ -2511,7 +2511,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)'
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM
   },
   listItemRow: {
     flexDirection: 'row',

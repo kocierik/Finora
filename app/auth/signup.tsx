@@ -1,5 +1,5 @@
 import { ThemedText } from '@/components/themed-text'
-import { Brand } from '@/constants/branding'
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -293,11 +293,11 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(217, 70, 239, 0.1)',
+    backgroundColor: UI_CONSTANTS.MAGENTA_BG,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(217, 70, 239, 0.2)',
+    borderColor: UI_CONSTANTS.MAGENTA_BORDER,
   },
 
   rocketIcon: {
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: Brand.colors.semantic.danger,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: UI_CONSTANTS.DANGER_BG,
   },
   input: {
     fontSize: 16,
@@ -414,12 +414,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   generalErrorContainer: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: UI_CONSTANTS.DANGER_BG,
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: UI_CONSTANTS.DANGER_BORDER,
   },
   generalErrorText: {
     fontSize: 14,

@@ -1,3 +1,4 @@
+import { DEFAULT_CATEGORIES } from '@/constants/categories'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 
@@ -40,14 +41,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [monthlyBudget, setMonthlyBudget] = useState<number | null>(null)
   const [enableBiometrics, setEnableBiometrics] = useState<boolean>(false)
   const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number>(15)
-  const [categories, setCategories] = useState<CategoryConfig[]>([
-    { key: 'other', name: 'Other', icon: '📦', color: '#10b981' },
-    { key: 'transport', name: 'Transport', icon: '🚗', color: '#06b6d4' },
-    { key: 'grocery', name: 'Grocery', icon: '🛒', color: '#8b5cf6' },
-    { key: 'shopping', name: 'Shopping', icon: '🛍️', color: '#f59e0b' },
-    { key: 'night_life', name: 'Night Life', icon: '🌃', color: '#ef4444' },
-    { key: 'travel', name: 'Travel', icon: '✈️', color: '#3b82f6' },
-  ])
+  const [categories, setCategories] = useState<CategoryConfig[]>(DEFAULT_CATEGORIES)
 
   // Load persisted settings once
   useEffect(() => {
@@ -178,7 +172,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           saving_changes: 'Salvataggio...'
           ,delete_transaction: 'Elimina Transazione'
           ,delete_confirm_text: 'Sei sicuro di voler eliminare questa transazione?'
-          ,cancel: 'Annulla'
+          
           ,delete: 'Elimina'
           ,app_actions: 'Azioni App'
           ,notifications: 'Notifiche'
@@ -336,7 +330,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           saving_changes: 'Saving...'
           ,delete_transaction: 'Delete Transaction'
           ,delete_confirm_text: 'Are you sure you want to delete this transaction?'
-          ,cancel: 'Cancel'
+          
           ,delete: 'Delete'
           ,app_actions: 'App Actions'
           ,notifications: 'Notifications'

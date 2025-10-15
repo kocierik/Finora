@@ -1,7 +1,7 @@
 import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
 import { Logo } from '@/components/ui/Logo'
-import { Brand } from '@/constants/branding'
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
 import { fetchInvestments, parseInvestmentsFile, upsertInvestments } from '@/services/portfolio'
 import { Investment } from '@/types'
@@ -225,7 +225,7 @@ export default function PortfolioScreen() {
           >
             <Pressable style={styles.kpiCard}>
               <LinearGradient
-                colors={['rgba(6, 182, 212, 0.1)', 'rgba(20, 184, 166, 0.05)']}
+                colors={UI_CONSTANTS.GRADIENT_PROFIT_POS as any}
                 style={styles.kpiGradient}
               >
                 <ThemedText style={styles.kpiLabel}>Totale Investito</ThemedText>
@@ -237,7 +237,7 @@ export default function PortfolioScreen() {
 
             <Pressable style={styles.kpiCard}>
               <LinearGradient
-                colors={['rgba(20, 184, 166, 0.1)', 'rgba(6, 182, 212, 0.05)']}
+                colors={UI_CONSTANTS.GRADIENT_PROFIT_POS as any}
                 style={styles.kpiGradient}
               >
                 <ThemedText style={styles.kpiLabel}>Valore Attuale</ThemedText>
@@ -261,7 +261,7 @@ export default function PortfolioScreen() {
           >
             <Pressable style={styles.kpiCard}>
               <LinearGradient
-                colors={totals.pnl >= 0 ? ['rgba(16, 185, 129, 0.1)', 'rgba(20, 184, 166, 0.05)'] : ['rgba(239, 68, 68, 0.1)', 'rgba(220, 38, 38, 0.05)']}
+                colors={totals.pnl >= 0 ? (UI_CONSTANTS.GRADIENT_PROFIT_POS as any) : (UI_CONSTANTS.GRADIENT_PROFIT_NEG as any)}
                 style={styles.kpiGradient}
               >
                 <ThemedText style={styles.kpiLabel}>Varianza</ThemedText>
@@ -273,7 +273,7 @@ export default function PortfolioScreen() {
 
             <Pressable style={styles.kpiCard}>
               <LinearGradient
-                colors={totals.pnl >= 0 ? ['rgba(16, 185, 129, 0.1)', 'rgba(20, 184, 166, 0.05)'] : ['rgba(239, 68, 68, 0.1)', 'rgba(220, 38, 38, 0.05)']}
+                colors={totals.pnl >= 0 ? (UI_CONSTANTS.GRADIENT_PROFIT_POS as any) : (UI_CONSTANTS.GRADIENT_PROFIT_NEG as any)}
                 style={styles.kpiGradient}
               >
                 <ThemedText style={styles.kpiLabel}>Varianza %</ThemedText>
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     alignItems: 'center',
   },
   dangerButton: {

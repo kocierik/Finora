@@ -1,17 +1,17 @@
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/Card';
-import { Brand } from '@/constants/branding';
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding';
 import { useSettings } from '@/context/SettingsContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  View
+    Animated,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 interface DatePickerModalProps {
@@ -277,7 +277,7 @@ export function DatePickerModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_MEDIUM,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,

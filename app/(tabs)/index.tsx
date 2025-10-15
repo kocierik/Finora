@@ -1,6 +1,7 @@
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/Card';
-import { Brand } from '@/constants/branding';
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding';
+import { DEFAULT_CATEGORIES, translateCategoryName } from '@/constants/categories';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/lib/supabase';
@@ -248,30 +249,9 @@ export default function HomeScreen() {
     return t('good_evening')
   })()
 
-  const translateCategoryName = (name: string) => {
-    const key = (name || '').toLowerCase()
-    if (language === 'it') {
-      switch (key) {
-        case 'other': return 'Altro'
-        case 'transport': return 'Trasporti'
-        case 'grocery': return 'Spesa'
-        case 'shopping': return 'Shopping'
-        case 'night life': return 'Vita notturna'
-        case 'travel': return 'Viaggi'
-        default: return name
-      }
-    }
-    return name
-  }
+  const tCategory = (name: string) => translateCategoryName(name, language)
 
-  const availableCategories = (dbCategories?.length ? dbCategories : [
-    { name: 'Other', color: '#10b981' },
-    { name: 'Transport', color: '#06b6d4' },
-    { name: 'Grocery', color: '#8b5cf6' },
-    { name: 'Shopping', color: '#f59e0b' },
-    { name: 'Night Life', color: '#ef4444' },
-    { name: 'Travel', color: '#3b82f6' },
-  ])
+  const availableCategories = (dbCategories?.length ? dbCategories : DEFAULT_CATEGORIES.map(c => ({ name: c.name, color: c.color, icon: c.icon })))
 
   const getCategoryInfo = (name?: string | null) => {
     if (!name) return null
@@ -342,7 +322,7 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* Subtle background gradient */}
       <LinearGradient
-        colors={['rgba(6, 182, 212, 0.03)', 'transparent', 'rgba(6, 182, 212, 0.02)']}
+        colors={UI_CONSTANTS.GRADIENT_CYAN_SUBTLE_BG as any}
         locations={[0, 0.5, 1]}
         style={styles.backgroundGradient}
       />
@@ -465,12 +445,12 @@ export default function HomeScreen() {
                   
                   <View style={styles.overviewCardFooter}>
                     <View style={[styles.overviewBadge, { 
-                      borderColor: expenseDelta >= 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)',
-                    }]}>
-                      <ThemedText style={[styles.overviewBadgeIcon, { color: expenseDelta >= 0 ? '#ef4444' : '#10b981' }]}>
+                      borderColor: expenseDelta >= 0 ? UI_CONSTANTS.DANGER_BORDER : UI_CONSTANTS.SUCCESS_BORDER,
+                    }]}> 
+                      <ThemedText style={[styles.overviewBadgeIcon, { color: expenseDelta >= 0 ? '#ef4444' : UI_CONSTANTS.SUCCESS_TEXT }]}> 
                         {expenseDelta >= 0 ? '↗' : '↘'}
                       </ThemedText>
-                      <ThemedText type="label" style={[styles.overviewBadgeText, { color: expenseDelta >= 0 ? '#ef4444' : '#10b981' }]}>
+                      <ThemedText type="label" style={[styles.overviewBadgeText, { color: expenseDelta >= 0 ? '#ef4444' : UI_CONSTANTS.SUCCESS_TEXT }]}> 
                         {expenseDelta >= 0 ? '+' : ''}{expenseDeltaPct.toFixed(1)}%
                       </ThemedText>
                     </View>
@@ -491,7 +471,7 @@ export default function HomeScreen() {
             onPress={() => setShowAddModal(true)}
           >
             <LinearGradient
-              colors={[ 'rgba(6,182,212,0.25)', 'rgba(6,182,212,0.08)' ]}
+              colors={UI_CONSTANTS.GRADIENT_CYAN_BG_LIGHT as any}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.fabGradient}
@@ -518,7 +498,7 @@ export default function HomeScreen() {
               </ThemedText>
             </View>
             <View style={styles.recentList}>
-              {sortedExpenses.slice(0, 3).map((tx, idx) => (
+              {sortedExpenses.slice(0, UI_CONSTANTS.RECENT_TRANSACTIONS_LIMIT).map((tx, idx) => (
                 <View key={tx.id ?? idx} style={styles.recentItem}>
                   <View style={styles.recentLeft}>
                     <View style={styles.recentIcon}>
@@ -540,15 +520,15 @@ export default function HomeScreen() {
                       <TouchableOpacity
                         onPress={() => openRecentCategoryModal(tx)}
                         style={[styles.homeCategoryBadge, { backgroundColor: `${clr}20`, borderColor: `${clr}40`, marginRight: 10 }]}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        hitSlop={UI_CONSTANTS.HIT_SLOP_MEDIUM as any}
                       >
                         <ThemedText style={[styles.homeCategoryBadgeText, { color: clr }]} numberOfLines={1}>
-                          {info?.icon ? `${info.icon} ` : ''}{translateCategoryName(info?.name || (tx.category || 'Other'))}
+                          {info?.icon ? `${info.icon} ` : ''}{tCategory(info?.name || (tx.category || 'Other'))}
                         </ThemedText>
                       </TouchableOpacity>
                     )
                   })()}
-                  <ThemedText style={[styles.recentAmount, (tx.amount ?? 0) > 0 ? { color: '#ef4444' } : { color: '#22c55e' }]}>
+                  <ThemedText style={[styles.recentAmount, (tx.amount ?? 0) > 0 ? { color: '#ef4444' } : { color: UI_CONSTANTS.SUCCESS_TEXT }]}> 
                     {Math.abs(tx.amount ?? 0).toLocaleString(language === 'it' ? 'it-IT' : 'en-US', { style: 'currency', currency: 'EUR' })}
                   </ThemedText>
                 </View>
@@ -576,7 +556,7 @@ export default function HomeScreen() {
         animationType="fade"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.85)' }]}>
+        <View style={[styles.modalOverlay, { backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_DARK }]}> 
           <View style={styles.addModalCard}>
             <LinearGradient
               colors={[ 'rgba(6,182,212,0.10)', 'rgba(139,92,246,0.06)', 'transparent' ]}
@@ -620,11 +600,11 @@ export default function HomeScreen() {
                 {availableCategories.map((c) => (
                   <TouchableOpacity
                     key={c.name}
-                    style={[styles.categoryChip, newCategory.toLowerCase() === c.name.toLowerCase() && styles.categoryChipActive, { borderColor: (c.color || 'rgba(255,255,255,0.12)') }]}
+                    style={[styles.categoryChip, newCategory.toLowerCase() === c.name.toLowerCase() && styles.categoryChipActive, { borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD) }]}
                     onPress={() => setNewCategory(c.name)}
                   >
                     <ThemedText style={[styles.categoryChipText, newCategory.toLowerCase() === c.name.toLowerCase() && styles.categoryChipTextActive]}>
-                      {c.icon ? `${c.icon} ` : ''}{translateCategoryName(c.name)}
+                      {c.icon ? `${c.icon} ` : ''}{tCategory(c.name)}
                     </ThemedText>
                   </TouchableOpacity>
                 ))}
@@ -913,11 +893,11 @@ export default function HomeScreen() {
               {availableCategories.map((c, i) => (
                 <TouchableOpacity
                   key={`${c.name}-${i}`}
-                  style={[styles.categoryChip, selectedTx?.category?.toLowerCase() === c.name.toLowerCase() && styles.categoryChipActive, { borderColor: (c.color || 'rgba(255,255,255,0.12)') }]}
+                  style={[styles.categoryChip, selectedTx?.category?.toLowerCase() === c.name.toLowerCase() && styles.categoryChipActive, { borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD) }]}
                   onPress={() => handleSelectRecentCategory(c.name)}
                 >
                   <ThemedText style={[styles.categoryChipText, selectedTx?.category?.toLowerCase() === c.name.toLowerCase() && styles.categoryChipTextActive]}>
-                    {c.icon ? `${c.icon} ` : ''}{translateCategoryName(c.name)}
+                    {c.icon ? `${c.icon} ` : ''}{tCategory(c.name)}
                   </ThemedText>
                 </TouchableOpacity>
               ))}
@@ -1023,9 +1003,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.15)',
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#06b6d4',
@@ -1038,7 +1018,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
     alignItems: 'center',
     justifyContent: 'center',
   },

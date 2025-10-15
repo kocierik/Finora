@@ -1,5 +1,5 @@
 import { ThemedText } from '@/components/themed-text'
-import { Brand } from '@/constants/branding'
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { PropsWithChildren } from 'react'
 import { StyleSheet, View } from 'react-native'
@@ -61,17 +61,17 @@ const styles = StyleSheet.create({
     ...Brand.shadows.sm,
   },
   cardDark: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
   },
   cardElevated: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD,
     ...Brand.shadows.md,
   },
   cardSubtle: {
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_XS,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_XS,
     ...Brand.shadows.sm,
   },
   kpi: {
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     padding: Brand.spacing.md,
     borderWidth: 1,
     borderColor: Brand.colors.glass.light,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_XS,
   }
 })
 

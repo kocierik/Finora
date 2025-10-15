@@ -1,17 +1,18 @@
 import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
+import { UI as UI_CONSTANTS } from '@/constants/branding'
 import { useSettings } from '@/context/SettingsContext'
 import {
-    checkNotificationPermission,
-    requestNotificationPermission,
-    type NotificationPermissionStatus
+  checkNotificationPermission,
+  requestNotificationPermission,
+  type NotificationPermissionStatus
 } from '@/services/notification-service'
 import {
-    clearNotifications,
-    getWalletNotifications,
-    loadNotifications,
-    sortNotificationsByDate,
-    type StoredNotification
+  clearNotifications,
+  getWalletNotifications,
+  loadNotifications,
+  sortNotificationsByDate,
+  type StoredNotification
 } from '@/services/notification-storage'
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
 import * as Notifications from 'expo-notifications'
@@ -373,7 +374,7 @@ export default function NotificationsScreen() {
           styles.card,
           pressed && styles.cardPressed,
         ]}
-        android_ripple={{ color: 'rgba(6,182,212,0.08)' }}
+        android_ripple={{ color: UI_CONSTANTS.ACCENT_CYAN_BG }}
         >
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
@@ -413,10 +414,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(6,182,212,0.06)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
     borderWidth: 1,
     shadowColor: '#000',
-    borderColor: 'rgba(8, 160, 187, 0.35)',
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
     shadowOpacity: 0.25,
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 24,
@@ -424,7 +425,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cardPressed: {
-    backgroundColor: 'rgba(6,182,212,0.12)'
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG
   },
   accentDot: {
     width: 8,
@@ -449,7 +450,7 @@ const styles = StyleSheet.create({
   metaWallet: {
     fontSize: 9,
     opacity: 0.7,
-    color: '#10b981'
+    color: UI_CONSTANTS.SUCCESS_TEXT
   },
   // unified glassmorphic primary button
   primaryButton: {
@@ -457,9 +458,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: 'rgba(6,182,212,0.12)',
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
     borderWidth: 1,
-    borderColor: 'rgba(6,182,212,0.35)'
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER
   },
   primaryButtonText: {
     fontWeight: '700',
@@ -478,9 +479,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(6,182,212,0.06)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
     borderWidth: 1,
-    borderColor: 'rgba(6,182,212,0.15)'
+    borderColor: UI_CONSTANTS.GLASS_BORDER
   },
   backIcon: {
     fontSize: 20,
@@ -495,9 +496,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER,
   },
   filterButtonActive: {
     backgroundColor: 'rgba(16, 185, 129, 0.2)',

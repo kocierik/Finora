@@ -1,6 +1,6 @@
 import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
-import { Brand } from '@/constants/branding'
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
@@ -458,7 +458,7 @@ export default function ProfileScreen() {
           animationType="fade"
           onRequestClose={() => setEditModalVisible(false)}
         >
-          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.85)' }]}> 
+          <View style={[styles.modalOverlay, { backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_DARK }]}> 
             <Card style={[styles.modalCard, styles.modalGlass, { backgroundColor: `${(editColor || '#10b981')}22`, borderColor: `${(editColor || '#10b981')}55`, shadowOffset: { width: 0, height: 4 }, elevation: 8 }]}> 
               <View style={styles.modalHeaderRow}>
                 <View style={[styles.previewBadge, { borderColor: editColor || '#10b981' }]}>
@@ -696,7 +696,7 @@ export default function ProfileScreen() {
         animationType="fade"
         onRequestClose={() => setShowSuccessModal(false)}
       >
-        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.9)' }]}>
+        <View style={[styles.modalOverlay, { backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_DARK }]}> 
           <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}>
             <Card  style={styles.modalCard}>
               <View style={styles.modalContent}>
@@ -964,9 +964,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)'
+    borderColor: UI_CONSTANTS.GLASS_BORDER
   },
   categoryLeft: {
     flexDirection: 'row',
@@ -980,9 +980,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)'
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD
   },
   categoryTitle: {
     color: Brand.colors.text.primary,
@@ -1003,15 +1003,15 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)'
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD
   },
   gearButton: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)'
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD
   },
   gearIcon: {
     fontSize: 14,
@@ -1025,9 +1025,9 @@ const styles = StyleSheet.create({
     borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(6,182,212,0.2)',
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
     borderWidth: 1,
-    borderColor: 'rgba(6,182,212,0.4)'
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER
   },
   fabText: {
     color: '#06b6d4',

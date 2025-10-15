@@ -1,20 +1,5 @@
-// Simple i18n: Italian labels for display only (future: add language toggle)
-const translateCategory = (name: string) => {
-  const key = (name || '').toLowerCase()
-  switch (key) {
-    case 'other': return 'Altro'
-    case 'transport': return 'Trasporti'
-    case 'grocery': return 'Spesa'
-    case 'shopping': return 'Shopping'
-    case 'night life': return 'Vita notturna'
-    case 'travel': return 'Viaggi'
-    case 'healthcare': return 'Sanità'
-    case 'education': return 'Istruzione'
-    case 'utilities': return 'Utenze'
-    case 'entertainment': return 'Intrattenimento'
-    default: return name
-  }
-}
+import { UI as UI_CONSTANTS } from '@/constants/branding'
+import { DEFAULT_CATEGORIES, PREDEFINED_CATEGORIES_MAP, translateCategoryName } from '@/constants/categories'
 import { useSettings } from '@/context/SettingsContext'
 import { Expense } from '@/types'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -40,25 +25,14 @@ type CategoryBase = {
   icon: string;
 }
 
-const categories = [
-  { name: 'Night Life', color: '#ef4444', icon: '🌃' },
-  { name: 'Travel', color: '#3b82f6', icon: '✈️' },
-  { name: 'Grocery', color: '#8b5cf6', icon: '🛒' },
-  { name: 'Shopping', color: '#f59e0b', icon: '🛍️' },
-  { name: 'Other', color: '#10b981', icon: '📦' },
-  { name: 'Transport', color: '#06b6d4', icon: '🚗' },
-  { name: 'Healthcare', color: '#ec4899', icon: '🏥' },
-  { name: 'Education', color: '#6366f1', icon: '📚' },
-  { name: 'Utilities', color: '#f97316', icon: '⚡' },
-  { name: 'Entertainment', color: '#6b7280', icon: '🎬' },
-];
+const categories = DEFAULT_CATEGORIES.map(c => ({ name: c.name, color: c.color, icon: c.icon }))
 
 export function ExpensesPie({ items, selectedYear, selectedMonth }: { 
   items: Expense[], 
   selectedYear: number, 
   selectedMonth: number 
 }) {
-  const { categories: configuredCategories } = useSettings()
+  const { categories: configuredCategories, language } = useSettings()
   const animatedValues = useRef(categories.map(() => new Animated.Value(0))).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -173,7 +147,7 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
         };
       }
       // Otherwise, check predefined defaults
-      const predefined = predefinedCategories.get(catName.toLowerCase());
+      const predefined = PREDEFINED_CATEGORIES_MAP.get(catName.toLowerCase());
       if (predefined) {
         return {
           name: predefined.name,
@@ -185,8 +159,8 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
       }
       
       // For unknown categories, assign a default color and icon
-      const defaultColors = ['#ef4444', '#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#06b6d4', '#ec4899', '#6366f1', '#f97316', '#6b7280'];
-      const defaultIcons = ['📦', '💳', '🛒', '✈️', '🚗', '🏥', '📚', '⚡', '🎬', '🌃'];
+      const defaultColors = UI_CONSTANTS.CHART_DEFAULT_COLORS;
+      const defaultIcons = UI_CONSTANTS.CHART_DEFAULT_ICONS;
       const colorIndex = allCategoriesFromData.indexOf(catName) % defaultColors.length;
       
       return {
@@ -250,7 +224,7 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
         ]}
       >
         <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>Nessuna spesa questo mese</Text>
+          <Text style={styles.emptyText}>{translateCategoryName('No expenses recorded', language as any)}</Text>
         </View>
       </Animated.View>
     );
@@ -309,7 +283,7 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
         {/* Background glow effect */}
         <View style={styles.backgroundGlow}>
           <LinearGradient
-            colors={['rgba(6, 182, 212, 0.15)', 'rgba(139, 92, 246, 0.1)', 'transparent']}
+            colors={UI_CONSTANTS.CHART_GLOW_COLORS as any}
             style={styles.glowGradient}
           />
         </View>
@@ -330,8 +304,8 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
             cx={centerX}
             cy={centerY}
             r={radius}
-            fill="rgba(10, 10, 15, 0.8)"
-            stroke="rgba(6, 182, 212, 0.2)"
+            fill={UI_CONSTANTS.CHART_BG_OUTER}
+            stroke={UI_CONSTANTS.CHART_BG_OUTER_STROKE}
             strokeWidth="2"
           />
           
@@ -340,8 +314,8 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
             cx={centerX}
             cy={centerY}
             r={innerRadius}
-            fill="rgba(20, 20, 30, 0.9)"
-            stroke="rgba(6, 182, 212, 0.3)"
+            fill={UI_CONSTANTS.CHART_BG_INNER}
+            stroke={UI_CONSTANTS.CHART_BG_INNER_STROKE}
             strokeWidth="1"
           />
 

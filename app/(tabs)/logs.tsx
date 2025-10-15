@@ -1,5 +1,5 @@
 import { ThemedText } from '@/components/themed-text'
-import { Brand } from '@/constants/branding'
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 import { useSettings } from '@/context/SettingsContext'
 import { LogEntry, logger, LogLevel } from '@/services/logger'
 import { Ionicons } from '@expo/vector-icons'
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: UI_CONSTANTS.GLASS_BORDER,
   },
   title: {
     fontSize: 24,
@@ -258,9 +258,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER,
   },
   filterButtonActive: {
     backgroundColor: Brand.colors.primary,
@@ -275,13 +275,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   searchInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     color: '#ffffff',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER,
   },
   statsContainer: {
     paddingHorizontal: 16,
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     marginHorizontal: 16,
     marginVertical: 4,
     padding: 12,

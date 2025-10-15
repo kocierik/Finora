@@ -1,5 +1,5 @@
 import { ThemedText } from '@/components/themed-text'
-import { Brand } from '@/constants/branding'
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_MEDIUM,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -462,9 +462,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: 'rgba(6,182,212,0.15)',
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
     borderWidth: 1,
-    borderColor: 'rgba(6,182,212,0.35)',
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
   },
   modalActionText: {
     color: Brand.colors.text.primary,

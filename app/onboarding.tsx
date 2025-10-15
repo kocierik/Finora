@@ -1,3 +1,4 @@
+import { UI as UI_CONSTANTS } from '@/constants/branding'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -454,11 +455,7 @@ export default function OnboardingScreen() {
               )}
               <Card style={[styles.card, { height: CARD_HEIGHT, maxWidth: CARD_MAX_WIDTH }]}>
                 <LinearGradient
-                  colors={[
-                    'rgba(6,182,212,0.10)',
-                    'rgba(139,92,246,0.06)',
-                    'transparent'
-                  ]}
+                  colors={UI_CONSTANTS.GRADIENT_CYAN_BG_CARD as any}
                   style={styles.gradient}
                 />
                 <View style={styles.emojiWrap}>
@@ -505,7 +502,7 @@ export default function OnboardingScreen() {
                     style={styles.nextBtn}
                   >
                     <LinearGradient
-                      colors={[ 'rgba(6,182,212,0.35)', 'rgba(6,182,212,0.22)' ]}
+                      colors={UI_CONSTANTS.GRADIENT_CYAN_BUTTON as any}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.nextGradient}
@@ -537,7 +534,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a0a0f'
   },
   card: {
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_XS,
     borderRadius: 12,
     paddingVertical: 34,
     paddingHorizontal: 26,
@@ -570,9 +567,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(6,182,212,0.10)',
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
     borderWidth: 1,
-    borderColor: 'rgba(6,182,212,0.25)',
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
     marginBottom: 18,
     paddingTop: 2
   },
@@ -598,9 +595,9 @@ const styles = StyleSheet.create({
   },
   // notifications preview styles
   previewCard: {
-    backgroundColor: 'rgba(6,182,212,0.06)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
     borderWidth: 1,
-    borderColor: 'rgba(6,182,212,0.18)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER,
     borderRadius: 12,
     padding: 12,
   },
@@ -655,7 +652,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: 'rgba(255,255,255,0.25)'
+    backgroundColor: UI_CONSTANTS.GLASS_BORDER
   },
   dotActive: {
     backgroundColor: '#06b6d4'
@@ -672,8 +669,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.04)'
+    borderColor: UI_CONSTANTS.GLASS_BORDER,
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM
   },
   backText: {
     color: '#E8EEF8',
@@ -695,7 +692,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(6,182,212,0.45)'
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER
   },
   nextText: {
     color: '#E8EEF8',
@@ -712,8 +709,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.04)'
+    borderColor: UI_CONSTANTS.GLASS_BORDER,
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM
   }
 })
 
