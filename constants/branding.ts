@@ -262,20 +262,20 @@ export const UI = {
   MODAL_OVERLAY_MEDIUM: 'rgba(0,0,0,0.70)',    // Sfondo modali medio (es. date picker)
   
   // 🔮 GLASSMORPHISM - Sfondi trasparenti per card e componenti
-  GLASS_BG_XS: 'rgba(255,255,255,0.02)',       // Sfondo più trasparente (card sottili)
-  GLASS_BG_SM: 'rgba(255,255,255,0.04)',       // Sfondo poco trasparente (card normali)
-  GLASS_BG: 'rgba(255,255,255,0.05)',          // Sfondo standard (card principali)
-  GLASS_BG_MD: 'rgba(255,255,255,0.06)',       // Sfondo medio trasparente (card elevate)
+  GLASS_BG_XS: 'rgba(6, 167, 207, 0.07)',       // Sfondo più trasparente (card sottili)
+  GLASS_BG_SM: 'rgba(6, 167, 207, 0.07)',       // Sfondo poco trasparente (card normali)
+  GLASS_BG: 'rgba(6, 167, 207, 0.07)',          // Sfondo standard (card principali)
+  GLASS_BG_MD: 'rgba(6, 167, 207, 0.07)',       // Sfondo medio trasparente (card elevate)
   
   // 🔮 GLASSMORPHISM - Bordi trasparenti per card e componenti
-  GLASS_BORDER_XS: 'rgba(255,255,255,0.04)',   // Bordo più trasparente
-  GLASS_BORDER_SM: 'rgba(255,255,255,0.08)',   // Bordo poco trasparente
-  GLASS_BORDER: 'rgba(255,255,255,0.10)',      // Bordo standard
-  GLASS_BORDER_MD: 'rgba(255,255,255,0.12)',   // Bordo medio trasparente
+  GLASS_BORDER_XS: 'rgba(6, 167, 207, 0.07)',   // Bordo più trasparente
+  GLASS_BORDER_SM: 'rgba(6, 167, 207, 0.07)',   // Bordo poco trasparente
+  GLASS_BORDER: 'rgba(6, 167, 207, 0.07)',      // Bordo standard
+  GLASS_BORDER_MD: 'rgba(6, 167, 207, 0.07)',   // Bordo medio trasparente
   
   // 🎯 ACCENT CYAN - Colore principale dell'app
-  ACCENT_CYAN_BG: 'rgba(6, 182, 212, 0.12)',   // Sfondo cyan per bottoni attivi
-  ACCENT_CYAN_BORDER: 'rgba(6, 182, 212, 0.3)', // Bordo cyan per bottoni attivi
+  ACCENT_CYAN_BG: 'rgba(6, 167, 207, 0.07)',   // Sfondo cyan per bottoni attivi
+  ACCENT_CYAN_BORDER: 'rgba(6, 167, 207, 0.07)', // Bordo cyan per bottoni attivi
   
   // 📏 DIMENSIONI E SPACING
   RADIUS_MD: 12,                                // Bordi arrotondati medi
