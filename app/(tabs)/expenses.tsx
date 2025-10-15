@@ -2008,7 +2008,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
-    backgroundColor: UI_CONSTANTS.GLASS_BG,
+   // backgroundColor: UI_CONSTANTS.GLASS_BG,
     marginBottom: 1,
   },
   transactionContent: {

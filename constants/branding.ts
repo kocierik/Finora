@@ -219,15 +219,15 @@ export type BrandSpacing = typeof Brand.spacing
 //    - MODAL_OVERLAY_DARK: sfondo scuro delle modali (es. aggiungi transazione)
 //    - MODAL_OVERLAY_MEDIUM: sfondo medio delle modali (es. date picker)
 //
-// 2. 🔮 GLASSMORPHISM (effetto vetro)
+// 2. 🔮 GLASSMORPHISM (effetto vetro) - PER CARD E COMPONENTI
 //    - GLASS_BG_*: sfondi trasparenti per card e componenti
-//      * XS = più trasparente (0.02)
-//      * SM = poco trasparente (0.04) 
-//      * MD = medio trasparente (0.06)
+//      * XS = più trasparente (0.07) - card sottili, elementi secondari
+//      * SM = poco trasparente (0.07) - card normali, liste
+//      * MD = medio trasparente (0.07) - card elevate, sezioni principali
 //    - GLASS_BORDER_*: bordi trasparenti per card e componenti
-//      * XS = più trasparente (0.04)
-//      * SM = poco trasparente (0.08)
-//      * MD = medio trasparente (0.12)
+//      * XS = più trasparente (0.07) - bordi sottili
+//      * SM = poco trasparente (0.07) - bordi normali
+//      * MD = medio trasparente (0.07) - bordi spessi
 //
 // 3. 🎯 ACCENT CYAN (colore principale dell'app)
 //    - ACCENT_CYAN_BG: sfondo cyan per bottoni e elementi attivi
@@ -253,6 +253,12 @@ export type BrandSpacing = typeof Brand.spacing
 //    - RADIUS_*: bordi arrotondati (MD=12, LG=20, XL=24)
 //    - HIT_SLOP_*: area di tocco per bottoni (SMALL, MEDIUM, LARGE)
 //
+// 🎯 PER COLORARE LE CARD DELLE SPESE MENSILI (Tab Spese):
+//    - Usa GLASS_BG_MD per lo sfondo della card principale
+//    - Usa GLASS_BORDER_MD per il bordo della card principale
+//    - Modifica questi valori per cambiare il colore di tutte le card
+//    - Attualmente usa: rgba(6, 167, 207, 0.07) - colore cyan trasparente
+//
 // ============================================================================
 
 export const UI = {
@@ -262,16 +268,18 @@ export const UI = {
   MODAL_OVERLAY_MEDIUM: 'rgba(0,0,0,0.70)',    // Sfondo modali medio (es. date picker)
   
   // 🔮 GLASSMORPHISM - Sfondi trasparenti per card e componenti
-  GLASS_BG_XS: 'rgba(6, 167, 207, 0.07)',       // Sfondo più trasparente (card sottili)
-  GLASS_BG_SM: 'rgba(6, 167, 207, 0.07)',       // Sfondo poco trasparente (card normali)
-  GLASS_BG: 'rgba(6, 167, 207, 0.07)',          // Sfondo standard (card principali)
-  GLASS_BG_MD: 'rgba(6, 167, 207, 0.07)',       // Sfondo medio trasparente (card elevate)
+  // 🎯 PER CARD SPESE MENSILI: modifica GLASS_BG_MD per cambiare il colore delle card principali
+  GLASS_BG_XS: 'rgba(6, 167, 207, 0.05)',       // Sfondo più trasparente (card sottili, elementi secondari)
+  GLASS_BG_SM: 'rgba(6, 167, 207, 0.05)',       // Sfondo poco trasparente (card normali, liste transazioni)
+  GLASS_BG: 'rgba(6, 167, 207, 0.05)',          // Sfondo standard (card principali, sezioni)
+  GLASS_BG_MD: 'rgba(6, 167, 207, 0.05)',       // Sfondo medio trasparente (card elevate, spese mensili)
   
   // 🔮 GLASSMORPHISM - Bordi trasparenti per card e componenti
-  GLASS_BORDER_XS: 'rgba(6, 167, 207, 0.07)',   // Bordo più trasparente
-  GLASS_BORDER_SM: 'rgba(6, 167, 207, 0.07)',   // Bordo poco trasparente
-  GLASS_BORDER: 'rgba(6, 167, 207, 0.07)',      // Bordo standard
-  GLASS_BORDER_MD: 'rgba(6, 167, 207, 0.07)',   // Bordo medio trasparente
+  // 🎯 PER CARD SPESE MENSILI: modifica GLASS_BORDER_MD per cambiare il bordo delle card principali
+  GLASS_BORDER_XS: 'rgba(6, 167, 207, 0.07)',   // Bordo più trasparente (elementi sottili)
+  GLASS_BORDER_SM: 'rgba(6, 167, 207, 0.07)',   // Bordo poco trasparente (card normali)
+  GLASS_BORDER: 'rgba(6, 167, 207, 0.07)',      // Bordo standard (card principali)
+  GLASS_BORDER_MD: 'rgba(6, 167, 207, 0.07)',   // Bordo medio trasparente (card elevate, spese mensili)
   
   // 🎯 ACCENT CYAN - Colore principale dell'app
   ACCENT_CYAN_BG: 'rgba(6, 167, 207, 0.07)',   // Sfondo cyan per bottoni attivi
@@ -297,21 +305,23 @@ export const UI = {
   CHART_BG_INNER_STROKE: 'rgba(6, 182, 212, 0.3)', // Bordo interno del grafico
   
   // 🌈 GRADIENTI - Sfondi sfumati per bottoni e card
-  GRADIENT_CYAN_BUTTON: ['rgba(6,182,212,0.35)', 'rgba(6,182,212,0.22)'], // Gradiente bottoni cyan
-  GRADIENT_CYAN_BG_LIGHT: ['rgba(6,182,212,0.25)', 'rgba(6,182,212,0.08)'], // Gradiente sfondo chiaro
-  GRADIENT_CYAN_BG_CARD: ['rgba(6,182,212,0.10)', 'rgba(139,92,246,0.06)', 'transparent'], // Gradiente card
-  GRADIENT_CYAN_SUBTLE_BG: ['rgba(6, 182, 212, 0.03)', 'transparent', 'rgba(6, 182, 212, 0.02)'], // Gradiente sottile
-  GRADIENT_PROFIT_POS: ['rgba(16, 185, 129, 0.1)', 'rgba(20, 184, 166, 0.05)'], // Gradiente verde (profitti)
-  GRADIENT_PROFIT_NEG: ['rgba(239, 68, 68, 0.1)', 'rgba(220, 38, 38, 0.05)'], // Gradiente rosso (perdite)
+  // 🎯 PER CARD SPESE MENSILI: usa GRADIENT_CYAN_BG_CARD per sfondi sfumati delle card
+  GRADIENT_CYAN_BUTTON: ['rgba(6,182,212,0.35)', 'rgba(6,182,212,0.22)'], // Gradiente bottoni cyan (FAB, bottoni principali)
+  GRADIENT_CYAN_BG_LIGHT: ['rgba(6,182,212,0.25)', 'rgba(6,182,212,0.08)'], // Gradiente sfondo chiaro (sezioni)
+  GRADIENT_CYAN_BG_CARD: ['rgba(6,182,212,0.10)', 'rgba(139,92,246,0.06)', 'transparent'], // Gradiente card (spese mensili)
+  GRADIENT_CYAN_SUBTLE_BG: ['rgba(6, 182, 212, 0.03)', 'transparent', 'rgba(6, 182, 212, 0.02)'], // Gradiente sottile (sfondi)
+  GRADIENT_PROFIT_POS: ['rgba(16, 185, 129, 0.1)', 'rgba(20, 184, 166, 0.05)'], // Gradiente verde (profitti, valori positivi)
+  GRADIENT_PROFIT_NEG: ['rgba(239, 68, 68, 0.1)', 'rgba(220, 38, 38, 0.05)'], // Gradiente rosso (perdite, valori negativi)
   
   // 🚨 COLORI SEMANTICI - Stati dell'applicazione
-  MAGENTA_BG: 'rgba(217, 70, 239, 0.1)',       // Sfondo magenta (elementi premium)
-  MAGENTA_BORDER: 'rgba(217, 70, 239, 0.2)',   // Bordo magenta (elementi premium)
-  DANGER_BG: 'rgba(239, 68, 68, 0.1)',         // Sfondo rosso (errori, eliminazioni)
-  DANGER_BORDER: 'rgba(239, 68, 68, 0.3)',     // Bordo rosso (errori, eliminazioni)
-  SUCCESS_BG: 'rgba(16, 185, 129, 0.12)',      // Sfondo verde (successo, conferme)
-  SUCCESS_BORDER: 'rgba(16, 185, 129, 0.3)',   // Bordo verde (successo, conferme)
-  SUCCESS_TEXT: '#10b981',                      // Testo verde (valori positivi)
+  // 🎯 PER CARD SPESE MENSILI: usa questi colori per evidenziare stati specifici nelle card
+  MAGENTA_BG: 'rgba(217, 70, 239, 0.1)',       // Sfondo magenta (elementi premium, card speciali)
+  MAGENTA_BORDER: 'rgba(217, 70, 239, 0.2)',   // Bordo magenta (elementi premium, card speciali)
+  DANGER_BG: 'rgba(239, 68, 68, 0.1)',         // Sfondo rosso (errori, eliminazioni, card di errore)
+  DANGER_BORDER: 'rgba(239, 68, 68, 0.3)',     // Bordo rosso (errori, eliminazioni, card di errore)
+  SUCCESS_BG: 'rgba(16, 185, 129, 0.12)',      // Sfondo verde (successo, conferme, card positive)
+  SUCCESS_BORDER: 'rgba(16, 185, 129, 0.3)',   // Bordo verde (successo, conferme, card positive)
+  SUCCESS_TEXT: '#10b981',                      // Testo verde (valori positivi, importi positivi)
 } as const
 
 // App theme mappings (merged from theme.ts)
