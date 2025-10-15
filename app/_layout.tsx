@@ -4,6 +4,9 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
+// Ensure headless listener is always registered (not only when app/index.tsx loads)
+import '../headless-notification-listener';
+
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SettingsProvider } from '@/context/SettingsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
