@@ -51,6 +51,8 @@ CREATE TABLE public.profiles (
   expense_threshold_high NUMERIC DEFAULT 1500,
   currency TEXT DEFAULT 'EUR',
   hide_balances BOOLEAN DEFAULT false,
+  -- App config
+  categories_config JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -81,6 +83,24 @@ CREATE TRIGGER set_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at();
+
+-- Ensure categories_config is an array (only if column exists)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'categories_config'
+  ) THEN
+    BEGIN
+      ALTER TABLE public.profiles
+      ADD CONSTRAINT profiles_categories_config_is_array
+      CHECK (jsonb_typeof(categories_config) = 'array');
+    EXCEPTION WHEN duplicate_object THEN
+      -- constraint already exists
+      NULL;
+    END;
+  END IF;
+END $$;
 
 
 -- Ensure recurring columns exist on public.expenses for existing databases
@@ -231,7 +251,30 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS expense_threshold_moderate NUMERIC DEFAULT 1000,
   ADD COLUMN IF NOT EXISTS expense_threshold_high NUMERIC DEFAULT 1500,
   ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'EUR',
-  ADD COLUMN IF NOT EXISTS hide_balances BOOLEAN DEFAULT false;
+  ADD COLUMN IF NOT EXISTS hide_balances BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS categories_config JSONB DEFAULT '[]'::jsonb;
+
+-- Idempotent constraint for existing DBs
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'categories_config'
+  ) THEN
+    BEGIN
+      ALTER TABLE public.profiles
+      ADD CONSTRAINT IF NOT EXISTS profiles_categories_config_is_array
+      CHECK (jsonb_typeof(categories_config) = 'array');
+    EXCEPTION WHEN duplicate_object THEN
+      NULL;
+    END;
+  END IF;
+END $$;
+
+-- Optional GIN index for categories_config
+CREATE INDEX IF NOT EXISTS idx_profiles_categories_config
+ON public.profiles
+USING gin (categories_config jsonb_path_ops);
 
 -- Aggiorna updated_at quando si modificano le impostazioni
 CREATE OR REPLACE FUNCTION public.update_profile_updated_at()

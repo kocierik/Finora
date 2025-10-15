@@ -15,6 +15,7 @@ const translateCategory = (name: string) => {
     default: return name
   }
 }
+import { useSettings } from '@/context/SettingsContext'
 import { Expense } from '@/types'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useEffect, useRef } from 'react'
@@ -57,6 +58,7 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
   selectedYear: number, 
   selectedMonth: number 
 }) {
+  const { categories: configuredCategories } = useSettings()
   const animatedValues = useRef(categories.map(() => new Animated.Value(0))).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -140,6 +142,14 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
   const predefinedCategories = new Map(
     categories.map(cat => [cat.name.toLowerCase(), cat])
   );
+
+  // Map of user-configured categories (icon/color override)
+  const userCategories = new Map(
+    (configuredCategories || []).map(c => [
+      (c.name || '').toLowerCase(),
+      { name: c.name, icon: c.icon, color: c.color }
+    ])
+  )
   
   // Get all unique categories from the data
   const allCategoriesFromData = Object.keys(byCat);
@@ -151,7 +161,18 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
       const amount = byCat[catName];
       const percentage = totalAmount > 0 ? (amount / totalAmount) * 100 : 0;
       
-      // Check if it's a predefined category
+      // Prefer user-configured category if present
+      const userConfigured = userCategories.get(catName.toLowerCase());
+      if (userConfigured) {
+        return {
+          name: userConfigured.name,
+          amount,
+          percentage,
+          color: userConfigured.color || '#10b981',
+          icon: (userConfigured.icon ?? '')
+        };
+      }
+      // Otherwise, check predefined defaults
       const predefined = predefinedCategories.get(catName.toLowerCase());
       if (predefined) {
         return {
@@ -330,10 +351,12 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
               key={category.name}
               d={createArcPath(category.startAngle, category.endAngle, radius, innerRadius)}
               fill={category.color}
-              fillOpacity={0.8}
-              stroke={category.color}
-              strokeWidth="1"
-              strokeOpacity={0.6}
+              fillOpacity={0.85}
+              stroke="rgb(0, 0, 0)"
+              strokeWidth="0.6"
+              vectorEffect="non-scaling-stroke"
+              strokeLinejoin="round"
+              strokeLinecap="round"
               filter="url(#glow)"
             />
           ))}

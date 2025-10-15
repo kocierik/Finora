@@ -88,8 +88,8 @@ export function useWalletListener() {
       // DISABILITATO: Non salvare quando l'app è aperta per evitare duplicati
       // Il headless task si occupa di tutto sia quando l'app è chiusa che aperta
       console.log('[WalletListener] ⏭️  Skipping expense save to avoid duplicates with headless task')
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-      return
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+        return
     }
 
     // Listener per notifiche simulate (test)

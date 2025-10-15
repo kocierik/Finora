@@ -11,7 +11,7 @@ import { fetchInvestments } from '@/services/portfolio';
 import { Expense } from '@/types';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, DeviceEventEmitter, Dimensions, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -36,6 +36,7 @@ export default function HomeScreen() {
   const { t, language } = useSettings()
   const { user, signOut, loading } = useAuth()
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [dbCategories, setDbCategories] = useState<{ name: string; icon?: string; color?: string }[]>([])
   const [portfolioPoints, setPortfolioPoints] = useState<{ x: string; y: number }[]>([])
   const [kpis, setKpis] = useState<{ totalInvested: number; totalMarket?: number; monthExpenses: number } | null>(null)
   const [hideBalances, setHideBalances] = useState(false)
@@ -53,6 +54,9 @@ export default function HomeScreen() {
   const [toast, setToast] = useState<{ visible: boolean; text: string }>({ visible: false, text: '' })
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  // Category edit modal for recent transactions
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [selectedTx, setSelectedTx] = useState<Expense | null>(null)
   // Recurring fields
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurringFrequency, setRecurringFrequency] = useState<'weekly' | 'monthly'>('monthly')
@@ -90,7 +94,7 @@ export default function HomeScreen() {
       const [{ data: inv }, { data: exp }, { data: profile }] = await Promise.all([
         fetchInvestments(user.id),
         fetchExpenses(user.id),
-        supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle(),
+        supabase.from('profiles').select('display_name, categories_config').eq('id', user.id).maybeSingle(),
       ])
       setExpenses(exp)
       
@@ -98,6 +102,16 @@ export default function HomeScreen() {
       if (profile?.display_name) {
         setUserDisplayName(profile.display_name)
       }
+      // Carica le categorie salvate dall'utente
+      const cats = (profile?.categories_config as any[]) || []
+      const normalizedCats = cats
+        .filter(Boolean)
+        .map((c: any) => ({
+          name: (c?.name || '').toString(),
+          icon: c?.icon || undefined,
+          color: c?.color || undefined,
+        }))
+      setDbCategories(normalizedCats)
       
       const totalInvested = inv.reduce((s, it) => s + (it.quantity || 0) * (it.average_price || 0), 0)
       // create a simple 5-point series from cumulative invested (placeholder until price feed)
@@ -152,6 +166,46 @@ export default function HomeScreen() {
       loadData()
     }, [loadData])
   )
+
+  // Realtime refresh: device events and Supabase changes (payments/new expenses)
+  useEffect(() => {
+    if (!user) return
+    const sub = DeviceEventEmitter.addListener('expenses:externalUpdate', () => {
+      loadData()
+    })
+    const channel = supabase
+      .channel(`realtime-expenses-${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'expenses',
+        filter: `user_id=eq.${user.id}`,
+      }, () => {
+        loadData()
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'expenses',
+        filter: `user_id=eq.${user.id}`,
+      }, () => {
+        loadData()
+      })
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'expenses',
+        filter: `user_id=eq.${user.id}`,
+      }, () => {
+        loadData()
+      })
+      .subscribe()
+
+    return () => {
+      try { sub.remove() } catch {}
+      try { supabase.removeChannel(channel) } catch {}
+    }
+  }, [user?.id, loadData])
 
   // Auth guard - redirect if not logged in
   if (loading) {
@@ -210,6 +264,80 @@ export default function HomeScreen() {
     return name
   }
 
+  const availableCategories = (dbCategories?.length ? dbCategories : [
+    { name: 'Other', color: '#10b981' },
+    { name: 'Transport', color: '#06b6d4' },
+    { name: 'Grocery', color: '#8b5cf6' },
+    { name: 'Shopping', color: '#f59e0b' },
+    { name: 'Night Life', color: '#ef4444' },
+    { name: 'Travel', color: '#3b82f6' },
+  ])
+
+  const getCategoryInfo = (name?: string | null) => {
+    if (!name) return null
+    const key = name.toLowerCase()
+    const found = availableCategories.find(c => (c.name || '').toLowerCase() === key)
+    return found || null
+  }
+
+  const openRecentCategoryModal = (tx: Expense) => {
+    setSelectedTx(tx)
+    setShowCategoryModal(true)
+  }
+
+  const handleSelectRecentCategory = async (categoryName: string) => {
+    if (!user || !selectedTx) return
+    try {
+      const merchant = selectedTx.merchant
+      // Update DB for all transactions of same merchant
+      const { error } = await supabase
+        .from('expenses')
+        .update({ category: categoryName.toLowerCase() })
+        .eq('user_id', user.id)
+        .eq('merchant', merchant)
+      if (error) throw error
+
+      // Update local state
+      setExpenses(prev => prev.map(it =>
+        it.merchant === merchant ? { ...it, category: categoryName.toLowerCase() } : it
+      ))
+
+      // Notify other screens
+      DeviceEventEmitter.emit('expenses:externalUpdate')
+    } catch (e) {
+      console.log('[Home] Error updating category for merchant', e)
+    } finally {
+      setShowCategoryModal(false)
+      setSelectedTx(null)
+    }
+  }
+
+  // Ensure consistent ordering client-side as a fallback
+  const sortedExpenses = useMemo(() => {
+    const parseDate = (s?: string) => {
+      if (!s) return 0
+      const parts = s.includes('/') ? s.split('/') : []
+      let d: Date
+      if (parts.length >= 3) {
+        const dd = parseInt(parts[0], 10)
+        const mm = parseInt(parts[1], 10) - 1
+        const yy = parseInt(parts[2], 10)
+        d = new Date(yy, mm, dd)
+      } else {
+        d = new Date(s)
+      }
+      return d.getTime()
+    }
+    return [...expenses].sort((a, b) => {
+      const da = parseDate(a.date)
+      const db = parseDate(b.date)
+      if (db !== da) return db - da
+      const ca = a.created_at ? new Date(a.created_at).getTime() : 0
+      const cb = b.created_at ? new Date(b.created_at).getTime() : 0
+      return cb - ca
+    })
+  }, [expenses])
+
   return (
     <View style={styles.container}>
       {/* Subtle background gradient */}
@@ -237,7 +365,9 @@ export default function HomeScreen() {
           <View style={styles.headerContent}>
             <View style={styles.headerText}>
               <ThemedText style={styles.premiumGreeting}>
-                {greeting}, {userName} 👋
+                {greeting}
+                {'\n'}
+                {userName.charAt(0).toUpperCase() + userName.slice(1)} 👋
               </ThemedText>
           </View>
               <Pressable
@@ -352,8 +482,6 @@ export default function HomeScreen() {
           </Animated.View>
 
         </View>
-
-        {/* Add Transaction Floating Button */}
         <View style={styles.fabContainer}>
           <Pressable
             style={({ pressed }) => [
@@ -372,6 +500,72 @@ export default function HomeScreen() {
           <ThemedText style={styles.fabLabel}>{t('add_transaction')}</ThemedText>
           </Pressable>
         </View>
+        {/* Recent Transactions */}
+        <Animated.View 
+          style={{
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+            marginTop: 8,
+          }}
+        >
+          <Card style={styles.recentCard}>
+            <View style={styles.recentHeader}>
+              <ThemedText style={styles.recentTitle}>
+                {language === 'it' ? 'Transazioni recenti' : 'Recent transactions'}
+              </ThemedText>
+              <ThemedText style={styles.recentCount}>
+            {/* {Math.min(3, expenses.length)} / {expenses.length} */}
+              </ThemedText>
+            </View>
+            <View style={styles.recentList}>
+              {sortedExpenses.slice(0, 3).map((tx, idx) => (
+                <View key={tx.id ?? idx} style={styles.recentItem}>
+                  <View style={styles.recentLeft}>
+                    <View style={styles.recentIcon}>
+                      <ThemedText style={styles.recentIconText}>{tx.raw_notification === 'manual' ? '✍️' : '💳'}</ThemedText>
+                    </View>
+                    <View style={styles.recentTextBlock}>
+                      <ThemedText style={styles.recentMerchant} numberOfLines={1}>
+                        {tx.merchant || '—'}
+                      </ThemedText>
+                      <ThemedText style={styles.recentDate}>
+                        {new Date(tx.date).toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US', { day: '2-digit', month: 'short' })}
+                      </ThemedText>
+                    </View>
+                  </View>
+                  {(() => {
+                    const info = getCategoryInfo(tx.category || 'Other')
+                    const clr = (info?.color || '#06b6d4')
+                    return (
+                      <TouchableOpacity
+                        onPress={() => openRecentCategoryModal(tx)}
+                        style={[styles.homeCategoryBadge, { backgroundColor: `${clr}20`, borderColor: `${clr}40`, marginRight: 10 }]}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <ThemedText style={[styles.homeCategoryBadgeText, { color: clr }]} numberOfLines={1}>
+                          {info?.icon ? `${info.icon} ` : ''}{translateCategoryName(info?.name || (tx.category || 'Other'))}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    )
+                  })()}
+                  <ThemedText style={[styles.recentAmount, (tx.amount ?? 0) > 0 ? { color: '#ef4444' } : { color: '#22c55e' }]}>
+                    {Math.abs(tx.amount ?? 0).toLocaleString(language === 'it' ? 'it-IT' : 'en-US', { style: 'currency', currency: 'EUR' })}
+                  </ThemedText>
+                </View>
+              ))}
+              {expenses.length === 0 && (
+                <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+                  <ThemedText style={{ color: Brand.colors.text.secondary }}>
+                    {language === 'it' ? 'Nessuna transazione' : 'No transactions'}
+                  </ThemedText>
+                </View>
+              )}
+            </View>
+          </Card>
+        </Animated.View>
+
+        {/* Add Transaction Floating Button */}
+
 
     </ScrollView>
 
@@ -382,7 +576,7 @@ export default function HomeScreen() {
         animationType="fade"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.85)' }]}>
           <View style={styles.addModalCard}>
             <LinearGradient
               colors={[ 'rgba(6,182,212,0.10)', 'rgba(139,92,246,0.06)', 'transparent' ]}
@@ -423,13 +617,15 @@ export default function HomeScreen() {
             <View style={styles.formRow}>
               <ThemedText style={styles.formLabel}>{t('category')}</ThemedText>
               <View style={styles.categoryRow}>
-                {['Other','Transport','Grocery','Shopping','Night Life','Travel'].map((c) => (
+                {availableCategories.map((c) => (
                   <TouchableOpacity
-                    key={c}
-                    style={[styles.categoryChip, newCategory === c && styles.categoryChipActive]}
-                    onPress={() => setNewCategory(c)}
+                    key={c.name}
+                    style={[styles.categoryChip, newCategory.toLowerCase() === c.name.toLowerCase() && styles.categoryChipActive, { borderColor: (c.color || 'rgba(255,255,255,0.12)') }]}
+                    onPress={() => setNewCategory(c.name)}
                   >
-                    <ThemedText style={[styles.categoryChipText, newCategory === c && styles.categoryChipTextActive]}>{translateCategoryName(c)}</ThemedText>
+                    <ThemedText style={[styles.categoryChipText, newCategory.toLowerCase() === c.name.toLowerCase() && styles.categoryChipTextActive]}>
+                      {c.icon ? `${c.icon} ` : ''}{translateCategoryName(c.name)}
+                    </ThemedText>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -698,6 +894,38 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {/* Category Selection Modal (reuse styles) */}
+      <Modal
+        visible={showCategoryModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setShowCategoryModal(false); setSelectedTx(null) }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.addModalCard}>
+            <View style={styles.addModalHeader}>
+              <ThemedText style={styles.addModalTitle}>{t('select_category')}</ThemedText>
+              <Pressable onPress={() => { setShowCategoryModal(false); setSelectedTx(null) }} style={styles.addModalClose}>
+                <ThemedText style={styles.addModalCloseText}>✕</ThemedText>
+              </Pressable>
+            </View>
+            <View style={styles.categoryRow}>
+              {availableCategories.map((c, i) => (
+                <TouchableOpacity
+                  key={`${c.name}-${i}`}
+                  style={[styles.categoryChip, selectedTx?.category?.toLowerCase() === c.name.toLowerCase() && styles.categoryChipActive, { borderColor: (c.color || 'rgba(255,255,255,0.12)') }]}
+                  onPress={() => handleSelectRecentCategory(c.name)}
+                >
+                  <ThemedText style={[styles.categoryChipText, selectedTx?.category?.toLowerCase() === c.name.toLowerCase() && styles.categoryChipTextActive]}>
+                    {c.icon ? `${c.icon} ` : ''}{translateCategoryName(c.name)}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -728,8 +956,8 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 60,
-    marginTop: 40,
+    paddingBottom: 24,
+    marginTop: 24,
   },
   loadingContainer: {
     flex: 1,
@@ -927,21 +1155,17 @@ const styles = StyleSheet.create({
     color: Brand.colors.text.secondary,
   },
   // Overview Cards
-  overviewContainer: {
-    gap: 16,
-    marginBottom: 32,
-    marginTop: 24,
-  },
+  overviewContainer: { gap: 12, marginBottom: 12, marginTop: 12 },
   overviewCardContainer: {
     flex: 1,
   },
   overviewCard: {
-    padding: 28,
+    padding: 18,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(6, 182, 212, 0.1)',
     backgroundColor: 'rgba(15, 15, 20, 0.6)',
-    minHeight: 160,
+    minHeight: 120,
   },
   overviewCardHeader: {
     flexDirection: 'row',
@@ -1012,6 +1236,88 @@ const styles = StyleSheet.create({
   overviewBadgeLabel: {
     fontSize: 11,
     color: Brand.colors.text.secondary,
+  },
+  // Recent transactions styles
+  recentCard: {
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.12)',
+    backgroundColor: 'rgba(255,255,255,0.04)'
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  recentTitle: {
+    color: Brand.colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  recentCount: {
+    color: Brand.colors.text.tertiary,
+    fontSize: 12,
+  },
+  recentList: {
+    gap: 8,
+  },
+  recentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)'
+  },
+  recentLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  recentIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.25)'
+  },
+  recentIconText: {
+    fontSize: 16,
+  },
+  recentTextBlock: {
+    flex: 1,
+  },
+  recentMerchant: {
+    color: Brand.colors.text.primary,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  recentDate: {
+    color: Brand.colors.text.secondary,
+    fontSize: 12,
+  },
+  recentAmount: {
+    fontWeight: '800',
+    fontSize: 14,
+    marginLeft: 12,
+  },
+  homeCategoryBadge: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginTop: 4,
+  },
+  homeCategoryBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   // Floating action button
   fabContainer: {
@@ -1173,6 +1479,7 @@ const styles = StyleSheet.create({
   categoryChipText: {
     color: '#cbd5e1',
     fontSize: 12,
+    marginRight: 10,
     fontWeight: '600',
   },
   categoryChipTextActive: {

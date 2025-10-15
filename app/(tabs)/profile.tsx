@@ -8,11 +8,11 @@ import { loadExpenseThresholds, saveExpenseThresholds, type ExpenseThresholds } 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native'
 
 export default function ProfileScreen() {
   const { user, signOut, loading: authLoading } = useAuth()
-  const { language, locale, currency, enableBiometrics, sessionTimeoutMinutes, setLanguage, setLocale, setCurrency, setEnableBiometrics, setSessionTimeoutMinutes, monthlyBudget, setMonthlyBudget, t } = useSettings()
+  const { language, locale, currency, enableBiometrics, sessionTimeoutMinutes, setLanguage, setLocale, setCurrency, setEnableBiometrics, setSessionTimeoutMinutes, monthlyBudget, setMonthlyBudget, t, categories, setCategories } = useSettings()
   const [displayName, setDisplayName] = useState('')
   const [currentDisplayName, setCurrentDisplayName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -21,6 +21,25 @@ export default function ProfileScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
   const router = useRouter()
+  const [editableCategories, setEditableCategories] = useState(categories)
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({})
+  const [editModalVisible, setEditModalVisible] = useState(false)
+  const [editIndex, setEditIndex] = useState<number | null>(null)
+  const [editEmoji, setEditEmoji] = useState('')
+  const [editName, setEditName] = useState('')
+  const [editColor, setEditColor] = useState('')
+  const colorPalette = ['#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#EC4899', '#8B5CF6']
+  const emojiSuggestions = ['📦','🚗','🛒','🛍️','🌃','✈️','🏥','📚','⚡','🎬']
+  const firstGrapheme = (text: string) => (Array.from(text || '')[0] || '')
+  const normalizeEmoji = (text: string) => {
+    const base = firstGrapheme(text)
+    const stripped = base
+      .replace(/\uFE0F/g, '')
+      .replace(/[\u{1F3FB}-\u{1F3FF}]/gu, '')
+      .replace(/\u200D/g, '')
+    const one = firstGrapheme(stripped)
+    return one || ''
+  }
 
   // Function to show tutorial again
   const showTutorial = async () => {
@@ -77,6 +96,21 @@ export default function ProfileScreen() {
       } catch (error) {
         console.log('[Profile] ⚠️  Error loading expense thresholds:', error)
       }
+      // Load category counts
+      try {
+        const { data } = await supabase
+          .from('expenses')
+          .select('category')
+          .eq('user_id', user.id)
+        const counts: Record<string, number> = {}
+        ;(data || []).forEach((e: any) => {
+          const key = (e.category || 'Other').toString()
+          counts[key] = (counts[key] || 0) + 1
+        })
+        setCategoryCounts(counts)
+      } catch (e) {
+        console.log('[Profile] ⚠️  Error loading category counts:', e)
+      }
     })()
 
     // Entrance animations
@@ -114,6 +148,11 @@ export default function ProfileScreen() {
     ]).start()
   }, [user?.id])
 
+  // Keep local editable copy of categories in sync
+  useEffect(() => {
+    setEditableCategories(categories)
+  }, [categories])
+
   const save = async () => {
     if (!user) return
     setLoading(true)
@@ -141,6 +180,54 @@ export default function ProfileScreen() {
     } finally {
       setThresholdsLoading(false)
     }
+  }
+
+  const saveCategories = async (override?: typeof editableCategories) => {
+    // Basic validation: limit to 6, ensure name/icon/color present
+    const source = override ?? editableCategories
+    const sanitized = (source || []).slice(0, 6).map(c => ({
+      key: c.key || (c.name || '').toLowerCase().replace(/\s+/g, '_') || 'other',
+      name: (c.name?.trim() || 'Other').slice(0, 10),
+      icon: normalizeEmoji(c.icon?.trim() || ''),
+      color: c.color?.trim() || '#10b981',
+    }))
+    setCategories(sanitized)
+    // Persist immediately to DB to ensure other tabs see the change
+    try {
+      if (user) {
+        await supabase
+          .from('profiles')
+          .upsert({ id: user.id, categories_config: sanitized, updated_at: new Date().toISOString() })
+      }
+    } catch {}
+    // Notify other screens to refresh
+    try { DeviceEventEmitter.emit('settings:categoriesUpdated') } catch {}
+    setSuccessMessage(language === 'it' ? 'Categorie aggiornate!' : 'Categories updated!')
+    setShowSuccessModal(true)
+  }
+
+  const openEditModal = (index: number) => {
+    const cat = editableCategories[index]
+    setEditIndex(index)
+    setEditEmoji(cat.icon || '📦')
+    setEditName(cat.name || '')
+    setEditColor(cat.color || '#10b981')
+    setEditModalVisible(true)
+  }
+
+  const applyEdit = async () => {
+    if (editIndex === null) return
+    const next = [...editableCategories]
+    next[editIndex] = {
+      ...next[editIndex],
+      icon: normalizeEmoji(editEmoji || ''),
+      name: (editName || 'Other').trim().slice(0, 10),
+      color: (editColor || '#10b981').trim(),
+    }
+    setEditableCategories(next)
+    // Persist immediately when pressing Save in modal
+    await saveCategories(next)
+    setEditModalVisible(false)
   }
 
   if (authLoading) {
@@ -323,6 +410,114 @@ export default function ProfileScreen() {
         </Card>
         </Animated.View>
 
+        {/* Spending Categories */}
+        <Animated.View
+          style={[
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim2 }]
+            }
+          ]}
+        >
+          <Card variant="default" style={styles.premiumCard}>
+            <View style={styles.cardHeader}>
+              <ThemedText style={styles.cardTitle}>{language === 'it' ? 'Categorie di spesa' : 'Spending Categories'}</ThemedText>
+            </View>
+            <View style={styles.categoryList}>
+              {editableCategories.slice(0, 6).map((cat, idx) => {
+                const count = categoryCounts[cat.name] || 0
+                return (
+                  <View key={idx} style={styles.categoryRow}>
+                    <View style={styles.categoryLeft}>
+                      <View style={styles.categoryEmoji}><ThemedText style={{ fontSize: 20 }}>{cat.icon || ''}</ThemedText></View>
+                      <View style={{ gap: 2 }}>
+                        <ThemedText type="defaultSemiBold" style={styles.categoryTitle}>{cat.name || 'Other'}</ThemedText>
+                        <ThemedText style={styles.categorySubtitle}>{count} {language === 'it' ? 'Spese' : 'Expenses'}</ThemedText>
+                      </View>
+                    </View>
+                    <View style={styles.categoryRight}>
+                      <View style={[styles.colorDotLarge, { backgroundColor: cat.color || '#10b981' }]} />
+                      <TouchableOpacity
+                        style={styles.gearButton}
+                        onPress={() => openEditModal(idx)}
+                      >
+                        <ThemedText style={styles.gearIcon}>⚙️</ThemedText>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )
+              })}
+            </View>
+          </Card>
+        </Animated.View>
+
+        {/* Category Edit Modal */}
+        <Modal
+          visible={editModalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setEditModalVisible(false)}
+        >
+          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.85)' }]}> 
+            <Card style={[styles.modalCard, styles.modalGlass, { backgroundColor: `${(editColor || '#10b981')}22`, borderColor: `${(editColor || '#10b981')}55`, shadowOffset: { width: 0, height: 4 }, elevation: 8 }]}> 
+              <View style={styles.modalHeaderRow}>
+                <View style={[styles.previewBadge, { borderColor: editColor || '#10b981' }]}>
+                  <ThemedText style={styles.previewEmoji}>{editEmoji || ''}</ThemedText>
+                </View>
+                <View style={styles.previewInfo}>
+                  <ThemedText type="heading" style={styles.modalTitleText}>
+                    {language === 'it' ? 'Modifica categoria' : 'Edit category'}
+                  </ThemedText>
+                  <View style={styles.previewColorRow}>
+                    <View style={[styles.previewColorDot, { backgroundColor: editColor || '#10b981' }]} />
+                    <ThemedText style={styles.previewColorLabel}>{editName || (language === 'it' ? 'Senza nome' : 'Untitled')}</ThemedText>
+                  </View>
+                </View>
+              </View>
+
+              <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  <TextInput
+                    style={[styles.settingInput, { flex: 1 }]}
+                    value={editEmoji}
+                    maxLength={4}
+                    onChangeText={(text) => setEditEmoji(normalizeEmoji(text))}
+                    placeholder={language === 'it' ? 'Emoji' : 'Emoji'}
+                    placeholderTextColor={Brand.colors.text.muted}
+                  />
+                  <TextInput
+                    style={[styles.settingInput, { flex: 3 }]}
+                    value={editName}
+                    maxLength={10}
+                    onChangeText={(text) => setEditName((text || '').slice(0, 10))}
+                    placeholder={language === 'it' ? 'Nome' : 'Name'}
+                    placeholderTextColor={Brand.colors.text.muted}
+                  />
+                </View>
+                <View style={{ marginTop: 10 }}>
+                  <View style={styles.colorRow}>
+                    {colorPalette.map((hex) => (
+                      <Pressable
+                        key={hex}
+                        style={[styles.colorDot, { backgroundColor: hex }, editColor === hex && styles.colorDotSelected]}
+                        onPress={() => setEditColor(hex)}
+                      />
+                    ))}
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
+                  <Pressable style={[styles.modalButtonSecondary]} onPress={() => setEditModalVisible(false)}>
+                    <ThemedText style={styles.modalButtonSecondaryText}>{language === 'it' ? 'Annulla' : 'Cancel'}</ThemedText>
+                  </Pressable>
+                  <Pressable style={[styles.modalButtonPrimary]} onPress={applyEdit}>
+                    <ThemedText style={styles.modalButtonPrimaryText}>{language === 'it' ? 'Salva' : 'Save'}</ThemedText>
+                  </Pressable>
+                </View>
+              </View>
+            </Card>
+          </View>
+        </Modal>
+
         {/* App Actions */}
         <Animated.View
           style={[
@@ -501,7 +696,7 @@ export default function ProfileScreen() {
         animationType="fade"
         onRequestClose={() => setShowSuccessModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.9)' }]}>
           <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}>
             <Card  style={styles.modalCard}>
               <View style={styles.modalContent}>
@@ -741,6 +936,104 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Brand.colors.background.deep,
   },
+  colorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+    justifyContent: 'center',
+  },
+  colorDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)'
+  },
+  colorDotSelected: {
+    borderColor: '#ffffff',
+    borderWidth: 2,
+  },
+  categoryList: {
+    gap: 12,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)'
+  },
+  categoryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  categoryEmoji: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)'
+  },
+  categoryTitle: {
+    color: Brand.colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  categorySubtitle: {
+    color: Brand.colors.text.tertiary,
+    fontSize: 12,
+  },
+  categoryRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  colorDotLarge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)'
+  },
+  gearButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)'
+  },
+  gearIcon: {
+    fontSize: 14,
+  },
+  fab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(6,182,212,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(6,182,212,0.4)'
+  },
+  fabText: {
+    color: '#06b6d4',
+    fontSize: 28,
+    fontWeight: '700'
+  },
   aboutContent: {
     gap: 20,
   },
@@ -873,6 +1166,21 @@ const styles = StyleSheet.create({
     marginTop: 6,
     lineHeight: 16,
   },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  chipText: {
+    color: Brand.colors.text.primary,
+    fontSize: 14,
+  },
   primaryButton: {
     backgroundColor: 'rgba(6,182,212,0.12)',
     borderColor: 'rgba(6,182,212,0.35)',
@@ -998,6 +1306,81 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     padding: 0,
+    width: '98%',
+    maxWidth: 640,
+  },
+  modalGlass: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
+    overflow: 'hidden'
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  previewBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    
+  },
+  previewEmoji: {
+    fontSize: 24,
+  },
+  previewInfo: {
+    flex: 1,
+  },
+  modalTitleText: {
+    color: Brand.colors.text.primary,
+  },
+  previewColorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  previewColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)'
+  },
+  previewColorLabel: {
+    color: Brand.colors.text.secondary,
+    fontSize: 12,
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#06b6d4',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  modalButtonPrimaryText: {
+    color: '#0a0a0f',
+    fontWeight: '700',
+  },
+  modalButtonSecondary: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)'
+  },
+  modalButtonSecondaryText: {
+    color: '#E8EEF8',
+    fontWeight: '600',
   },
   modalContent: {
     alignItems: 'center',

@@ -17,7 +17,7 @@ import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Modal, Pressabl
 import { PanGestureHandler, State } from 'react-native-gesture-handler'
 
 export default function ExpensesScreen() {
-  const { locale, currency, t, monthlyBudget, language } = useSettings()
+  const { locale, currency, t, monthlyBudget, language, categories: configuredCategories } = useSettings()
   const { user, loading } = useAuth()
   const [items, setItems] = useState<Expense[]>([])
   const [hideBalances, setHideBalances] = useState(false)
@@ -36,6 +36,8 @@ export default function ExpensesScreen() {
   const [selectedHistoryCategory, setSelectedHistoryCategory] = useState<string | null>(null)
   const [categoryHistory, setCategoryHistory] = useState<Expense[]>([])
   const [categoryHistoryLoading, setCategoryHistoryLoading] = useState(false)
+  // Categories loaded from DB (profiles.categories_config)
+  const [dbCategories, setDbCategories] = useState<{ name: string; icon: string; color: string }[]>([])
   
   // Month navigation state
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0) // 0 = current month, -1 = previous, 1 = next
@@ -55,6 +57,42 @@ export default function ExpensesScreen() {
   const listAnim = useRef(new Animated.Value(0)).current
 
   // Note: Do NOT early-return before hooks. Render guards are applied later to keep hook order stable.
+
+  // Load categories from DB profiles.categories_config
+  const loadCategoriesFromDb = useCallback(async () => {
+    if (!user) return
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('categories_config')
+        .eq('id', user.id)
+        .single()
+      if (error) throw error
+      const cats = (data?.categories_config as any[]) || []
+      // Normalize shape and take first 6 for main grid later via memo
+      const normalized = cats
+        .filter(Boolean)
+        .map((c: any) => ({
+          name: c.name ?? c.key ?? 'Other',
+          icon: c.icon ?? '📦',
+          color: c.color ?? '#10b981',
+        }))
+      setDbCategories(normalized)
+      // Trigger UI that depends on categories
+      setCategoryUpdateTrigger((prev) => prev + 1)
+    } catch (e) {
+      console.log('[Expenses] ⚠️  Error loading categories from DB:', e)
+    }
+  }, [user?.id])
+
+  // Initial load and refresh on focus/events
+  useEffect(() => {
+    loadCategoriesFromDb()
+    const sub = DeviceEventEmitter.addListener('settings:categoriesUpdated', () => {
+      loadCategoriesFromDb()
+    })
+    return () => { sub.remove() }
+  }, [loadCategoriesFromDb])
 
   const fetchExpenses = useCallback(async () => {
     if (!user) return
@@ -199,7 +237,12 @@ export default function ExpensesScreen() {
       setCategoryUpdateTrigger(prev => prev + 1)
     })
 
-    return () => { clearInterval(interval); sub.remove() }
+    const subSettings = DeviceEventEmitter.addListener('settings:categoriesUpdated', () => {
+      console.log('[Expenses] 🎨 Categories updated via settings, forcing UI refresh')
+      setCategoryUpdateTrigger(prev => prev + 1)
+    })
+
+    return () => { clearInterval(interval); sub.remove(); subSettings.remove() }
   }, [fetchExpenses])
 
 
@@ -255,29 +298,30 @@ export default function ExpensesScreen() {
     sampleDates: items.map(e => ({ date: e.date, amount: e.amount })).slice(0, 3)
   })
 
-  // Spending categories
-  const categories = [
-    { name: 'Night Life', icon: '🌃', amount: 0, color: '#ef4444', percentage: 0 },
-    { name: 'Travel', icon: '✈️', amount: 0, color: '#3b82f6', percentage: 0 },
-    { name: 'Grocery', icon: '🛒', amount: 0, color: '#8b5cf6', percentage: 0 },
-    { name: 'Shopping', icon: '🛍️', amount: 0, color: '#f59e0b', percentage: 0 },
-    { name: 'Other', icon: '📦', amount: 0, color: '#10b981', percentage: 0 },
-    { name: 'Transport', icon: '🚗', amount: 0, color: '#06b6d4', percentage: 0 },
-    { name: 'Healthcare', icon: '🏥', amount: 0, color: '#ec4899', percentage: 0 },
-    { name: 'Education', icon: '📚', amount: 0, color: '#6366f1', percentage: 0 },
-    { name: 'Utilities', icon: '⚡', amount: 0, color: '#f97316', percentage: 0 },
-    { name: 'Entertainment', icon: '🎬', amount: 0, color: '#6b7280', percentage: 0 },
-  ]
+  // Prefer DB categories if available, otherwise fall back to settings
+  const effectiveCategories = useMemo(() => (dbCategories?.length ? dbCategories : (configuredCategories || [])), [dbCategories, configuredCategories])
 
-  // Main categories for selection (reduced set for better UX)
-  const mainCategories = [
-    { name: 'Other', icon: '📦', amount: 0, color: '#10b981', percentage: 0 },
-    { name: 'Transport', icon: '🚗', amount: 0, color: '#06b6d4', percentage: 0 },
-    { name: 'Grocery', icon: '🛒', amount: 0, color: '#8b5cf6', percentage: 0 },
-    { name: 'Shopping', icon: '🛍️', amount: 0, color: '#f59e0b', percentage: 0 },
-    { name: 'Night Life', icon: '🌃', amount: 0, color: '#ef4444', percentage: 0 },
-    { name: 'Travel', icon: '✈️', amount: 0, color: '#3b82f6', percentage: 0 },
-  ]
+  // Spending categories for main grid (first 6)
+  const categories = useMemo(() => {
+    return (effectiveCategories || []).slice(0, 6).map(c => ({
+      name: c.name,
+      icon: c.icon,
+      color: c.color,
+      amount: 0,
+      percentage: 0,
+    }))
+  }, [effectiveCategories])
+
+  // Main categories for selection (use all effective categories)
+  const mainCategories = useMemo(() => {
+    return (effectiveCategories || []).map(c => ({
+      name: c.name,
+      icon: c.icon,
+      color: c.color,
+      amount: 0,
+      percentage: 0,
+    }))
+  }, [effectiveCategories])
 
   // Available categories for selection (main categories only)
   const availableCategories = mainCategories
@@ -347,7 +391,7 @@ export default function ExpensesScreen() {
       
       return { ...cat, amount, percentage }
     }).sort((a, b) => b.amount - a.amount)
-  }, [allMonthItems, monthTotal, categoryUpdateTrigger])
+  }, [allMonthItems, monthTotal, categoryUpdateTrigger, categories])
 
   const onRefresh = useCallback(() => {
     fetchExpenses()
@@ -384,11 +428,19 @@ export default function ExpensesScreen() {
     setCategoryHistory([])
     setCategoryHistoryLoading(true)
     try {
+      // Limit to currently selected month
+      const startDate = new Date(curYear, curMonth, 1)
+      const endDate = new Date(curYear, curMonth + 1, 0)
+      const startDateStr = startDate.toISOString().split('T')[0]
+      const endDateStr = endDate.toISOString().split('T')[0]
+
       const { data, error } = await supabase
         .from('expenses')
         .select('*')
         .eq('user_id', user.id)
         .eq('category', categoryName.toLowerCase())
+        .gte('date', startDateStr)
+        .lte('date', endDateStr)
         .order('date', { ascending: false })
       if (error) throw error
       setCategoryHistory((data as any) ?? [])
@@ -397,7 +449,7 @@ export default function ExpensesScreen() {
     } finally {
       setCategoryHistoryLoading(false)
     }
-  }, [user])
+  }, [user, curYear, curMonth])
 
   const handleCategorySelect = useCallback(async (category: string) => {
     if (!selectedTransaction || !user) return
@@ -1041,10 +1093,10 @@ export default function ExpensesScreen() {
                       ]}
                     >
                       <LinearGradient
-                        colors={['rgba(139, 69, 19, 0.08)', 'rgba(139, 69, 19, 0.04)']}
+                        colors={[`${category.color}15`, `${category.color}08`]}
                         style={styles.categoryGradient}
                       >
-                      <View style={[styles.categoryIcon, { backgroundColor: 'rgba(139, 69, 19, 0.10)' }]}>
+                      <View style={[styles.categoryIcon, { backgroundColor: `${category.color}20` }]}>
                         <ThemedText style={styles.categoryIconText}>{category.icon}</ThemedText>
                       </View>
                     <ThemedText style={styles.categoryName}>{translateCategory(category.name)}</ThemedText>
@@ -1056,12 +1108,12 @@ export default function ExpensesScreen() {
                         € {category.amount.toFixed(0)}
                 </ThemedText>
                       <View style={styles.progressContainer}>
-                        <View style={[styles.progressBar, { backgroundColor: 'rgba(139, 69, 19, 0.10)' }]}>
+                        <View style={[styles.progressBar, { backgroundColor: `${category.color}20` }]}>
                           <Animated.View 
                             style={[
                               styles.progressFill, 
                               { 
-                                backgroundColor: '#8b4513',
+                                backgroundColor: category.color,
                                 width: `${category.percentage}%`
                               }
                             ]} 
@@ -1099,7 +1151,7 @@ export default function ExpensesScreen() {
             </View>
             <View style={styles.chartContainer}>
               <ExpensesPie 
-                key={`${curYear}-${curMonth}-${categoryUpdateTrigger}`}
+                key={`${curYear}-${curMonth}-${categoryUpdateTrigger}-${JSON.stringify(effectiveCategories)}`}
                 items={allMonthItems} 
                 selectedYear={curYear} 
                 selectedMonth={curMonth} 
@@ -1563,7 +1615,6 @@ function formatDateWithLocale(dateStr: string, language: 'it' | 'en', locale: st
 const styles = StyleSheet.create({
   container: { 
     flex: 1,
-    backgroundColor: Brand.colors.background.deep,
   },
   backgroundGradient: {
     position: 'absolute',

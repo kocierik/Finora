@@ -49,7 +49,7 @@ export default function TabLayout() {
         name="logs"
         options={{
           title: 'Logs',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="doc.text.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.line.uptrend.xyaxis" color={color} />,
         }}
       />
       

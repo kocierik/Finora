@@ -3,6 +3,13 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 
 type LanguageCode = 'it' | 'en'
 
+export type CategoryConfig = {
+  key: string
+  name: string
+  icon: string
+  color: string
+}
+
 type Settings = {
   language: LanguageCode
   locale: string
@@ -11,6 +18,7 @@ type Settings = {
   monthlyBudget: number | null
   enableBiometrics: boolean
   sessionTimeoutMinutes: number
+  categories: CategoryConfig[]
   t: (key: string, params?: Record<string, any>) => string
   setLanguage: (lang: LanguageCode) => void
   setLocale: (loc: string) => void
@@ -19,6 +27,7 @@ type Settings = {
   setMonthlyBudget: (v: number | null) => void
   setEnableBiometrics: (v: boolean) => void
   setSessionTimeoutMinutes: (v: number) => void
+  setCategories: (cats: CategoryConfig[]) => void
 }
 
 const SettingsContext = createContext<Settings | undefined>(undefined)
@@ -31,6 +40,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [monthlyBudget, setMonthlyBudget] = useState<number | null>(null)
   const [enableBiometrics, setEnableBiometrics] = useState<boolean>(false)
   const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number>(15)
+  const [categories, setCategories] = useState<CategoryConfig[]>([
+    { key: 'other', name: 'Other', icon: '📦', color: '#10b981' },
+    { key: 'transport', name: 'Transport', icon: '🚗', color: '#06b6d4' },
+    { key: 'grocery', name: 'Grocery', icon: '🛒', color: '#8b5cf6' },
+    { key: 'shopping', name: 'Shopping', icon: '🛍️', color: '#f59e0b' },
+    { key: 'night_life', name: 'Night Life', icon: '🌃', color: '#ef4444' },
+    { key: 'travel', name: 'Travel', icon: '✈️', color: '#3b82f6' },
+  ])
 
   // Load persisted settings once
   useEffect(() => {
@@ -46,6 +63,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           if (typeof parsed.monthlyBudget === 'number') setMonthlyBudget(parsed.monthlyBudget)
           if (typeof parsed.enableBiometrics === 'boolean') setEnableBiometrics(parsed.enableBiometrics)
           if (typeof parsed.sessionTimeoutMinutes === 'number') setSessionTimeoutMinutes(parsed.sessionTimeoutMinutes)
+          if (Array.isArray(parsed.categories)) setCategories(parsed.categories)
 
           // Also follow current device language on startup
           // If device language differs from stored one, update to device language
@@ -99,14 +117,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       try {
         await AsyncStorage.setItem(
           '@finora:settings',
-          JSON.stringify({ language, locale, currency, hideBalances, monthlyBudget, enableBiometrics, sessionTimeoutMinutes })
+          JSON.stringify({ language, locale, currency, hideBalances, monthlyBudget, enableBiometrics, sessionTimeoutMinutes, categories })
         )
       } catch (error) {
         console.log('[Settings] ❌ Error saving settings:', error)
       }
     }
     save()
-  }, [language, locale, currency, hideBalances, monthlyBudget, enableBiometrics, sessionTimeoutMinutes])
+  }, [language, locale, currency, hideBalances, monthlyBudget, enableBiometrics, sessionTimeoutMinutes, categories])
 
   const value = useMemo<Settings>(() => ({
     language,
@@ -116,6 +134,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     monthlyBudget,
     enableBiometrics,
     sessionTimeoutMinutes,
+    categories,
     t: (key: string, params?: Record<string, any>) => {
       const i18n: Record<LanguageCode, Record<string, string>> = {
         it: {
@@ -438,7 +457,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setMonthlyBudget,
     setEnableBiometrics,
     setSessionTimeoutMinutes,
-  }), [language, locale, currency, hideBalances, monthlyBudget, enableBiometrics, sessionTimeoutMinutes])
+    setCategories,
+  }), [language, locale, currency, hideBalances, monthlyBudget, enableBiometrics, sessionTimeoutMinutes, categories])
 
   return (
     <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>

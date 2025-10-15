@@ -95,7 +95,8 @@ export async function fetchExpenses(userId: string) {
     .from('expenses')
     .select('*')
     .eq('user_id', userId)
-    .order('date', { ascending: true })
+    .order('date', { ascending: false })
+    .order('created_at', { ascending: false })
   return { data: (data as Expense[]) ?? [], error }
 }
 
