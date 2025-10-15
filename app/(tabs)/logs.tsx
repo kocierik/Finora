@@ -5,15 +5,15 @@ import { LogEntry, logger, LogLevel } from '@/services/logger'
 import { Ionicons } from '@expo/vector-icons'
 import React, { useCallback, useEffect, useState } from 'react'
 import {
-    Alert,
-    FlatList,
-    Platform,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  FlatList,
+  Platform,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 

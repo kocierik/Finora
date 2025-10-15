@@ -446,7 +446,7 @@ export default function HomeScreen() {
                   <View style={styles.overviewCardFooter}>
                     <View style={[styles.overviewBadge, { 
                       borderColor: expenseDelta >= 0 ? UI_CONSTANTS.DANGER_BORDER : UI_CONSTANTS.SUCCESS_BORDER,
-                    }]}> 
+                    }]}>
                       <ThemedText style={[styles.overviewBadgeIcon, { color: expenseDelta >= 0 ? '#ef4444' : UI_CONSTANTS.SUCCESS_TEXT }]}> 
                         {expenseDelta >= 0 ? '↗' : '↘'}
                       </ThemedText>
