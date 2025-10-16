@@ -174,6 +174,10 @@ export default function HomeScreen() {
     const sub = DeviceEventEmitter.addListener('expenses:externalUpdate', () => {
       loadData()
     })
+    const subSettings = DeviceEventEmitter.addListener('settings:categoriesUpdated', () => {
+      console.log('[Home] 🎨 Categories updated via settings, forcing UI refresh')
+      loadData()
+    })
     const channel = supabase
       .channel(`realtime-expenses-${user.id}`)
       .on('postgres_changes', {
@@ -204,6 +208,7 @@ export default function HomeScreen() {
 
     return () => {
       try { sub.remove() } catch {}
+      try { subSettings.remove() } catch {}
       try { supabase.removeChannel(channel) } catch {}
     }
   }, [user?.id, loadData])
@@ -250,6 +255,23 @@ export default function HomeScreen() {
   })()
 
   const tCategory = (name: string) => translateCategoryName(name, language)
+
+  // Shorten category name to max characters from branding
+  const shortenCategoryName = (name: string) => {
+    const translated = tCategory(name)
+    return translated.length > UI_CONSTANTS.CATEGORY_MAX_LENGTH ? translated.slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH) + '…' : translated
+  }
+
+  // Check if a date is today
+  const isToday = (dateStr: string) => {
+    if (!dateStr) return false
+    const today = new Date()
+    const transactionDate = new Date(dateStr)
+    
+    return today.getFullYear() === transactionDate.getFullYear() &&
+           today.getMonth() === transactionDate.getMonth() &&
+           today.getDate() === transactionDate.getDate()
+  }
 
   const availableCategories = (dbCategories?.length ? dbCategories : DEFAULT_CATEGORIES.map(c => ({ name: c.name, color: c.color, icon: c.icon })))
 
@@ -308,7 +330,29 @@ export default function HomeScreen() {
       }
       return d.getTime()
     }
-    return [...expenses].sort((a, b) => {
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0) // Reset time to start of day
+    
+    // Filtra le transazioni:
+    // 1. Precedenti o uguali alla data corrente (incluso oggi)
+    // 2. Del mese della data selezionata (sempre)
+    const filteredExpenses = expenses.filter(expense => {
+      const expenseDate = parseDate(expense.date)
+      const expenseDateObj = new Date(expenseDate)
+      const selectedDate = new Date(newDate)
+      
+      // Includi sempre le transazioni del mese della data selezionata
+      const isInSelectedMonth = expenseDateObj.getFullYear() === selectedDate.getFullYear() && 
+                               expenseDateObj.getMonth() === selectedDate.getMonth()
+      
+      // Includi le transazioni precedenti o uguali alla data corrente (incluso oggi)
+      const isTodayOrBefore = expenseDate <= today.getTime()
+      
+      return isInSelectedMonth || isTodayOrBefore
+    })
+
+    return [...filteredExpenses].sort((a, b) => {
       const da = parseDate(a.date)
       const db = parseDate(b.date)
       if (db !== da) return db - da
@@ -316,7 +360,7 @@ export default function HomeScreen() {
       const cb = b.created_at ? new Date(b.created_at).getTime() : 0
       return cb - ca
     })
-  }, [expenses])
+  }, [expenses, newDate])
 
   return (
     <View style={styles.container}>
@@ -472,8 +516,8 @@ export default function HomeScreen() {
           >
             <LinearGradient
               colors={UI_CONSTANTS.GRADIENT_CYAN_BG_LIGHT as any}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              start={{ x: 1.1, y: 1.1 }}
+              end={{ x: 0.9, y: 0.9 }}
               style={styles.fabGradient}
             />
             <ThemedText style={styles.fabIcon}>＋</ThemedText>
@@ -498,41 +542,66 @@ export default function HomeScreen() {
               </ThemedText>
             </View>
             <View style={styles.recentList}>
-              {sortedExpenses.slice(0, UI_CONSTANTS.RECENT_TRANSACTIONS_LIMIT).map((tx, idx) => (
-                <View key={tx.id ?? idx} style={styles.recentItem}>
-                  <View style={styles.recentLeft}>
-                    <View style={styles.recentIcon}>
-                      <ThemedText style={styles.recentIconText}>{tx.raw_notification === 'manual' ? '✍️' : '💳'}</ThemedText>
-                    </View>
-                    <View style={styles.recentTextBlock}>
-                      <ThemedText style={styles.recentMerchant} numberOfLines={1}>
-                        {tx.merchant || '—'}
-                      </ThemedText>
-                      <ThemedText style={styles.recentDate}>
-                        {new Date(tx.date).toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US', { day: '2-digit', month: 'short' })}
-                      </ThemedText>
-                    </View>
-                  </View>
-                  {(() => {
-                    const info = getCategoryInfo(tx.category || 'Other')
-                    const clr = (info?.color || '#06b6d4')
-                    return (
-                      <TouchableOpacity
-                        onPress={() => openRecentCategoryModal(tx)}
-                        style={[styles.homeCategoryBadge, { backgroundColor: `${clr}20`, borderColor: `${clr}40`, marginRight: 10 }]}
-                        hitSlop={UI_CONSTANTS.HIT_SLOP_MEDIUM as any}
+              {sortedExpenses.slice(0, UI_CONSTANTS.RECENT_TRANSACTIONS_LIMIT).map((tx, idx) => {
+                const info = getCategoryInfo(tx.category || 'Other')
+                const clr = (info?.color || '#06b6d4')
+                
+                return (
+                  <View 
+                    key={tx.id ?? idx} 
+                    style={[
+                      styles.recentItem,
+                      {
+                        backgroundColor: `${clr}08`,
+                        borderBottomColor: `${clr}20`
+                      }
+                    ]}
+                  >
+                    <View style={styles.recentLeft}>
+                      <View 
+                        style={[
+                          styles.recentIcon,
+                          {
+                            backgroundColor: `${clr}15`,
+                            borderColor: `${clr}30`
+                          }
+                        ]}
                       >
-                        <ThemedText style={[styles.homeCategoryBadgeText, { color: clr }]} numberOfLines={1}>
-                          {info?.icon ? `${info.icon} ` : ''}{tCategory(info?.name || (tx.category || 'Other'))}
+                        <ThemedText style={styles.recentIconText}>{tx.raw_notification === 'manual' ? '✍️' : '💳'}</ThemedText>
+                      </View>
+                      <View style={styles.recentTextBlock}>
+                        <ThemedText 
+                          style={[
+                            styles.recentMerchant, 
+                            { color: clr }
+                          ]} 
+                          numberOfLines={1}
+                        >
+                          {tx.merchant || '—'}
                         </ThemedText>
-                      </TouchableOpacity>
-                    )
-                  })()}
-                  <ThemedText style={[styles.recentAmount, (tx.amount ?? 0) > 0 ? { color: '#ef4444' } : { color: UI_CONSTANTS.SUCCESS_TEXT }]}> 
-                    {Math.abs(tx.amount ?? 0).toLocaleString(language === 'it' ? 'it-IT' : 'en-US', { style: 'currency', currency: 'EUR' })}
-                  </ThemedText>
-                </View>
-              ))}
+                        <ThemedText style={styles.recentDate}>
+                          {isToday(tx.date) 
+                            ? (language === 'it' ? 'Oggi' : 'Today')
+                            : new Date(tx.date).toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US', { day: '2-digit', month: 'short' })
+                          }
+                        </ThemedText>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => openRecentCategoryModal(tx)}
+                      style={[styles.homeCategoryBadge, { backgroundColor: `${clr}20`, borderColor: `${clr}40`, marginRight: 10 }]}
+                      hitSlop={UI_CONSTANTS.HIT_SLOP_MEDIUM as any}
+                    >
+                      <ThemedText style={[styles.homeCategoryBadgeText, { color: clr }]} numberOfLines={1}>
+                        {info?.icon ? `${info.icon} ` : ''}{shortenCategoryName(info?.name || (tx.category || 'Other'))}
+                      </ThemedText>
+                    </TouchableOpacity>
+                    <ThemedText style={[styles.recentAmount, (tx.amount ?? 0) > 0 ? { color: '#ef4444' } : { color: UI_CONSTANTS.SUCCESS_TEXT }]}> 
+                      {Math.abs(tx.amount ?? 0).toLocaleString(language === 'it' ? 'it-IT' : 'en-US', { style: 'currency', currency: 'EUR' })}
+                    </ThemedText>
+                  </View>
+                )
+              })}
               {expenses.length === 0 && (
                 <View style={{ paddingVertical: 12, alignItems: 'center' }}>
                   <ThemedText style={{ color: Brand.colors.text.secondary }}>
@@ -597,17 +666,31 @@ export default function HomeScreen() {
             <View style={styles.formRow}>
               <ThemedText style={styles.formLabel}>{t('category')}</ThemedText>
               <View style={styles.categoryRow}>
-                {availableCategories.map((c) => (
-                  <TouchableOpacity
-                    key={c.name}
-                    style={[styles.categoryChip, newCategory.toLowerCase() === c.name.toLowerCase() && styles.categoryChipActive, { borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD) }]}
-                    onPress={() => setNewCategory(c.name)}
-                  >
-                    <ThemedText style={[styles.categoryChipText, newCategory.toLowerCase() === c.name.toLowerCase() && styles.categoryChipTextActive]}>
-                      {c.icon ? `${c.icon} ` : ''}{tCategory(c.name)}
-                    </ThemedText>
-                  </TouchableOpacity>
-                ))}
+                {availableCategories.map((c) => {
+                  const isSelected = newCategory.toLowerCase() === c.name.toLowerCase()
+                  return (
+                    <TouchableOpacity
+                      key={c.name}
+                      style={[
+                        styles.categoryChip, 
+                        isSelected && styles.categoryChipActive,
+                        { 
+                          borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
+                          backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
+                        }
+                      ]}
+                      onPress={() => setNewCategory(c.name)}
+                    >
+                      <ThemedText style={[
+                        styles.categoryChipText, 
+                        isSelected && styles.categoryChipTextActive,
+                        isSelected && c.color && { color: c.color }
+                      ]}>
+                        {c.icon ? `${c.icon} ` : ''}{shortenCategoryName(c.name)}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  )
+                })}
               </View>
             </View>
             <View style={styles.formRow}>
@@ -782,7 +865,27 @@ export default function HomeScreen() {
                   const items: any[] = []
                   if (isRecurring) {
                     const count = recurringInfinite ? 1 : Math.min(36, Math.max(1, parseInt(recurringOccurrences || '1', 10) || 1))
-                    const start = new Date(newDate)
+                    const selectedDate = new Date(newDate)
+                    const today = new Date()
+                    today.setHours(0, 0, 0, 0) // Reset time to start of day
+                    
+                    // Per le transazioni ricorrenti:
+                    // - Se la data selezionata è nel futuro: inizia da quella data
+                    // - Se la data selezionata è nel passato: inizia dal mese successivo a oggi
+                    let start: Date
+                    if (selectedDate >= today) {
+                      // Data futura: inizia dalla data selezionata
+                      start = new Date(selectedDate)
+                    } else {
+                      // Data passata: inizia dal mese successivo a oggi
+                      start = new Date(today)
+                      if (recurringFrequency === 'monthly') {
+                        start.setMonth(start.getMonth() + 1)
+                      } else {
+                        start.setDate(start.getDate() + 7)
+                      }
+                    }
+                    
                     const groupId = `rec-${user.id}-${Date.now()}`
                     for (let i = 0; i < count; i++) {
                       const d = new Date(start)
@@ -841,6 +944,14 @@ export default function HomeScreen() {
                   await loadData()
                   // notify Expenses screen to refresh immediately
                   DeviceEventEmitter.emit('expenses:externalUpdate')
+                  
+                  // For recurring transactions, add a small delay and force refresh
+                  if (isRecurring) {
+                    setTimeout(async () => {
+                      await loadData()
+                      DeviceEventEmitter.emit('expenses:externalUpdate')
+                    }, 500)
+                  }
                   setNewAmount('')
                   setNewCategory('Other')
                   setNewTitle('')
@@ -890,17 +1001,31 @@ export default function HomeScreen() {
               </Pressable>
             </View>
             <View style={styles.categoryRow}>
-              {availableCategories.map((c, i) => (
-                <TouchableOpacity
-                  key={`${c.name}-${i}`}
-                  style={[styles.categoryChip, selectedTx?.category?.toLowerCase() === c.name.toLowerCase() && styles.categoryChipActive, { borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD) }]}
-                  onPress={() => handleSelectRecentCategory(c.name)}
-                >
-                  <ThemedText style={[styles.categoryChipText, selectedTx?.category?.toLowerCase() === c.name.toLowerCase() && styles.categoryChipTextActive]}>
-                    {c.icon ? `${c.icon} ` : ''}{tCategory(c.name)}
-                  </ThemedText>
-                </TouchableOpacity>
-              ))}
+              {availableCategories.map((c, i) => {
+                const isSelected = selectedTx?.category?.toLowerCase() === c.name.toLowerCase()
+                return (
+                  <TouchableOpacity
+                    key={`${c.name}-${i}`}
+                    style={[
+                      styles.categoryChip, 
+                      isSelected && styles.categoryChipActive,
+                      { 
+                        borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
+                        backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
+                      }
+                    ]}
+                    onPress={() => handleSelectRecentCategory(c.name)}
+                  >
+                    <ThemedText style={[
+                      styles.categoryChipText, 
+                      isSelected && styles.categoryChipTextActive,
+                      isSelected && c.color && { color: c.color }
+                    ]}>
+                      {c.icon ? `${c.icon} ` : ''}{shortenCategoryName(c.name)}
+                    </ThemedText>
+                  </TouchableOpacity>
+                )
+              })}
             </View>
           </View>
         </View>
@@ -1012,7 +1137,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 4,
   },
   profileAvatar: {
     width: 40,
@@ -1146,6 +1270,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(6, 182, 212, 0.1)',
     backgroundColor: 'rgba(6, 167, 207, 0.05)',
     minHeight: 120,
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   overviewCardHeader: {
     flexDirection: 'row',
@@ -1223,7 +1352,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(6, 182, 212, 0.12)',
-    backgroundColor: 'rgba(6, 167, 207, 0.07)'
+    backgroundColor: 'rgba(6, 167, 207, 0.07)',
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   recentHeader: {
     flexDirection: 'row',
@@ -1241,15 +1375,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   recentList: {
-    gap: 8,
+    gap: 2,
   },
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderRadius: 10,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)'
+    borderRightWidth: 1,
+    borderLeftWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderRightColor: 'rgba(255,255,255,0.06)',
+    borderLeftColor: 'rgba(255,255,255,0.06)',
   },
   recentLeft: {
     flexDirection: 'row',

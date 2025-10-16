@@ -353,7 +353,7 @@ export default function ExpensesScreen() {
       case 'intrattenimento': return 'Intratt.'
       case 'istruzione': return 'Studio'
       default:
-        return it.length > 10 ? it.slice(0, 10) + '…' : it
+        return it.length > UI_CONSTANTS.CATEGORY_MAX_LENGTH ? it.slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH) + '…' : it
     }
   }
 
@@ -912,11 +912,6 @@ export default function ExpensesScreen() {
                           alignItems: 'center',
                           paddingHorizontal: 12,
                           paddingVertical: 6,
-                          // subtle shadow for more clickable feel
-                          shadowColor: '#0ea5e9',
-                          shadowOpacity: 0.09,
-                          shadowOffset: { width: 0, height: 1 },
-                          shadowRadius: 5,
                         }
                       ]}
                       onPress={() => setShowDatePicker(true)}
@@ -1221,20 +1216,45 @@ export default function ExpensesScreen() {
                       Animated.spring(scaleAnim1, { toValue: 1, useNativeDriver: true }).start()
                     }}
                   >
-                    <Card variant="subtle" style={styles.transactionCard}>
-                      <View style={styles.transactionContent}>
-                        <View style={styles.transactionLeft}>
-                          <View style={styles.transactionIcon}>
-                            <ThemedText style={styles.transactionIconText}>
-                              {item.raw_notification === 'manual' ? '✍️' : '💳'}
-            </ThemedText>
-                          </View>
-                          <View style={styles.transactionText}>
-                            <View style={styles.transactionTitleRow}>
-                              <ThemedText style={styles.transactionMerchant}>
-                                {item.merchant ?? '—'}
-            </ThemedText>
-                            </View>
+                    {(() => {
+                      const categoryInfo = getCategoryInfo(item.merchant)
+                      const categoryColor = categoryInfo?.color || '#06b6d4'
+                      
+                      return (
+                        <Card variant="subtle" style={[
+                          styles.transactionCard,
+                          {
+                            backgroundColor: `${categoryColor}08`,
+                            borderColor: `${categoryColor}20`,
+                            shadowColor: 'transparent',
+                            shadowOffset: { width: 0, height: 0 },
+                            shadowOpacity: 0,
+                            shadowRadius: 0,
+                            elevation: 0,
+                          }
+                        ]}>
+                          <View style={styles.transactionContent}>
+                            <View style={styles.transactionLeft}>
+                              <View style={[
+                                styles.transactionIcon,
+                                {
+                                  backgroundColor: `${categoryColor}15`,
+                                  borderColor: `${categoryColor}30`
+                                }
+                              ]}>
+                                <ThemedText style={styles.transactionIconText}>
+                                  {item.raw_notification === 'manual' ? '✍️' : '💳'}
+                                </ThemedText>
+                              </View>
+                              <View style={styles.transactionText}>
+                                <View style={styles.transactionTitleRow}>
+                                  <ThemedText style={[
+                                    styles.transactionMerchant,
+                                    { color: categoryColor }
+                                  ]}>
+                                    {item.merchant ?? '—'}
+                                  </ThemedText>
+                                </View>
                             <View style={styles.transactionDateRow}>
                               <ThemedText style={styles.transactionDate}>
                                 {formatDateWithLocale(item.date, language, locale)}
@@ -1304,6 +1324,8 @@ export default function ExpensesScreen() {
                         </View>
                       </View>
                     </Card>
+                      )
+                    })()}
                   </Pressable>
                 </Animated.View>
               ))}
@@ -1481,21 +1503,45 @@ export default function ExpensesScreen() {
                     </ThemedText>
                   </View>
                 ) : (
-                  categoryHistory.map(tx => (
-                    <View key={tx.id} style={[styles.listItemCard, { marginBottom: 10 }]}> 
-                      <View style={styles.listItemRow}>
-                        <View style={{ flex: 1 }}>
-                          <ThemedText style={styles.listItemMerchant}>{tx.merchant || '—'}</ThemedText>
-                          <ThemedText style={styles.listItemDate}>
-                            {new Date(tx.date).toLocaleDateString(locale)}
+                  categoryHistory.map(tx => {
+                    // Trova il colore della categoria selezionata
+                    const categoryColor = dbCategories.find(cat => 
+                      cat.name.toLowerCase() === selectedHistoryCategory?.toLowerCase()
+                    )?.color
+                    
+                    return (
+                      <View 
+                        key={tx.id} 
+                        style={[
+                          styles.listItemCard, 
+                          { 
+                            marginBottom: 10,
+                            backgroundColor: categoryColor ? `${categoryColor}15` : undefined,
+                            borderColor: categoryColor ? `${categoryColor}30` : undefined
+                          }
+                        ]}
+                      > 
+                        <View style={styles.listItemRow}>
+                          <View style={{ flex: 1 }}>
+                            <ThemedText 
+                              style={[
+                                styles.listItemMerchant,
+                                categoryColor && { color: categoryColor }
+                              ]}
+                            >
+                              {tx.merchant || '—'}
+                            </ThemedText>
+                            <ThemedText style={styles.listItemDate}>
+                              {new Date(tx.date).toLocaleDateString(locale)}
+                            </ThemedText>
+                          </View>
+                          <ThemedText style={[styles.listItemAmount, { color: tx.amount > 0 ? '#ef4444' : UI_CONSTANTS.SUCCESS_TEXT }]}> 
+                            {Math.abs(tx.amount).toLocaleString(locale, { style: 'currency', currency })}
                           </ThemedText>
                         </View>
-                        <ThemedText style={[styles.listItemAmount, { color: tx.amount > 0 ? '#ef4444' : UI_CONSTANTS.SUCCESS_TEXT }]}> 
-                          {Math.abs(tx.amount).toLocaleString(locale, { style: 'currency', currency })}
-                        </ThemedText>
                       </View>
-                    </View>
-                  ))
+                    )
+                  })
                 )}
               </ScrollView>
             </Card>
@@ -1670,6 +1716,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: UI_CONSTANTS.SUCCESS_BORDER,
     backgroundColor: UI_CONSTANTS.SUCCESS_BG,
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   autoAssignContent: {
     flexDirection: 'row',
@@ -1708,6 +1759,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderRadius: 28,
+    backgroundColor: 'rgba(6, 167, 207, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.1)',
   },
   cardGradient: {
     position: 'absolute',
@@ -1728,7 +1782,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(239, 68, 68, 0.15)',
     borderWidth: 1.5,
-    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1799,10 +1853,11 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: Brand.colors.glow.cyan,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   kpiGradient: {
     padding: 20,
@@ -2010,6 +2065,11 @@ const styles = StyleSheet.create({
     borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
    // backgroundColor: UI_CONSTANTS.GLASS_BG,
     marginBottom: 1,
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   transactionContent: {
     flexDirection: 'row',
@@ -2281,6 +2341,11 @@ const styles = StyleSheet.create({
     minHeight: 200,
     position: 'relative',
     overflow: 'hidden',
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   summaryNavigation: {
     flexDirection: 'row',

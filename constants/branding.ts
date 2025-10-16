@@ -322,6 +322,9 @@ export const UI = {
   SUCCESS_BG: 'rgba(16, 185, 129, 0.12)',      // Sfondo verde (successo, conferme, card positive)
   SUCCESS_BORDER: 'rgba(16, 185, 129, 0.3)',   // Bordo verde (successo, conferme, card positive)
   SUCCESS_TEXT: '#10b981',                      // Testo verde (valori positivi, importi positivi)
+  
+  // 📝 CATEGORIE - Limiti e configurazioni per le categorie
+  CATEGORY_MAX_LENGTH: 15,                      // Lunghezza massima del nome delle categorie
 } as const
 
 // App theme mappings (merged from theme.ts)

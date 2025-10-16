@@ -187,7 +187,7 @@ export default function ProfileScreen() {
     const source = override ?? editableCategories
     const sanitized = (source || []).slice(0, 6).map(c => ({
       key: c.key || (c.name || '').toLowerCase().replace(/\s+/g, '_') || 'other',
-      name: (c.name?.trim() || 'Other').slice(0, 10),
+      name: (c.name?.trim() || 'Other').slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH),
       icon: normalizeEmoji(c.icon?.trim() || ''),
       color: c.color?.trim() || '#10b981',
     }))
@@ -221,7 +221,7 @@ export default function ProfileScreen() {
     next[editIndex] = {
       ...next[editIndex],
       icon: normalizeEmoji(editEmoji || ''),
-      name: (editName || 'Other').trim().slice(0, 10),
+      name: (editName || 'Other').trim().slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH),
       color: (editColor || '#10b981').trim(),
     }
     setEditableCategories(next)
@@ -427,18 +427,51 @@ export default function ProfileScreen() {
               {editableCategories.slice(0, 6).map((cat, idx) => {
                 const count = categoryCounts[cat.name] || 0
                 return (
-                  <View key={idx} style={styles.categoryRow}>
+                  <View 
+                    key={idx} 
+                    style={[
+                      styles.categoryRow,
+                      {
+                        backgroundColor: cat.color ? `${cat.color}15` : UI_CONSTANTS.GLASS_BG,
+                        borderColor: cat.color ? `${cat.color}30` : UI_CONSTANTS.GLASS_BORDER
+                      }
+                    ]}
+                  >
                     <View style={styles.categoryLeft}>
-                      <View style={styles.categoryEmoji}><ThemedText style={{ fontSize: 20 }}>{cat.icon || ''}</ThemedText></View>
+                      <View 
+                        style={[
+                          styles.categoryEmoji,
+                          {
+                            backgroundColor: cat.color ? `${cat.color}20` : UI_CONSTANTS.GLASS_BG_MD,
+                            borderColor: cat.color ? `${cat.color}40` : UI_CONSTANTS.GLASS_BORDER_MD
+                          }
+                        ]}
+                      >
+                        <ThemedText style={{ fontSize: 20 }}>{cat.icon || ''}</ThemedText>
+                      </View>
                       <View style={{ gap: 2 }}>
-                        <ThemedText type="defaultSemiBold" style={styles.categoryTitle}>{cat.name || 'Other'}</ThemedText>
+                        <ThemedText 
+                          type="defaultSemiBold" 
+                          style={[
+                            styles.categoryTitle,
+                            cat.color && { color: cat.color }
+                          ]}
+                        >
+                          {(cat.name || 'Other').length > UI_CONSTANTS.CATEGORY_MAX_LENGTH ? (cat.name || 'Other').slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH) + '…' : (cat.name || 'Other')}
+                        </ThemedText>
                         <ThemedText style={styles.categorySubtitle}>{count} {language === 'it' ? 'Spese' : 'Expenses'}</ThemedText>
                       </View>
                     </View>
                     <View style={styles.categoryRight}>
                       <View style={[styles.colorDotLarge, { backgroundColor: cat.color || '#10b981' }]} />
                       <TouchableOpacity
-                        style={styles.gearButton}
+                        style={[
+                          styles.gearButton,
+                          {
+                            backgroundColor: cat.color ? `${cat.color}20` : UI_CONSTANTS.GLASS_BG_MD,
+                            borderColor: cat.color ? `${cat.color}40` : UI_CONSTANTS.GLASS_BORDER_MD
+                          }
+                        ]}
                         onPress={() => openEditModal(idx)}
                       >
                         <ThemedText style={styles.gearIcon}>⚙️</ThemedText>
@@ -459,7 +492,7 @@ export default function ProfileScreen() {
           onRequestClose={() => setEditModalVisible(false)}
         >
           <View style={[styles.modalOverlay, { backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_DARK }]}> 
-            <Card style={[styles.modalCard, styles.modalGlass, { backgroundColor: `${(editColor || '#10b981')}22`, borderColor: `${(editColor || '#10b981')}55`, shadowOffset: { width: 0, height: 4 }, elevation: 8 }]}> 
+            <Card style={[styles.modalCard, styles.modalGlass, { backgroundColor: `${(editColor || '#10b981')}22`, borderColor: `${(editColor || '#10b981')}55`, shadowColor: 'transparent', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0, shadowRadius: 0, elevation: 0 }]}> 
               <View style={styles.modalHeaderRow}>
                 <View style={[styles.previewBadge, { borderColor: editColor || '#10b981' }]}>
                   <ThemedText style={styles.previewEmoji}>{editEmoji || ''}</ThemedText>
@@ -488,8 +521,8 @@ export default function ProfileScreen() {
                   <TextInput
                     style={[styles.settingInput, { flex: 3 }]}
                     value={editName}
-                    maxLength={10}
-                    onChangeText={(text) => setEditName((text || '').slice(0, 10))}
+                    maxLength={UI_CONSTANTS.CATEGORY_MAX_LENGTH}
+                    onChangeText={(text) => setEditName((text || '').slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH))}
                     placeholder={language === 'it' ? 'Nome' : 'Name'}
                     placeholderTextColor={Brand.colors.text.muted}
                   />
@@ -1266,10 +1299,11 @@ const styles = StyleSheet.create({
   langChipActive: {
     backgroundColor: 'rgba(6,182,212,0.18)',
     borderColor: 'rgba(6,182,212,0.45)',
-    shadowColor: '#06b6d4',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   langChipFlag: {
     fontSize: 16,

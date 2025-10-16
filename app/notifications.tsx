@@ -3,16 +3,16 @@ import { Card } from '@/components/ui/Card'
 import { UI as UI_CONSTANTS } from '@/constants/branding'
 import { useSettings } from '@/context/SettingsContext'
 import {
-  checkNotificationPermission,
-  requestNotificationPermission,
-  type NotificationPermissionStatus
+    checkNotificationPermission,
+    requestNotificationPermission,
+    type NotificationPermissionStatus
 } from '@/services/notification-service'
 import {
-  clearNotifications,
-  getWalletNotifications,
-  loadNotifications,
-  sortNotificationsByDate,
-  type StoredNotification
+    clearNotifications,
+    getWalletNotifications,
+    loadNotifications,
+    sortNotificationsByDate,
+    type StoredNotification
 } from '@/services/notification-storage'
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
 import * as Notifications from 'expo-notifications'
@@ -23,7 +23,7 @@ import { DeviceEventEmitter, FlatList, Linking, Platform, Pressable, StyleSheet,
 type FilterType = 'all' | 'wallet' | 'other'
 
 export default function NotificationsScreen() {
-  const { t } = useSettings()
+  const { t, locale, language } = useSettings()
   const [notifications, setNotifications] = useState<StoredNotification[]>([])
   const [filteredNotifications, setFilteredNotifications] = useState<StoredNotification[]>([])
   const [filter, setFilter] = useState<FilterType>('all')
@@ -33,7 +33,7 @@ export default function NotificationsScreen() {
   // Mostra solo le 5 più recenti in questa schermata
 
   const addLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString()
+    const timestamp = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     const logEntry = `[${timestamp}] ${message}`
     console.log(logEntry)
     setLogs(prev => [logEntry, ...prev].slice(0, 100))
@@ -385,7 +385,7 @@ export default function NotificationsScreen() {
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <ThemedText style={styles.timeText}>
-                {new Date(item.receivedAt).toLocaleTimeString()}
+                {new Date(item.receivedAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
               </ThemedText>
               {item.isWalletNotification && (
                 <ThemedText style={styles.metaWallet}>💳 {t('wallet_badge')}</ThemedText>
