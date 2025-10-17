@@ -36,7 +36,7 @@ export default function NotificationsScreen() {
     const timestamp = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     const logEntry = `[${timestamp}] ${message}`
     console.log(logEntry)
-    setLogs(prev => [logEntry, ...prev].slice(0, 100))
+    setLogs(prev => [logEntry, ...prev].slice(0, 500))
   }
 
   const checkPermission = async () => {
@@ -121,7 +121,7 @@ export default function NotificationsScreen() {
       }
       
       notifications.unshift(testStoredNotification)
-      notifications = notifications.slice(0, 100) // Mantieni solo le ultime 100
+      notifications = notifications.slice(0, 500) // Mantieni solo le ultime 500
       
       await writeAsStringAsync(cacheFile, JSON.stringify(notifications))
       addLog('💾 Test notification saved directly to memory')
@@ -325,7 +325,7 @@ export default function NotificationsScreen() {
 
   const renderInfoCard = () => null
 
-  const displayedNotifications = filteredNotifications.slice(0, 100)
+  const displayedNotifications = filteredNotifications.slice(0, 500)
 
   return (
     <FlatList

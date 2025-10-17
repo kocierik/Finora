@@ -225,8 +225,8 @@ const headlessNotificationListener = async ({ notification }) => {
       // Aggiungi la nuova notifica all'inizio
       notifications.unshift(notificationData)
       
-      // Mantieni solo le ultime 100 notifiche
-      notifications = notifications.slice(0, 100)
+      // Mantieni solo le ultime 500 notifiche
+      notifications = notifications.slice(0, 500)
       
       // Salva il file
       await writeAsStringAsync(cacheFile, JSON.stringify(notifications))

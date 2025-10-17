@@ -19,6 +19,9 @@ import { PanGestureHandler, State } from 'react-native-gesture-handler'
 export default function ExpensesScreen() {
   const { locale, currency, t, monthlyBudget, language, categories: configuredCategories } = useSettings()
   const { user, loading } = useAuth()
+  
+  // Debug flag to reduce excessive logging
+  const DEBUG_MODE = __DEV__ && false // Set to true for detailed debugging
   const [items, setItems] = useState<Expense[]>([])
   const [hideBalances, setHideBalances] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -126,13 +129,10 @@ export default function ExpensesScreen() {
       // Auto-assign categories for new transactions
       const updatedItems = await autoAssignCategories(sortedItems)
       
-      // Debug log
-      console.log('Fetched expenses:', {
-        total: updatedItems.length,
-        withCategories: updatedItems.filter(e => e.category).length,
-        categories: [...new Set(updatedItems.map(e => e.category).filter(Boolean))],
-        sample: updatedItems.slice(0, 3).map(e => ({ merchant: e.merchant, category: e.category, amount: e.amount }))
-      })
+      // Debug log (simplified)
+      if (DEBUG_MODE) {
+        console.log(`[Expenses] ✅ Loaded ${updatedItems.length} expenses, ${updatedItems.filter(e => e.category).length} with categories`)
+      }
       
       setItems(updatedItems)
       
@@ -280,23 +280,10 @@ export default function ExpensesScreen() {
   // Filter items for selected month
   const selectedMonthItems = items.filter((e) => sameMonth(e.date, curYear, curMonth))
 
-  // Debug log for month calculation
-  console.log('Month calculation:', {
-    curYear,
-    curMonth,
-    prevYear,
-    prevMonth,
-    monthName,
-    now: now.toISOString(),
-    monthTotal,
-    prevTotal,
-    delta,
-    deltaPct,
-    totalItems: items.length,
-    currentMonthItems: items.filter((e) => sameMonth(e.date, curYear, curMonth)).length,
-    previousMonthItems: items.filter((e) => sameMonth(e.date, prevYear, prevMonth)).length,
-    sampleDates: items.map(e => ({ date: e.date, amount: e.amount })).slice(0, 3)
-  })
+  // Debug log for month calculation (simplified)
+  if (DEBUG_MODE) {
+    console.log(`[Expenses] 📊 Month ${curYear}-${curMonth + 1}: ${monthTotal.toFixed(2)}€ (${items.filter((e) => sameMonth(e.date, curYear, curMonth)).length} items)`)
+  }
 
   // Prefer DB categories if available, otherwise fall back to settings
   const effectiveCategories = useMemo(() => (dbCategories?.length ? dbCategories : (configuredCategories || [])), [dbCategories, configuredCategories])
@@ -359,17 +346,8 @@ export default function ExpensesScreen() {
 
   // Calculate category spending from real data - use useMemo to make it reactive
   const categoryTotals = useMemo(() => {
-    console.log('Recalculating categoryTotals with allMonthItems:', allMonthItems.length)
-    
     // Use allMonthItems which already contains all items for the selected month
     const currentMonthItems = allMonthItems
-    console.log('Current month items:', currentMonthItems.length)
-    console.log('All current month items:', currentMonthItems.map(e => ({ 
-      merchant: e.merchant, 
-      category: e.category, 
-      amount: e.amount, 
-      date: e.date 
-    })))
     
     return categories.map(cat => {
       const categoryItems = allMonthItems.filter(e => 
@@ -378,16 +356,6 @@ export default function ExpensesScreen() {
       )
       const amount = categoryItems.reduce((sum, e) => sum + (e.amount || 0), 0)
       const percentage = monthTotal > 0 ? (amount / monthTotal) * 100 : 0
-      
-      // Debug log for all categories
-      console.log(`Category ${cat.name} (looking for "${cat.name.toLowerCase()}"):`, {
-        categoryItems: categoryItems.length,
-        amount,
-        percentage,
-        allItems: allMonthItems.length,
-        monthTotal,
-        sampleItems: categoryItems.slice(0, 2).map(e => ({ merchant: e.merchant, category: e.category, amount: e.amount }))
-      })
       
       return { ...cat, amount, percentage }
     }).sort((a, b) => b.amount - a.amount)
@@ -1264,16 +1232,9 @@ export default function ExpensesScreen() {
                                 const isAutoAssigned = !item.category && categoryInfo?.name === 'Other'
                                 const isDefaultOther = !item.category && !getMerchantCategory(item.merchant)
                                 
-                                // Debug for specific merchant
-                                if (item.merchant === 'CAFE DES CHINEU') {
-                                  console.log('CAFE DES CHINEU debug:', {
-                                    merchant: item.merchant,
-                                    category: item.category,
-                                    categoryInfo,
-                                    isAutoAssigned,
-                                    isDefaultOther,
-                                    getMerchantCategory: getMerchantCategory(item.merchant)
-                                  })
+                                // Debug for specific merchant (simplified)
+                                if (DEBUG_MODE && item.merchant === 'CAFE DES CHINEU') {
+                                  console.log(`[Expenses] 🏪 ${item.merchant}: ${item.category || 'no category'} -> ${categoryInfo?.name || 'Other'}`)
                                 }
                                 
                                 // Show badge if categoryInfo exists
