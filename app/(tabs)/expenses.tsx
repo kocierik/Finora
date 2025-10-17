@@ -365,6 +365,46 @@ export default function ExpensesScreen() {
     fetchExpenses()
   }, [fetchExpenses])
 
+  // Funzione per sincronizzare manualmente le spese dalle notifiche JSON
+  const syncFromNotifications = useCallback(async () => {
+    if (!user) return
+    
+    console.log('[Expenses] 🔄 Syncing from notifications JSON...')
+    setRefreshing(true)
+    
+    try {
+      // Sincronizza le spese pendenti dalle notifiche
+      const syncResult = await syncPendingExpenses(user.id)
+      console.log(`[Expenses] ✅ Sync completed: ${syncResult.synced} synced, ${syncResult.errors} errors`)
+      
+      // Ricarica le spese dopo la sincronizzazione
+      await fetchExpenses()
+      
+      if (syncResult.synced > 0) {
+        Alert.alert(
+          'Sincronizzazione Completata', 
+          `Sincronizzate ${syncResult.synced} nuove spese dalle notifiche`,
+          [{ text: 'OK', style: 'default' }]
+        )
+      } else {
+        Alert.alert(
+          'Sincronizzazione', 
+          'Nessuna nuova spesa da sincronizzare dalle notifiche',
+          [{ text: 'OK', style: 'default' }]
+        )
+      }
+    } catch (error) {
+      console.error('[Expenses] ❌ Sync from notifications failed:', error)
+      Alert.alert(
+        'Errore', 
+        'Errore durante la sincronizzazione dalle notifiche',
+        [{ text: 'OK', style: 'default' }]
+      )
+    } finally {
+      setRefreshing(false)
+    }
+  }, [user, fetchExpenses])
+
   const handleTransactionPress = useCallback((transaction: Expense) => {
     setSelectedTransaction(transaction)
     setShowCategoryModal(true)
@@ -1138,18 +1178,32 @@ export default function ExpensesScreen() {
               <ThemedText style={styles.sectionTitle}>
                 {isTransitioning ? t('loading') : t('recent_transactions')}
               </ThemedText>
-              <Pressable 
-                style={styles.refreshButton}
-                onPress={fetchExpenses}
-                disabled={refreshing || isTransitioning}
-              >
-                <ThemedText style={[
-                  styles.refreshButtonText,
-                  (refreshing || isTransitioning) && styles.refreshButtonTextDisabled
-                ]}>
-                  {refreshing || isTransitioning ? '🔄' : '↻'}
-                </ThemedText>
-              </Pressable>
+              <View style={styles.headerActions}>
+                <Pressable 
+                  style={styles.syncButton}
+                  onPress={syncFromNotifications}
+                  disabled={refreshing || isTransitioning}
+                >
+                  <ThemedText style={[
+                    styles.syncButtonText,
+                    (refreshing || isTransitioning) && styles.syncButtonTextDisabled
+                  ]}>
+                    📱 Sync
+                  </ThemedText>
+                </Pressable>
+                <Pressable 
+                  style={styles.refreshButton}
+                  onPress={fetchExpenses}
+                  disabled={refreshing || isTransitioning}
+                >
+                  <ThemedText style={[
+                    styles.refreshButtonText,
+                    (refreshing || isTransitioning) && styles.refreshButtonTextDisabled
+                  ]}>
+                    {refreshing || isTransitioning ? '🔄' : '↻'}
+                  </ThemedText>
+                </Pressable>
+              </View>
           </View>
             <ThemedText style={styles.sectionSubtitle}>
               {selectedMonthItems.length} {selectedMonthItems.length !== 1 ? t('transactions') : t('transaction')} • {language === 'it' ? 'Ultimo aggiornamento' : 'Last update'}: {new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
@@ -1884,6 +1938,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   refreshButtonTextDisabled: {
+    opacity: 0.6,
+  },
+  syncButton: {
+    width: 60,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  syncButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  syncButtonTextDisabled: {
     opacity: 0.6,
   },
   sectionSubtitle: {

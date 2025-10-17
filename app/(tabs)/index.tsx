@@ -36,6 +36,25 @@ function sameMonth(dateStr: string, year: number, monthIndex: number) {
 export default function HomeScreen() {
   const { t, language } = useSettings()
   const { user, signOut, loading } = useAuth()
+  
+  // Auth guard - redirect if not logged in (MUST be before all hooks)
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#06b6d4" />
+      </View>
+    )
+  }
+
+  // Durante logout/redirect mostra caricamento
+  if (!user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#06b6d4" />
+      </View>
+    )
+  }
+
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [dbCategories, setDbCategories] = useState<{ name: string; icon?: string; color?: string }[]>([])
   const [portfolioPoints, setPortfolioPoints] = useState<{ x: string; y: number }[]>([])
@@ -63,8 +82,12 @@ export default function HomeScreen() {
   const [recurringFrequency, setRecurringFrequency] = useState<'weekly' | 'monthly'>('monthly')
   const [recurringOccurrences, setRecurringOccurrences] = useState<string>('6')
   const [recurringInfinite, setRecurringInfinite] = useState<boolean>(false)
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const d = new Date()
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  })
 
-  // Animation values - MUST be before any conditional returns
+  // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(30)).current
   const scaleAnim1 = useRef(new Animated.Value(0.95)).current
@@ -213,23 +236,6 @@ export default function HomeScreen() {
     }
   }, [user?.id, loadData])
 
-  // Auth guard - redirect if not logged in
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#06b6d4" />
-      </View>
-    )
-  }
-
-  // Durante logout/redirect mostra caricamento
-  if (!user) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#06b6d4" />
-      </View>
-    )
-  }
 
   // Calculate financial data
   const now = new Date()
