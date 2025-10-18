@@ -12,11 +12,9 @@ export function useDatabaseSync() {
     monthlyBudget, 
     currency, 
     hideBalances, 
-    categories,
     setMonthlyBudget, 
     setCurrency, 
     setHideBalances,
-    setCategories,
   } = useSettings()
 
   // Carica le impostazioni dal database quando l'utente cambia
@@ -27,7 +25,7 @@ export function useDatabaseSync() {
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('monthly_budget, currency, hide_balances, categories_config')
+          .select('monthly_budget, currency, hide_balances')
           .eq('id', user.id)
           .single()
         
@@ -40,7 +38,6 @@ export function useDatabaseSync() {
           if (data.monthly_budget !== null) setMonthlyBudget(Number(data.monthly_budget))
           if (data.currency) setCurrency(data.currency)
           if (typeof data.hide_balances === 'boolean') setHideBalances(data.hide_balances)
-          if (Array.isArray(data.categories_config)) setCategories(data.categories_config)
           console.log('[DatabaseSync] ✅ Loaded settings from database:', data)
         }
       } catch (error) {
@@ -64,7 +61,6 @@ export function useDatabaseSync() {
             monthly_budget: monthlyBudget,
             currency: currency,
             hide_balances: hideBalances,
-            categories_config: categories,
             updated_at: new Date().toISOString()
           })
         
@@ -81,5 +77,5 @@ export function useDatabaseSync() {
     // Debounce per evitare troppi salvataggi
     const timeoutId = setTimeout(saveToDatabase, 1000)
     return () => clearTimeout(timeoutId)
-  }, [user, monthlyBudget, currency, hideBalances, categories])
+  }, [user, monthlyBudget, currency, hideBalances])
 }

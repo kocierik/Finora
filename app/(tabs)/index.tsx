@@ -5,7 +5,7 @@ import { DEFAULT_CATEGORIES, translateCategoryName } from '@/constants/categorie
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/lib/supabase';
-import { syncPendingExpenses } from '@/services/expense-sync';
+import { autoCleanupDuplicates } from '@/services/expense-sync';
 import { logger } from '@/services/logger';
 import { fetchInvestments } from '@/services/portfolio';
 import { Expense } from '@/types';
@@ -102,18 +102,7 @@ export default function HomeScreen() {
       logger.info('Home screen loadData started', { userId: user.id, timestamp: Date.now() }, 'Home')
     }
     
-    // Sincronizza le spese pendenti dalle notifiche Google Wallet
-    if (logger && logger.info) {
-      logger.info('Syncing pending expenses from notifications', { userId: user.id }, 'Home')
-    }
-    console.log('[Home] 🔄 Syncing pending expenses from notifications...')
-    const syncResult = await syncPendingExpenses(user.id)
-    if (syncResult.synced > 0) {
-      if (logger && logger.info) {
-        logger.info(`Synced ${syncResult.synced} new expenses from Google Wallet`, { synced: syncResult.synced }, 'Home')
-      }
-      console.log(`[Home] ✅ Synced ${syncResult.synced} new expenses from Google Wallet`)
-    }
+    // Note: Expense synchronization is handled in the Expenses tab to avoid duplicates
     
       const [{ data: inv }, { data: exp }, { data: profile }, { data: categories }] = await Promise.all([
         fetchInvestments(user.id),
@@ -1043,6 +1032,9 @@ export default function HomeScreen() {
                     setFormError(error.message || 'Errore durante il salvataggio')
                     return
                   }
+                  
+                  // Pulizia automatica dei duplicati dopo il salvataggio
+                  await autoCleanupDuplicates(user.id)
                   
                   if (logger && logger.info) {
                     logger.info('Transaction saved successfully', { 

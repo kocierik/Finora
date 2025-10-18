@@ -96,6 +96,7 @@ const headlessNotificationListener = async ({ notification }) => {
                    date: new Date().toISOString().split('T')[0],
                    raw_notification: text,
                    category: 'Other',
+                   // category_id will be resolved during sync
                  }
           
           console.log('[HEADLESS] 💰 Parsed expense:', JSON.stringify(expenseData))

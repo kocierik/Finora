@@ -11,6 +11,7 @@ import { calculateActivityPercentage, getExpenseLevel, getExpenseLevelColor, get
 import { deleteExpense } from '@/services/expenses'
 import { Expense } from '@/types'
 import { useFocusEffect } from '@react-navigation/native'
+import { cacheDirectory, readAsStringAsync } from 'expo-file-system/legacy'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native'
@@ -42,6 +43,8 @@ export default function ExpensesScreen() {
   const [categoryHistoryLoading, setCategoryHistoryLoading] = useState(false)
   // Categories loaded from DB (categories table)
   const [dbCategories, setDbCategories] = useState<{ id: string; name: string; icon: string; color: string; sort_order: number }[]>([])
+  // Pending expenses state
+  const [pendingExpensesCount, setPendingExpensesCount] = useState(0)
   
   // Month navigation state
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0) // 0 = current month, -1 = previous, 1 = next
@@ -125,14 +128,30 @@ export default function ExpensesScreen() {
     }
   }, [user?.id])
 
+  // Funzione per controllare le spese pendenti
+  const checkPendingExpenses = useCallback(async () => {
+    try {
+      const expensesFile = `${cacheDirectory}pending_expenses.json`
+      const data = await readAsStringAsync(expensesFile)
+      const pendingExpenses = JSON.parse(data)
+      const unsyncedCount = pendingExpenses.filter((e: any) => !e.synced).length
+      setPendingExpensesCount(unsyncedCount)
+      console.log(`[Expenses] 📊 Found ${unsyncedCount} pending expenses`)
+    } catch (error) {
+      setPendingExpensesCount(0)
+      console.log('[Expenses] ℹ️  No pending expenses file found')
+    }
+  }, [])
+
   // Initial load and refresh on focus/events
   useEffect(() => {
     loadCategoriesFromDb()
+    checkPendingExpenses()
     const sub = DeviceEventEmitter.addListener('settings:categoriesUpdated', () => {
       loadCategoriesFromDb()
     })
     return () => { sub.remove() }
-  }, [loadCategoriesFromDb])
+  }, [loadCategoriesFromDb, checkPendingExpenses])
 
   const fetchExpenses = useCallback(async () => {
     if (!user) return
@@ -452,6 +471,9 @@ export default function ExpensesScreen() {
       
       // Ricarica le spese dopo la sincronizzazione
       await fetchExpenses()
+      
+      // Controlla le spese pendenti rimanenti
+      await checkPendingExpenses()
       
       if (syncResult.synced > 0) {
         Alert.alert(
@@ -1364,7 +1386,7 @@ export default function ExpensesScreen() {
                     styles.syncButtonText,
                     (refreshing || isTransitioning) && styles.syncButtonTextDisabled
                   ]}>
-                    📱 Sync
+                    📱 Sync{pendingExpensesCount > 0 ? ` (${pendingExpensesCount})` : ''}
                   </ThemedText>
                 </Pressable>
                 <Pressable 
