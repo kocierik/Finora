@@ -28,7 +28,7 @@ export async function loadExpenseThresholds(userId?: string): Promise<ExpenseThr
         .single()
       
       if (error) {
-        console.log('[ExpenseThresholds] ❌ Error loading from database:', error.message)
+        // console.log('[ExpenseThresholds] ❌ Error loading from database:', error.message)
         return await loadFromCache()
       }
       
@@ -40,7 +40,7 @@ export async function loadExpenseThresholds(userId?: string): Promise<ExpenseThr
         
         // Valida le soglie
         if (thresholds.moderate > 0 && thresholds.high > 0 && thresholds.moderate < thresholds.high) {
-          console.log('[ExpenseThresholds] 📂 Loaded thresholds from database:', thresholds)
+          // console.log('[ExpenseThresholds] 📂 Loaded thresholds from database:', thresholds)
           return thresholds
         }
       }
@@ -49,7 +49,7 @@ export async function loadExpenseThresholds(userId?: string): Promise<ExpenseThr
     // Fallback alla cache locale
     return await loadFromCache()
   } catch (error) {
-    console.log('[ExpenseThresholds] ❌ Error loading thresholds:', error)
+    // console.log('[ExpenseThresholds] ❌ Error loading thresholds:', error)
     return await loadFromCache()
   }
 }
@@ -68,14 +68,14 @@ async function loadFromCache(): Promise<ExpenseThresholds> {
         thresholds.moderate > 0 && 
         thresholds.high > 0 &&
         thresholds.moderate < thresholds.high) {
-      console.log('[ExpenseThresholds] 📂 Loaded thresholds from cache:', thresholds)
+      // console.log('[ExpenseThresholds] 📂 Loaded thresholds from cache:', thresholds)
       return thresholds
     } else {
-      console.log('[ExpenseThresholds] ⚠️  Invalid thresholds in cache, using defaults')
+      // console.log('[ExpenseThresholds] ⚠️  Invalid thresholds in cache, using defaults')
       return DEFAULT_THRESHOLDS
     }
   } catch (error) {
-    console.log('[ExpenseThresholds] 📂 No thresholds cache found, using defaults')
+    // console.log('[ExpenseThresholds] 📂 No thresholds cache found, using defaults')
     return DEFAULT_THRESHOLDS
   }
 }
@@ -102,16 +102,16 @@ export async function saveExpenseThresholds(thresholds: ExpenseThresholds, userI
         })
       
       if (error) {
-        console.log('[ExpenseThresholds] ❌ Error saving to database:', error.message)
+        // console.log('[ExpenseThresholds] ❌ Error saving to database:', error.message)
         // Continua con il salvataggio in cache come fallback
       } else {
-        console.log('[ExpenseThresholds] ✅ Thresholds saved to database:', thresholds)
+        // console.log('[ExpenseThresholds] ✅ Thresholds saved to database:', thresholds)
       }
     }
     
     // Salva sempre nella cache locale come backup
     await writeAsStringAsync(THRESHOLDS_CACHE_FILE, JSON.stringify(thresholds))
-    console.log('[ExpenseThresholds] ✅ Thresholds saved to cache:', thresholds)
+    // console.log('[ExpenseThresholds] ✅ Thresholds saved to cache:', thresholds)
   } catch (error: any) {
     console.error('[ExpenseThresholds] ❌ Error saving thresholds:', error.message)
     throw error

@@ -9,10 +9,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Animated, StyleSheet, View } from 'react-native'
 import '../headless-notification-listener'
 
-// Import headless notification listener
-console.log('[APP] 🚀 Importing headless notification listener...')
-console.log('[APP] ✅ Headless notification listener imported successfully\n')
-
 export default function Index() {
   const { user, loading } = useAuth()
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -20,13 +16,7 @@ export default function Index() {
   const [checkingOnboarding, setCheckingOnboarding] = useState(false)
   const [shouldRedirectToOnboarding, setShouldRedirectToOnboarding] = useState<boolean | null>(null)
 
-  console.log('[Index] 🎬 Component render:', { 
-    user: !!user, 
-    loading, 
-    checkingOnboarding, 
-    shouldRedirectToOnboarding,
-    email: user?.email 
-  })
+
 
   useEffect(() => {
     if (!loading) {
@@ -45,37 +35,22 @@ export default function Index() {
     }
   }, [loading])
 
+  // Check onboarding status when user is authenticated
   useEffect(() => {
-    console.log('[Index] 🔄 useEffect triggered:', { user: !!user, loading, email: user?.email })
     if (user && !loading) {
-      console.log('[Index] 🚀 Starting onboarding check...')
       checkOnboardingStatus()
     }
   }, [user, loading])
 
-  // Quick synchronous check for immediate redirect
-  useEffect(() => {
-    if (user && !loading && shouldRedirectToOnboarding === null) {
-      // Only show onboarding if explicitly forced (after signup) or if user is actively in onboarding
-      // Don't show onboarding just because user is "fresh" - only after explicit signup
-      const hasOnboardingMetadata = (user as any)?.user_metadata?.onboarding_seen === true
-      if (!hasOnboardingMetadata) {
-        console.log('[Index] 🔄 No onboarding metadata found, will check storage flags')
-        // Don't immediately redirect, let the async check handle it
-      }
-    }
-  }, [user, loading, shouldRedirectToOnboarding])
 
   const checkOnboardingStatus = async () => {
     try {
       setCheckingOnboarding(true)
-      console.log('[Index] 🔍 Checking onboarding status for user:', user?.email)
       
       // Check if onboarding should be forced (only after signup)
       const force = await AsyncStorage.getItem('@finora:forceOnboarding')
       const active = await AsyncStorage.getItem('@finora:onboardingActive')
       
-      console.log('[Index] 📱 Storage flags:', { force, active })
       
       // Check server-side onboarding status
       const seenServer = (user as any)?.user_metadata?.onboarding_seen === true
@@ -83,19 +58,12 @@ export default function Index() {
       // Check local onboarding status
       const seenLocal = await AsyncStorage.getItem('@finora:onboardingSeen')
       
-      console.log('[Index] 🎯 Onboarding checks:', { 
-        force: force === '1', 
-        active: active === '1', 
-        seenServer, 
-        seenLocal: !!seenLocal 
-      })
-      
+
       // Only show onboarding if:
       // 1. Explicitly forced after signup (force flag)
       // 2. Currently active in onboarding (active flag)
       const shouldShowOnboarding = force === '1' || active === '1'
       
-      console.log('[Index] ✅ Should show onboarding:', shouldShowOnboarding)
       
       if (shouldShowOnboarding) {
         // Mark onboarding as active to persist across re-mounts
@@ -108,7 +76,6 @@ export default function Index() {
         setShouldRedirectToOnboarding(false)
       }
     } catch (error) {
-      console.log('[Index] ❌ Error checking onboarding status:', error)
       setShouldRedirectToOnboarding(false)
     } finally {
       setCheckingOnboarding(false)
@@ -140,7 +107,6 @@ export default function Index() {
   }
 
   if (!user) {
-    console.log('[Index] 👤 No user, redirecting to welcome')
     return <Redirect href="/auth/welcome" />
   }
 
@@ -168,7 +134,7 @@ export default function Index() {
     )
   }
 
-  console.log('[Index] 🔀 Redirecting to:', shouldRedirectToOnboarding ? '/onboarding' : '/(tabs)')
+  // console.log('[Index] 🔀 Redirecting to:', shouldRedirectToOnboarding ? '/onboarding' : '/(tabs)')
   return <Redirect href={shouldRedirectToOnboarding ? '/onboarding' : '/(tabs)'} />
 }
 

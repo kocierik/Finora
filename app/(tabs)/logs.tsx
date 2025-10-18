@@ -5,15 +5,15 @@ import { LogEntry, logger, LogLevel } from '@/services/logger'
 import { Ionicons } from '@expo/vector-icons'
 import React, { useCallback, useEffect, useState } from 'react'
 import {
-  Alert,
-  FlatList,
-  Platform,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    FlatList,
+    Platform,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -27,22 +27,22 @@ export default function LogsScreen() {
 
   // Sottoscrivi ai log
   useEffect(() => {
-    console.log('[LogsScreen] 🔍 Subscribing to logger...')
-    console.log('[LogsScreen] 🔍 Logger object:', logger)
-    console.log('[LogsScreen] 🔍 Logger.info:', logger?.info)
+    // console.log('[LogsScreen] 🔍 Subscribing to logger...')
+    // console.log('[LogsScreen] 🔍 Logger object:', logger)
+    // console.log('[LogsScreen] 🔍 Logger.info:', logger?.info)
     
     const unsubscribe = logger.subscribe((newLogs) => {
-      console.log('[LogsScreen] 📝 Received logs:', newLogs.length)
-      console.log('[LogsScreen] 📝 Logs content:', newLogs)
+      // console.log('[LogsScreen] 📝 Received logs:', newLogs.length)
+      // console.log('[LogsScreen] 📝 Logs content:', newLogs)
       setLogs(newLogs)
     })
     
     // Aggiungi un log di test
     if (logger && logger.info) {
-      console.log('[LogsScreen] ✅ Logger is working, adding test log')
+      // console.log('[LogsScreen] ✅ Logger is working, adding test log')
       logger.info('Logs screen initialized', { timestamp: Date.now() }, 'LogsScreen')
     } else {
-      console.log('[LogsScreen] ❌ Logger is not working properly')
+      // console.log('[LogsScreen] ❌ Logger is not working properly')
     }
     
     return unsubscribe

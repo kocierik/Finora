@@ -3,16 +3,16 @@ import { Card } from '@/components/ui/Card'
 import { UI as UI_CONSTANTS } from '@/constants/branding'
 import { useSettings } from '@/context/SettingsContext'
 import {
-    checkNotificationPermission,
-    requestNotificationPermission,
-    type NotificationPermissionStatus
+  checkNotificationPermission,
+  requestNotificationPermission,
+  type NotificationPermissionStatus
 } from '@/services/notification-service'
 import {
-    clearNotifications,
-    getWalletNotifications,
-    loadNotifications,
-    sortNotificationsByDate,
-    type StoredNotification
+  clearNotifications,
+  getWalletNotifications,
+  loadNotifications,
+  sortNotificationsByDate,
+  type StoredNotification
 } from '@/services/notification-storage'
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
 import * as Notifications from 'expo-notifications'
@@ -35,7 +35,6 @@ export default function NotificationsScreen() {
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     const logEntry = `[${timestamp}] ${message}`
-    console.log(logEntry)
     setLogs(prev => [logEntry, ...prev].slice(0, 500))
   }
 

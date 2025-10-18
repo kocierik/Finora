@@ -114,7 +114,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           JSON.stringify({ language, locale, currency, hideBalances, monthlyBudget, enableBiometrics, sessionTimeoutMinutes, categories })
         )
       } catch (error) {
-        console.log('[Settings] ❌ Error saving settings:', error)
+        // console.log('[Settings] ❌ Error saving settings:', error)
       }
     }
     save()

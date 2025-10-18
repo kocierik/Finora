@@ -139,7 +139,6 @@ export default function HomeScreen() {
       
       // If no categories exist, create default ones
       if (normalizedCats.length === 0) {
-        console.log('[Home] 📊 No categories found, creating default categories...')
         const DEFAULT_CATEGORIES = [
           { name: 'Food & Drinks', icon: '🍽️', color: '#F59E0B', sort_order: 0 },
           { name: 'Transport', icon: '🚗', color: '#10B981', sort_order: 1 },
@@ -233,7 +232,9 @@ export default function HomeScreen() {
       loadData()
     })
     const subSettings = DeviceEventEmitter.addListener('settings:categoriesUpdated', () => {
-      console.log('[Home] 🎨 Categories updated via settings, forcing UI refresh')
+      loadData()
+    })
+    const subDuplicates = DeviceEventEmitter.addListener('expenses:duplicatesRemoved', (data) => {
       loadData()
     })
     const channel = supabase
@@ -267,6 +268,7 @@ export default function HomeScreen() {
     return () => {
       try { sub.remove() } catch {}
       try { subSettings.remove() } catch {}
+      try { subDuplicates.remove() } catch {}
       try { supabase.removeChannel(channel) } catch {}
     }
   }, [user?.id, loadData])
@@ -365,7 +367,6 @@ export default function HomeScreen() {
       // Notify other screens
       DeviceEventEmitter.emit('expenses:externalUpdate')
     } catch (e) {
-      console.log('[Home] Error updating category for merchant', e)
     } finally {
       setShowCategoryModal(false)
       setSelectedTx(null)
@@ -1071,7 +1072,6 @@ export default function HomeScreen() {
                   setToast({ visible: true, text: 'Transazione aggiunta ✅' })
                   setTimeout(() => setToast({ visible: false, text: '' }), 2000)
                 } catch (e: any) {
-                  console.log('[Home] add expense error', e)
                   setFormError(e?.message || 'Impossibile salvare la transazione')
                 } finally {
                   setSubmitting(false)

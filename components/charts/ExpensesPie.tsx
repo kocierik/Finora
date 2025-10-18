@@ -101,20 +101,6 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
   
   const totalAmount = Object.values(byCat).reduce((sum, amount) => sum + amount, 0);
   
-  // Debug log
-  console.log('ExpensesPie debug:', {
-    totalItems: items.length,
-    currentMonthItems: currentMonthItems.length,
-    byCat,
-    allCategories: Object.keys(byCat),
-    sampleItems: currentMonthItems.slice(0, 3).map(e => ({ 
-      merchant: e.merchant, 
-      category: e.category, 
-      categories: e.categories,
-      amount: e.amount, 
-      date: e.date 
-    }))
-  });
 
   // Calculate angles for each category
   let currentAngle = -90; // Start from top
@@ -202,7 +188,6 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
     })
     .sort((a, b) => b.amount - a.amount); // Sort by amount descending
 
-  console.log('Filtered categoryData:', categoryData.map(c => ({ name: c.name, amount: c.amount, percentage: c.percentage.toFixed(1) + '%' })));
 
   // If no categories have data but there's a total, show "Other" category
   if (categoryData.length === 0 && totalAmount > 0) {
@@ -371,17 +356,14 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
             
             // Skip labels for very small percentages to avoid overlapping
             if (category.percentage < 1) {
-              console.log(`Skipping label for ${category.name} (${category.percentage.toFixed(1)}%)`);
               return null;
             }
             
             // Skip every other label if there are too many categories
             if (finalCategoryData.length > 6 && index % 2 === 1 && category.percentage < 5) {
-              console.log(`Skipping alternating label for ${category.name} (${category.percentage.toFixed(1)}%)`);
               return null;
             }
             
-            console.log(`Showing label for ${category.name} (${category.percentage.toFixed(1)}%)`);
             
             // Adjust font size and position based on percentage to reduce overlapping
             const fontSize = category.percentage < 10 ? 10 : 14;

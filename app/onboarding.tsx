@@ -227,17 +227,12 @@ export default function OnboardingScreen() {
 
   const openNotificationSettings = async () => {
     try {
-      console.log('[Onboarding] 🔔 Opening notification settings...')
-      // Try to open notification settings directly
-      // apri le impostazioni
       await Linking.openSettings()
     } catch (error) {
-      console.log('[Onboarding] ⚠️ Could not open notification settings directly, opening general settings')
       try {
         // Fallback to general app settings
         await Linking.openSettings()
       } catch (fallbackError) {
-        console.log('[Onboarding] ❌ Could not open any settings:', fallbackError)
       }
     }
   }

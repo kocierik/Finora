@@ -18,12 +18,12 @@ export default function AuthCallback() {
     const attemptExchangeAndRoute = async () => {
       try {
         const searchParams = typeof params === 'object' ? params : {}
-        console.log('[AuthCallback] params:', searchParams)
+        // console.log('[AuthCallback] params:', searchParams)
 
         let initialUrl: string | null = null
         try {
           initialUrl = await RNLinking.Linking.getInitialURL()
-          console.log('[AuthCallback] initialURL:', initialUrl)
+          // console.log('[AuthCallback] initialURL:', initialUrl)
         } catch {}
 
         let callbackUrl: string | null = null
@@ -47,7 +47,7 @@ export default function AuthCallback() {
             accessToken = accessToken || urlObj.searchParams.get('access_token') || ''
             refreshToken = refreshToken || urlObj.searchParams.get('refresh_token') || ''
             code = code || urlObj.searchParams.get('code') || ''
-            console.log('[AuthCallback] parsed from callbackUrl:', { hasAccess: !!accessToken, hasRefresh: !!refreshToken, hasCode: !!code })
+            // console.log('[AuthCallback] parsed from callbackUrl:', { hasAccess: !!accessToken, hasRefresh: !!refreshToken, hasCode: !!code })
           } catch {}
         }
         // Also try parsing hash fragment for implicit flow
@@ -58,32 +58,32 @@ export default function AuthCallback() {
             accessToken = accessToken || params.get('access_token') || ''
             refreshToken = refreshToken || params.get('refresh_token') || ''
             code = code || params.get('code') || ''
-            console.log('[AuthCallback] parsed from hash:', { hasAccess: !!accessToken, hasRefresh: !!refreshToken, hasCode: !!code })
+            // console.log('[AuthCallback] parsed from hash:', { hasAccess: !!accessToken, hasRefresh: !!refreshToken, hasCode: !!code })
           } catch {}
         }
 
         if (accessToken && refreshToken) {
           const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
           if (error) {
-            console.log('[AuthCallback] ❌ setSession error:', error.message)
+            // console.log('[AuthCallback] ❌ setSession error:', error.message)
           } else {
-            console.log('[AuthCallback] ✅ Session set via implicit tokens')
+            // console.log('[AuthCallback] ✅ Session set via implicit tokens')
           }
         }
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code)
           if (error) {
-            console.log('[AuthCallback] ❌ exchangeCodeForSession error:', error.message)
+            // console.log('[AuthCallback] ❌ exchangeCodeForSession error:', error.message)
           } else {
-            console.log('[AuthCallback] ✅ Session established via code exchange')
+            // console.log('[AuthCallback] ✅ Session established via code exchange')
           }
         }
       } catch (e) {
-        console.log('[AuthCallback] ⚠️ Exception during code exchange', e)
+        // console.log('[AuthCallback] ⚠️ Exception during code exchange', e)
       } finally {
         try {
           const { data: sessData } = await supabase.auth.getSession()
-          console.log('[AuthCallback] ℹ️ session after exchange:', !!sessData?.session)
+          // console.log('[AuthCallback] ℹ️ session after exchange:', !!sessData?.session)
         } catch {}
         router.replace('/(tabs)')
       }

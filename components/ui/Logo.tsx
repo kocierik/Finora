@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient'
 import { StyleSheet, View } from 'react-native'
 import { ThemedText } from '../themed-text'
 
@@ -43,14 +42,12 @@ export function Logo({ size = 'md', showText = false, variant = 'default' }: Log
           hasGlow && styles.glowContainer,
         ]}
       >
-        <LinearGradient
-          colors={['#06b6d4', '#14b8a6', '#22d3ee']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <View
           style={[
             styles.gradient,
             {
               borderRadius: dimensions.container / 2,
+              backgroundColor: '#1a1a1a',
             },
           ]}
         >
@@ -66,7 +63,7 @@ export function Logo({ size = 'md', showText = false, variant = 'default' }: Log
           >
             F
           </ThemedText>
-        </LinearGradient>
+        </View>
 
         {/* Glow effect overlay */}
         {hasGlow && (
@@ -103,7 +100,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderColor: 'rgba(0, 191, 255, 0.3)',
   },
   gradient: {
     width: '100%',
@@ -113,10 +110,13 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   lettermark: {
-    color: '#0a0a0f',
+    color: '#00bfff',
     fontWeight: '900',
     letterSpacing: -1,
     textAlign: 'center',
+    textShadowColor: '#00bfff',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   accentDot: {
     position: 'absolute',
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   glowContainer: {
-    shadowColor: '#06b6d4',
+    shadowColor: '#00bfff',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 20,
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   },
   glowOverlay: {
     position: 'absolute',
-    backgroundColor: 'rgba(6, 182, 212, 0.2)',
+    backgroundColor: 'rgba(0, 191, 255, 0.2)',
     top: 0,
     left: 0,
   },

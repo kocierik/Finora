@@ -20,18 +20,18 @@ export interface NotificationData {
  */
 export async function checkNotificationPermission(): Promise<NotificationPermissionStatus> {
   if (Platform.OS !== 'android') {
-    console.log('[NotificationService] ⚠️  Not Android, permission check skipped')
+    // console.log('[NotificationService] ⚠️  Not Android, permission check skipped')
     return 'unknown'
   }
 
   try {
-    console.log('[NotificationService] 🔍 Checking notification permission...')
+    // console.log('[NotificationService] 🔍 Checking notification permission...')
     const status = await RNANL.getPermissionStatus()
-    console.log('[NotificationService] ✅ Permission status:', status)
+    // console.log('[NotificationService] ✅ Permission status:', status)
     return status
   } catch (error: any) {
-    console.log('[NotificationService] ❌ Error checking permission:', error.message)
-    console.log('[NotificationService] This is normal in Expo Dev Client')
+    // console.log('[NotificationService] ❌ Error checking permission:', error.message)
+    // console.log('[NotificationService] This is normal in Expo Dev Client')
     return 'unknown'
   }
 }
@@ -41,17 +41,17 @@ export async function checkNotificationPermission(): Promise<NotificationPermiss
  */
 export async function requestNotificationPermission(): Promise<void> {
   if (Platform.OS !== 'android') {
-    console.log('[NotificationService] ⚠️  Not Android, permission request skipped')
+    // console.log('[NotificationService] ⚠️  Not Android, permission request skipped')
     return
   }
 
   try {
-    console.log('[NotificationService] 📱 Requesting notification permission...')
+    // console.log('[NotificationService] 📱 Requesting notification permission...')
     await RNANL.requestPermission()
-    console.log('[NotificationService] ✅ Permission request sent')
+    // console.log('[NotificationService] ✅ Permission request sent')
   } catch (error: any) {
-    console.log('[NotificationService] ❌ Error requesting permission:', error.message)
-    console.log('[NotificationService] This is normal in Expo Dev Client')
+    // console.log('[NotificationService] ❌ Error requesting permission:', error.message)
+    // console.log('[NotificationService] This is normal in Expo Dev Client')
   }
 }
 
@@ -69,10 +69,10 @@ export function isXiaomiDevice(): boolean {
                    brand.includes('poco') ||
                    manufacturer.includes('xiaomi')
   
-  console.log('[NotificationService] 📱 Device check:')
-  console.log('[NotificationService] ├─ Brand:', Platform.constants?.Brand)
-  console.log('[NotificationService] ├─ Manufacturer:', Platform.constants?.Manufacturer)
-  console.log('[NotificationService] └─ Is Xiaomi/MIUI:', isXiaomi)
+  // console.log('[NotificationService] 📱 Device check:')
+  // console.log('[NotificationService] ├─ Brand:', Platform.constants?.Brand)
+  // console.log('[NotificationService] ├─ Manufacturer:', Platform.constants?.Manufacturer)
+  // console.log('[NotificationService] └─ Is Xiaomi/MIUI:', isXiaomi)
   
   return isXiaomi
 }
@@ -83,14 +83,6 @@ export function isXiaomiDevice(): boolean {
 export function isGoogleWalletNotification(notification: NotificationData): boolean {
   const app = notification.app?.toLowerCase() || ''
   const isWallet = app.includes('wallet') || app.includes('com.google.android.apps.wallet')
-  
-  if (isWallet) {
-    console.log('[NotificationService] 🎯 Google Wallet notification detected:', {
-      app: notification.app,
-      title: notification.title,
-      text: notification.text,
-    })
-  }
   
   return isWallet
 }

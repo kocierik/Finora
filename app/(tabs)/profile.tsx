@@ -52,7 +52,6 @@ export default function ProfileScreen() {
       // Navigate to onboarding
       router.push('/onboarding')
     } catch (error) {
-      console.log('[Profile] Error showing tutorial:', error)
       Alert.alert('Errore', 'Impossibile aprire il tutorial')
     }
   }
@@ -95,7 +94,6 @@ export default function ProfileScreen() {
       
       // If no categories exist, create default ones
       if (!data || data.length === 0) {
-        console.log('[Profile] 📊 No categories found, creating default categories...')
         const { data: newCategories, error: createError } = await supabase
           .from('categories')
           .insert(DEFAULT_CATEGORIES.map(cat => ({
@@ -146,11 +144,9 @@ export default function ProfileScreen() {
   // Load category counts
   const loadCategoryCounts = async () => {
     if (!user) {
-      console.log('[Profile] 📊 No user, skipping category counts')
       return
     }
     
-    console.log('[Profile] 📊 Loading category counts for user:', user.id)
     
     try {
       // Query expenses with category_id and join with categories table
@@ -166,32 +162,26 @@ export default function ProfileScreen() {
         `)
         .eq('user_id', user.id)
       
-      console.log('[Profile] 📊 Expenses query result:', { data: expensesData, error: expensesError })
       
       if (expensesError) {
-        console.log('[Profile] ⚠️  Error querying expenses:', expensesError)
         return
       }
       
       if (!expensesData || expensesData.length === 0) {
-        console.log('[Profile] 📊 No expenses found for user')
         setCategoryCounts({})
         return
       }
       
       const counts: Record<string, number> = {}
       
-      console.log('[Profile] 📊 Processing expenses data...')
       expensesData.forEach((expense: any) => {
         // Use categories.name from the join, fallback to 'Other' if no category
         const categoryName = expense.categories?.name || 'Other'
         counts[categoryName] = (counts[categoryName] || 0) + 1
       })
       
-      console.log('[Profile] 📊 Final calculated category counts:', counts)
       setCategoryCounts(counts)
     } catch (e) {
-      console.log('[Profile] ⚠️  Error loading category counts:', e)
     }
   }
 
@@ -225,7 +215,6 @@ export default function ProfileScreen() {
         const thresholds = await loadExpenseThresholds(user?.id)
         setExpenseThresholds(thresholds)
       } catch (error) {
-        console.log('[Profile] ⚠️  Error loading expense thresholds:', error)
       }
       
       // Load categories from database (this will also load category counts)
@@ -941,11 +930,8 @@ export default function ProfileScreen() {
         onPress={async () => {
           try {
             setLoading(true)
-                console.log('[Profile] 🚪 Starting logout process...')
             await signOut()
-            console.log('[Profile] ✅ Logout completed, redirecting...')
                 setTimeout(() => {
-                  console.log('[Profile] 🔄 Redirecting to welcome screen...')
                 }, 100)
           } catch (error) {
             console.error('[Profile] ❌ Logout failed:', error)

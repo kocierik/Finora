@@ -70,17 +70,17 @@ export default function LoginScreen() {
     }
 
     try {
-      console.log('[Login] 🔐 Attempting login...')
+      // console.log('[Login] 🔐 Attempting login...')
       const { error } = await signIn(email.trim(), password)
       if (error) {
-        console.log('[Login] ❌ Login error:', error)
+        // console.log('[Login] ❌ Login error:', error)
         setErrors({ general: error })
       } else {
-        console.log('[Login] ✅ Login successful, redirecting...')
+        // console.log('[Login] ✅ Login successful, redirecting...')
         // Success - AuthContext and main index route will handle redirect automatically
       }
     } catch (error) {
-      console.log('[Login] ❌ Login exception:', error)
+      // console.log('[Login] ❌ Login exception:', error)
       setErrors({ general: t('login_error_generic') })
     } finally {
       setLoading(false)

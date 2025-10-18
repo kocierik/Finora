@@ -21,7 +21,7 @@ async function readCache(): Promise<Expense[]> {
     const txt = await FileSystem.readAsStringAsync(CACHE_FILE)
     return JSON.parse(txt)
   } catch (error: any) {
-    console.log('[WalletListener] ❌ Error reading cache:', error.message)
+    // console.log('[WalletListener] ❌ Error reading cache:', error.message)
     return []
   }
 }
@@ -29,9 +29,9 @@ async function readCache(): Promise<Expense[]> {
 async function writeCache(items: Expense[]) {
   try {
     await FileSystem.writeAsStringAsync(CACHE_FILE, JSON.stringify(items))
-    console.log('[WalletListener] ✅ Cache written:', items.length, 'items')
+    // console.log('[WalletListener] ✅ Cache written:', items.length, 'items')
   } catch (error: any) {
-    console.log('[WalletListener] ❌ Error writing cache:', error.message)
+    // console.log('[WalletListener] ❌ Error writing cache:', error.message)
   }
 }
 
@@ -40,93 +40,93 @@ export function useWalletListener() {
 
   useEffect(() => {
     if (Platform.OS !== 'android') {
-      console.log('[WalletListener] ⚠️  Not Android, listener disabled')
+      // console.log('[WalletListener] ⚠️  Not Android, listener disabled')
       return
     }
     
     if (loading) {
-      console.log('[WalletListener] ⏳ Auth still loading, waiting...')
+      // console.log('[WalletListener] ⏳ Auth still loading, waiting...')
       return
     }
     
     if (!user) {
-      console.log('[WalletListener] ⚠️  No user logged in, listener disabled')
+      // console.log('[WalletListener] ⚠️  No user logged in, listener disabled')
       return
     }
 
     if (logger && logger.info) {
       logger.info('Initializing wallet listener', { userId: user.id }, 'WalletListener')
     }
-    console.log('[WalletListener] 🚀 Initializing wallet listener for user:', user.id)
+    // console.log('[WalletListener] 🚀 Initializing wallet listener for user:', user.id)
 
     const handlePayload = async (payload: any) => {
       // Double check user is still logged in
       if (!user) {
-        console.log('[WalletListener] ⚠️  User logged out during notification processing, skipping')
+        // console.log('[WalletListener] ⚠️  User logged out during notification processing, skipping')
         return
       }
       
       const timestamp = new Date().toISOString()
       
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      console.log(`[WalletListener] ${timestamp}`)
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      // console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      // console.log(`[WalletListener] ${timestamp}`)
+      // console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
       
       try {
-        console.log('[WalletListener] 📱 Incoming notification payload from ANY APP:')
-        console.log(JSON.stringify(payload, null, 2))
+        // console.log('[WalletListener] 📱 Incoming notification payload from ANY APP:')
+        // console.log(JSON.stringify(payload, null, 2))
       } catch {
-        console.log('[WalletListener] 📱 Incoming notification (non-serializable)')
+        // console.log('[WalletListener] 📱 Incoming notification (non-serializable)')
       }
       
       // Il headless task salva già le notifiche E le spese in memoria quando l'app è chiusa
       // Quando l'app è aperta, le notifiche arrivano tramite DeviceEventEmitter
       // ma il headless task continua a funzionare e salva tutto, quindi evitiamo duplicati
-      console.log('[WalletListener] ℹ️  Notification received via DeviceEventEmitter (app is open)')
-      console.log('[WalletListener] ℹ️  Headless task should have already saved this notification and expense')
+      // console.log('[WalletListener] ℹ️  Notification received via DeviceEventEmitter (app is open)')
+      // console.log('[WalletListener] ℹ️  Headless task should have already saved this notification and expense')
       
       // DISABILITATO: Non salvare quando l'app è aperta per evitare duplicati
       // Il headless task si occupa di tutto sia quando l'app è chiusa che aperta
-      console.log('[WalletListener] ⏭️  Skipping expense save to avoid duplicates with headless task')
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+      // console.log('[WalletListener] ⏭️  Skipping expense save to avoid duplicates with headless task')
+        // console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
         return
     }
 
     // Listener per notifiche simulate (test)
-    console.log('[WalletListener] 📡 Setting up DeviceEventEmitter listener...')
+    // console.log('[WalletListener] 📡 Setting up DeviceEventEmitter listener...')
     const devEmitterSub = DeviceEventEmitter.addListener('wallet_notification', handlePayload)
-    console.log('[WalletListener] ✅ DeviceEventEmitter listener registered')
+    // console.log('[WalletListener] ✅ DeviceEventEmitter listener registered')
 
     // Inizializzazione permessi e cache
     ;(async () => {
       try {
-        console.log('[WalletListener] 🔐 Checking notification permission...')
+        // console.log('[WalletListener] 🔐 Checking notification permission...')
         const permissionStatus = await checkNotificationPermission()
-        console.log('[WalletListener] 🔐 Permission status:', permissionStatus)
+        // console.log('[WalletListener] 🔐 Permission status:', permissionStatus)
         
         if (permissionStatus !== 'authorized') {
-          console.log('[WalletListener] ⚠️  Permission not granted, requesting...')
+          // console.log('[WalletListener] ⚠️  Permission not granted, requesting...')
           await requestNotificationPermission()
         } else {
-          console.log('[WalletListener] ✅ Permission already granted')
+          // console.log('[WalletListener] ✅ Permission already granted')
         }
       } catch (error: any) {
-        console.log('[WalletListener] ❌ Error checking/requesting permission:', error.message)
+        // console.log('[WalletListener] ❌ Error checking/requesting permission:', error.message)
       }
       
       // Flush cached expenses
-      console.log('[WalletListener] 💾 Checking for cached expenses...')
+      // console.log('[WalletListener] 💾 Checking for cached expenses...')
       const cached = await readCache()
-      console.log('[WalletListener] 💾 Found', cached.length, 'cached expenses')
+      // console.log('[WalletListener] 💾 Found', cached.length, 'cached expenses')
       
       if (cached.length > 0) {
-        console.log('[WalletListener] 💾 Flushing cached expenses...')
+        // console.log('[WalletListener] 💾 Flushing cached expenses...')
         for (const e of cached) {
-          console.log('[WalletListener] 💾 Saving cached expense:', e)
+          // console.log('[WalletListener] 💾 Saving cached expense:', e)
           await saveExpense(e)
         }
         await writeCache([])
-        console.log('[WalletListener] ✅ Cached expenses flushed')
+        // console.log('[WalletListener] ✅ Cached expenses flushed')
       }
     })()
 
@@ -151,13 +151,13 @@ export function useWalletListener() {
       }
     })
 
-    console.log('[WalletListener] ✅ Wallet listener initialized\n')
+    // console.log('[WalletListener] ✅ Wallet listener initialized\n')
 
     return () => {
-      console.log('[WalletListener] 🛑 Cleaning up wallet listener...')
+      // console.log('[WalletListener] 🛑 Cleaning up wallet listener...')
       devEmitterSub.remove()
       headlessLogSubscription.remove()
-      console.log('[WalletListener] ✅ Wallet listener cleaned up\n')
+      // console.log('[WalletListener] ✅ Wallet listener cleaned up\n')
     }
   }, [user?.id, loading])
 }

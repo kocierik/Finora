@@ -30,7 +30,6 @@ export function useDatabaseSync() {
           .single()
         
         if (error) {
-          console.log('[DatabaseSync] ❌ Error loading from database:', error.message)
           return
         }
         
@@ -38,10 +37,8 @@ export function useDatabaseSync() {
           if (data.monthly_budget !== null) setMonthlyBudget(Number(data.monthly_budget))
           if (data.currency) setCurrency(data.currency)
           if (typeof data.hide_balances === 'boolean') setHideBalances(data.hide_balances)
-          console.log('[DatabaseSync] ✅ Loaded settings from database:', data)
         }
       } catch (error) {
-        console.log('[DatabaseSync] ❌ Error syncing with database:', error)
       }
     }
 
@@ -65,12 +62,9 @@ export function useDatabaseSync() {
           })
         
         if (error) {
-          console.log('[DatabaseSync] ❌ Error saving to database:', error.message)
         } else {
-          console.log('[DatabaseSync] ✅ Settings saved to database')
         }
       } catch (error) {
-        console.log('[DatabaseSync] ❌ Error saving settings:', error)
       }
     }
 

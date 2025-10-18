@@ -3,6 +3,7 @@ import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
 import { DatePickerModal } from '@/components/ui/DatePickerModal'
 import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
+import { DEFAULT_CATEGORIES } from '@/constants/categories'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
@@ -65,15 +66,6 @@ export default function ExpensesScreen() {
 
   // Note: Do NOT early-return before hooks. Render guards are applied later to keep hook order stable.
 
-  // Default categories for new users
-  const DEFAULT_CATEGORIES = [
-    { name: 'Food & Drinks', icon: '🍽️', color: '#F59E0B', sort_order: 0 },
-    { name: 'Transport', icon: '🚗', color: '#10B981', sort_order: 1 },
-    { name: 'Home & Utilities', icon: '🏠', color: '#3B82F6', sort_order: 2 },
-    { name: 'Entertainment', icon: '🎬', color: '#EF4444', sort_order: 3 },
-    { name: 'Health & Personal', icon: '🏥', color: '#EC4899', sort_order: 4 },
-    { name: 'Miscellaneous', icon: '📦', color: '#8B5CF6', sort_order: 5 }
-  ]
 
   // Load categories from DB categories table
   const loadCategoriesFromDb = useCallback(async () => {
@@ -88,11 +80,13 @@ export default function ExpensesScreen() {
       
       // If no categories exist, create default ones
       if (!data || data.length === 0) {
-        console.log('[Expenses] 📊 No categories found, creating default categories...')
         const { data: newCategories, error: createError } = await supabase
           .from('categories')
-          .insert(DEFAULT_CATEGORIES.map(cat => ({
-            ...cat,
+          .insert(DEFAULT_CATEGORIES.map((cat, index) => ({
+            name: cat.name,
+            icon: cat.icon,
+            color: cat.color,
+            sort_order: index,
             user_id: user.id
           })))
           .select()
@@ -124,7 +118,6 @@ export default function ExpensesScreen() {
       // Trigger UI that depends on categories
       setCategoryUpdateTrigger((prev) => prev + 1)
     } catch (e) {
-      console.log('[Expenses] ⚠️  Error loading categories from DB:', e)
     }
   }, [user?.id])
 
@@ -136,32 +129,18 @@ export default function ExpensesScreen() {
       const pendingExpenses = JSON.parse(data)
       const unsyncedCount = pendingExpenses.filter((e: any) => !e.synced).length
       setPendingExpensesCount(unsyncedCount)
-      console.log(`[Expenses] 📊 Found ${unsyncedCount} pending expenses`)
     } catch (error) {
       setPendingExpensesCount(0)
-      console.log('[Expenses] ℹ️  No pending expenses file found')
     }
   }, [])
-
-  // Initial load and refresh on focus/events
-  useEffect(() => {
-    loadCategoriesFromDb()
-    checkPendingExpenses()
-    const sub = DeviceEventEmitter.addListener('settings:categoriesUpdated', () => {
-      loadCategoriesFromDb()
-    })
-    return () => { sub.remove() }
-  }, [loadCategoriesFromDb, checkPendingExpenses])
 
   const fetchExpenses = useCallback(async () => {
     if (!user) return
     setRefreshing(true)
     try {
       // Sincronizza le spese pendenti dalle notifiche Google Wallet
-      console.log('[Expenses] 🔄 Syncing pending expenses from notifications...')
       const syncResult = await syncPendingExpenses(user.id)
       if (syncResult.synced > 0) {
-        console.log(`[Expenses] ✅ Synced ${syncResult.synced} new expenses from Google Wallet`)
         // Trigger category cards update
         setCategoryUpdateTrigger(prev => prev + 1)
       }
@@ -191,11 +170,6 @@ export default function ExpensesScreen() {
       }) ?? []
       
       // Debug: Log sample transactions to see their category structure
-      console.log('[Expenses] 🔄 Sample transactions after fetch:', sortedItems.slice(0, 3).map(item => ({
-        merchant: item.merchant,
-        category_id: item.category_id,
-        categories: item.categories
-      })))
       
       
       // Auto-assign categories for new transactions
@@ -203,7 +177,6 @@ export default function ExpensesScreen() {
       
       // Debug log (simplified)
       if (DEBUG_MODE) {
-        console.log(`[Expenses] ✅ Loaded ${updatedItems.length} expenses, ${updatedItems.filter(e => e.category).length} with categories`)
       }
       
       setItems(updatedItems)
@@ -231,7 +204,6 @@ export default function ExpensesScreen() {
       const thresholds = await loadExpenseThresholds()
       setExpenseThresholds(thresholds)
     } catch (error) {
-      console.log('[Expenses] ⚠️  Error loading expense thresholds:', error)
     }
   }, [])
 
@@ -246,7 +218,6 @@ export default function ExpensesScreen() {
       const startDateStr = startDate.toISOString().split('T')[0]
       const endDateStr = endDate.toISOString().split('T')[0]
       
-      console.log(`[Expenses] 📅 Loading all items for ${year}-${month + 1} (${startDateStr} to ${endDateStr})`)
       
       const { data, error } = await supabase
         .from('expenses')
@@ -267,7 +238,6 @@ export default function ExpensesScreen() {
       if (error) throw error
       
       setAllMonthItems(data || [])
-      console.log(`[Expenses] ✅ Loaded ${data?.length || 0} items for month ${year}-${month + 1}`)
     } catch (error: any) {
       console.error('[Expenses] ❌ Error loading month items:', error)
     }
@@ -310,7 +280,6 @@ export default function ExpensesScreen() {
     }, 30000)
 
     const sub = DeviceEventEmitter.addListener('expenses:externalUpdate', () => {
-      console.log('[Expenses] 🔄 External update received, refreshing data...')
       fetchExpenses()
       loadAllMonthItems(curYear, curMonth)
       // Force pie chart update
@@ -320,7 +289,6 @@ export default function ExpensesScreen() {
     })
 
     const subSettings = DeviceEventEmitter.addListener('settings:categoriesUpdated', () => {
-      console.log('[Expenses] 🎨 Categories updated via settings, forcing UI refresh')
       loadCategoriesFromDb()
       fetchExpenses()
       setCategoryUpdateTrigger(prev => prev + 1)
@@ -329,6 +297,26 @@ export default function ExpensesScreen() {
     return () => { clearInterval(interval); sub.remove(); subSettings.remove() }
   }, [fetchExpenses])
 
+  // Initial load and refresh on focus/events
+  useEffect(() => {
+    loadCategoriesFromDb()
+    checkPendingExpenses()
+    
+    const sub1 = DeviceEventEmitter.addListener('settings:categoriesUpdated', () => {
+      loadCategoriesFromDb()
+    })
+    
+    const sub2 = DeviceEventEmitter.addListener('expenses:duplicatesRemoved', (data) => {
+      // Ricarica le spese e le categorie quando vengono rimossi dei duplicati
+      fetchExpenses()
+      loadCategoriesFromDb()
+    })
+    
+    return () => { 
+      sub1.remove()
+      sub2.remove()
+    }
+  }, [loadCategoriesFromDb, checkPendingExpenses, fetchExpenses])
 
   // KPIs
   // Month calculations with navigation support
@@ -369,7 +357,6 @@ export default function ExpensesScreen() {
 
   // Debug log for month calculation (simplified)
   if (DEBUG_MODE) {
-    console.log(`[Expenses] 📊 Month ${curYear}-${curMonth + 1}: ${monthTotal.toFixed(2)}€ (${items.filter((e) => sameMonth(e.date, curYear, curMonth)).length} items)`)
   }
 
   // Prefer DB categories if available, otherwise fall back to settings
@@ -405,35 +392,9 @@ export default function ExpensesScreen() {
   // Available categories for selection (first 6 categories only)
   const availableCategories = categories
 
-  // i18n - category labels by current language
-  const translateCategory = (name: string) => {
-    if (language !== 'it') return name
-    const key = (name || '').toLowerCase()
-    switch (key) {
-      case 'other': return 'Altro'
-      case 'transport': return 'Trasporti'
-      case 'grocery': return 'Spesa'
-      case 'shopping': return 'Shopping'
-      case 'night life': return 'Vita notturna'
-      case 'travel': return 'Viaggi'
-      case 'healthcare': return 'Sanità'
-      case 'education': return 'Istruzione'
-      case 'utilities': return 'Utenze'
-      case 'entertainment': return 'Intrattenimento'
-      default: return name
-    }
-  }
-
   // Shorten category label to avoid overlap in badges
   const shortenCategory = (name: string) => {
-    const it = translateCategory(name)
-    switch (it.toLowerCase()) {
-      case 'vita notturna': return 'Notte'
-      case 'intrattenimento': return 'Intratt.'
-      case 'istruzione': return 'Studio'
-      default:
-        return it.length > UI_CONSTANTS.CATEGORY_MAX_LENGTH ? it.slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH) + '…' : it
-    }
+    return name.length > UI_CONSTANTS.CATEGORY_MAX_LENGTH ? name.slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH) + '…' : name
   }
 
   // Calculate category spending from real data - use useMemo to make it reactive
@@ -461,13 +422,11 @@ export default function ExpensesScreen() {
   const syncFromNotifications = useCallback(async () => {
     if (!user) return
     
-    console.log('[Expenses] 🔄 Syncing from notifications JSON...')
     setRefreshing(true)
     
     try {
       // Sincronizza le spese pendenti dalle notifiche
       const syncResult = await syncPendingExpenses(user.id)
-      console.log(`[Expenses] ✅ Sync completed: ${syncResult.synced} synced, ${syncResult.errors} errors`)
       
       // Ricarica le spese dopo la sincronizzazione
       await fetchExpenses()
@@ -597,9 +556,6 @@ export default function ExpensesScreen() {
           : item
       )
       
-      console.log('Updating categories for merchant:', selectedTransaction.merchant, 'to category:', category.name)
-      console.log('Updated items count:', updatedItems.length)
-      console.log('Items with new category:', updatedItems.filter(item => item.merchant === selectedTransaction.merchant).length)
       
       setItems(updatedItems)
 
@@ -653,7 +609,6 @@ export default function ExpensesScreen() {
         [{ text: 'OK', style: 'default' }]
       )
       
-      console.log('[Expenses] ✅ All expenses reset successfully')
     } catch (error) {
       console.error('[Expenses] ❌ Error resetting expenses:', error)
       Alert.alert(
@@ -700,7 +655,6 @@ export default function ExpensesScreen() {
       setShowCategoryModal(false)
       setSelectedTransaction(null)
       
-      console.log('[Expenses] ✅ Recurring series stopped, pie chart updated')
     } catch (e) {
       console.error('[Expenses] ❌ Error stopping recurring series', e)
     }
@@ -716,7 +670,6 @@ export default function ExpensesScreen() {
     
     // Prevent going beyond current month (offset 0)
     if (newOffset > 0) {
-      console.log('Cannot navigate beyond current month')
       return
     }
     
@@ -921,7 +874,6 @@ export default function ExpensesScreen() {
             .update({ category_id: update.category_id })
             .eq('id', update.id)
         }
-        console.log(`Auto-assigned categories to ${transactionsToUpdate.length} transactions`)
           setAutoAssignedCount(transactionsToUpdate.length)
           
           // Clear the notification after 3 seconds
@@ -1288,7 +1240,7 @@ export default function ExpensesScreen() {
                       <View style={[styles.categoryIcon, { backgroundColor: `${category.color}20` }]}>
                         <ThemedText style={styles.categoryIconText}>{category.icon}</ThemedText>
                       </View>
-                    <ThemedText style={styles.categoryName}>{translateCategory(category.name)}</ThemedText>
+                    <ThemedText style={styles.categoryName}>{category.name}</ThemedText>
                       <ThemedText style={[
                         styles.categoryAmount,
                         // Positive totals are outgoing costs → red; zero/negative → green
@@ -1486,7 +1438,6 @@ export default function ExpensesScreen() {
                                 
                                 // Debug for specific merchant (simplified)
                                 if (DEBUG_MODE && item.merchant === 'CAFE DES CHINEU') {
-                                  console.log(`[Expenses] 🏪 ${item.merchant}: ${item.categories?.name || 'no category'} -> ${categoryInfo?.name || 'Other'}`)
                                 }
                                 
                                 // Show badge if categoryInfo exists
@@ -1663,7 +1614,7 @@ export default function ExpensesScreen() {
                           <View style={[styles.categoryOptionIcon, { backgroundColor: `${category.color}20` }]}>
                             <ThemedText style={styles.categoryOptionIconText}>{category.icon}</ThemedText>
                           </View>
-                          <ThemedText style={styles.categoryOptionName}>{translateCategory(category.name)}</ThemedText>
+                          <ThemedText style={styles.categoryOptionName}>{category.name}</ThemedText>
                         </LinearGradient>
                       </TouchableOpacity>
                     </Animated.View>
@@ -1693,7 +1644,7 @@ export default function ExpensesScreen() {
               />
               <View style={styles.modalHeader}>
                 <ThemedText style={styles.modalTitle}>
-                  {language === 'it' ? 'Storico categoria' : 'Category history'}{selectedHistoryCategory ? `: ${translateCategory(selectedHistoryCategory)}` : ''}
+                  {language === 'it' ? 'Storico categoria' : 'Category history'}{selectedHistoryCategory ? `: ${selectedHistoryCategory}` : ''}
                 </ThemedText>
                 <Pressable onPress={() => setShowCategoryHistoryModal(false)} style={styles.closeButton}>
                   <ThemedText style={styles.closeButtonText}>✕</ThemedText>
@@ -1806,7 +1757,6 @@ export default function ExpensesScreen() {
                     setShowConfirmModal(false)
                     setTransactionToDelete(null)
                     
-                    console.log('[Expenses] ✅ Transaction deleted, pie chart updated')
                   } catch (e) {
                     Alert.alert('Errore', 'Impossibile eliminare la transazione. Riprova.')
                   }

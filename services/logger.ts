@@ -27,7 +27,7 @@ class Logger {
         this.logs = JSON.parse(stored)
       }
     } catch (error) {
-      console.log("[Logger] Failed to load logs:", error)
+      // console.log("[Logger] Failed to load logs:", error)
     }
   }
 
@@ -35,7 +35,7 @@ class Logger {
     try {
       await AsyncStorage.setItem("@finora:logs", JSON.stringify(this.logs))
     } catch (error) {
-      console.log("[Logger] Failed to save logs:", error)
+      // console.log("[Logger] Failed to save logs:", error)
     }
   }
 

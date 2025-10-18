@@ -83,21 +83,21 @@ export default function SignupScreen() {
     }
 
     try {
-      console.log('[Signup] 📝 Attempting signup...')
+      // console.log('[Signup] 📝 Attempting signup...')
       const { error } = await signUp(email.trim(), password, name.trim())
       if (error) {
-        console.log('[Signup] ❌ Signup error:', error)
+        // console.log('[Signup] ❌ Signup error:', error)
         setErrors({ general: error })
       } else {
-        console.log('[Signup] ✅ Signup successful, redirecting...')
+        // console.log('[Signup] ✅ Signup successful, redirecting...')
         // Force navigation to index to trigger onboarding check
         setTimeout(() => {
-          console.log('[Signup] 🔄 Navigating to index...')
+          // console.log('[Signup] 🔄 Navigating to index...')
           router.replace('/')
         }, 100)
       }
     } catch (error) {
-      console.log('[Signup] ❌ Signup exception:', error)
+      // console.log('[Signup] ❌ Signup exception:', error)
       setErrors({ general: t('signup_error_generic') })
     } finally {
       setLoading(false)

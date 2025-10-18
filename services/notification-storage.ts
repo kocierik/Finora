@@ -15,7 +15,7 @@ export interface StoredNotification extends NotificationData {
  */
 export async function saveNotification(notification: NotificationData): Promise<void> {
   try {
-    console.log('[NotificationStorage] 💾 Saving notification to cache...')
+    // console.log('[NotificationStorage] 💾 Saving notification to cache...')
     
     // Carica le notifiche esistenti
     const existingNotifications = await loadNotifications()
@@ -40,7 +40,7 @@ export async function saveNotification(notification: NotificationData): Promise<
       JSON.stringify(trimmedNotifications, null, 2)
     )
     
-    console.log('[NotificationStorage] ✅ Notification saved:', storedNotification.title)
+    // console.log('[NotificationStorage] ✅ Notification saved:', storedNotification.title)
   } catch (error: any) {
     console.error('[NotificationStorage] ❌ Error saving notification:', error.message)
   }
@@ -53,14 +53,14 @@ export async function loadNotifications(): Promise<StoredNotification[]> {
   try {
     const fileInfo = await getInfoAsync(NOTIFICATIONS_CACHE_FILE)
     if (!fileInfo.exists) {
-      console.log('[NotificationStorage] 📂 No notifications cache found')
+      // console.log('[NotificationStorage] 📂 No notifications cache found')
       return []
     }
     
     const data = await readAsStringAsync(NOTIFICATIONS_CACHE_FILE)
     const notifications = JSON.parse(data)
     
-    console.log('[NotificationStorage] 📂 Loaded', notifications.length, 'notifications from cache')
+    // console.log('[NotificationStorage] 📂 Loaded', notifications.length, 'notifications from cache')
     return notifications
   } catch (error: any) {
     console.error('[NotificationStorage] ❌ Error loading notifications:', error.message)
@@ -74,7 +74,7 @@ export async function loadNotifications(): Promise<StoredNotification[]> {
 export async function clearNotifications(): Promise<void> {
   try {
     await writeAsStringAsync(NOTIFICATIONS_CACHE_FILE, JSON.stringify([]))
-    console.log('[NotificationStorage] ✅ All notifications cleared')
+    // console.log('[NotificationStorage] ✅ All notifications cleared')
   } catch (error: any) {
     console.error('[NotificationStorage] ❌ Error clearing notifications:', error.message)
   }

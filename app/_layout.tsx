@@ -43,7 +43,7 @@ function RootNavigator() {
   // Sync settings with database
   useDatabaseSync()
   
-  console.log('[RootNavigator] 🔄 Auth state:', { user: !!user, loading })
+  // console.log('[RootNavigator] 🔄 Auth state:', { user: !!user, loading })
   
   if (loading) return null
   
