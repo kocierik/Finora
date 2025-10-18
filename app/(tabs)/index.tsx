@@ -140,13 +140,47 @@ export default function HomeScreen() {
         setUserDisplayName(profile.display_name)
       }
       // Carica le categorie dalla tabella categories
-      const normalizedCats = (categories || []).map((c: any) => ({
+      let normalizedCats = (categories || []).map((c: any) => ({
         id: c.id,
         name: c.name,
         icon: c.icon,
         color: c.color,
         sort_order: c.sort_order,
       }))
+      
+      // If no categories exist, create default ones
+      if (normalizedCats.length === 0) {
+        console.log('[Home] 📊 No categories found, creating default categories...')
+        const DEFAULT_CATEGORIES = [
+          { name: 'Food & Drinks', icon: '🍽️', color: '#F59E0B', sort_order: 0 },
+          { name: 'Transport', icon: '🚗', color: '#10B981', sort_order: 1 },
+          { name: 'Home & Utilities', icon: '🏠', color: '#3B82F6', sort_order: 2 },
+          { name: 'Entertainment', icon: '🎬', color: '#EF4444', sort_order: 3 },
+          { name: 'Health & Personal', icon: '🏥', color: '#EC4899', sort_order: 4 },
+          { name: 'Miscellaneous', icon: '📦', color: '#8B5CF6', sort_order: 5 }
+        ]
+        
+        const { data: newCategories, error: createError } = await supabase
+          .from('categories')
+          .insert(DEFAULT_CATEGORIES.map(cat => ({
+            ...cat,
+            user_id: user.id
+          })))
+          .select()
+        
+        if (createError) {
+          console.error('Error creating default categories:', createError)
+        } else {
+          normalizedCats = (newCategories || []).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            icon: c.icon,
+            color: c.color,
+            sort_order: c.sort_order,
+          }))
+        }
+      }
+      
       setDbCategories(normalizedCats)
       
       const totalInvested = (inv || []).reduce((s, it) => s + (it.quantity || 0) * (it.average_price || 0), 0)
@@ -700,35 +734,75 @@ export default function HomeScreen() {
             </View>
             <View style={styles.formRow}>
               <ThemedText style={styles.formLabel}>{t('category')}</ThemedText>
-              <View style={styles.categoryRow}>
-                {availableCategories.map((c) => {
-                  const isSelected = newCategory.toLowerCase() === c.name.toLowerCase()
-                  return (
-                    <TouchableOpacity
-                      key={c.name}
-                      style={[
-                        styles.categoryChip, 
-                        isSelected && styles.categoryChipActive,
-                        { 
-                          borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
-                          backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
-                        }
-                      ]}
-                      onPress={() => {
-                        setNewCategory(c.name)
-                        setNewCategoryId(c.id)
-                      }}
-                    >
-                      <ThemedText style={[
-                        styles.categoryChipText, 
-                        isSelected && styles.categoryChipTextActive,
-                        isSelected && c.color && { color: c.color }
-                      ]}>
-                        {c.icon ? `${c.icon} ` : ''}{shortenCategoryName(c.name)}
-                      </ThemedText>
-                    </TouchableOpacity>
-                  )
-                })}
+              <View style={styles.categoryGrid}>
+                <View style={styles.categoryColumn}>
+                  {availableCategories.slice(0, 3).map((c) => {
+                    const isSelected = newCategory.toLowerCase() === c.name.toLowerCase()
+                    return (
+                      <TouchableOpacity
+                        key={c.name}
+                        style={[
+                          styles.categoryChip, 
+                          isSelected && styles.categoryChipActive,
+                          { 
+                            borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
+                            backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
+                          }
+                        ]}
+                        onPress={() => {
+                          setNewCategory(c.name)
+                          setNewCategoryId(c.id)
+                        }}
+                      >
+                        <ThemedText 
+                          style={[
+                            styles.categoryChipText, 
+                            isSelected && styles.categoryChipTextActive,
+                            isSelected && c.color && { color: c.color }
+                          ]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {c.icon ? `${c.icon} ` : ''}{shortenCategoryName(c.name)}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
+                <View style={styles.categoryColumn}>
+                  {availableCategories.slice(3, 6).map((c) => {
+                    const isSelected = newCategory.toLowerCase() === c.name.toLowerCase()
+                    return (
+                      <TouchableOpacity
+                        key={c.name}
+                        style={[
+                          styles.categoryChip, 
+                          isSelected && styles.categoryChipActive,
+                          { 
+                            borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
+                            backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
+                          }
+                        ]}
+                        onPress={() => {
+                          setNewCategory(c.name)
+                          setNewCategoryId(c.id)
+                        }}
+                      >
+                        <ThemedText 
+                          style={[
+                            styles.categoryChipText, 
+                            isSelected && styles.categoryChipTextActive,
+                            isSelected && c.color && { color: c.color }
+                          ]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {c.icon ? `${c.icon} ` : ''}{shortenCategoryName(c.name)}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
               </View>
             </View>
             <View style={styles.formRow}>
@@ -1039,32 +1113,69 @@ export default function HomeScreen() {
                 <ThemedText style={styles.addModalCloseText}>✕</ThemedText>
               </Pressable>
             </View>
-            <View style={styles.categoryRow}>
-              {availableCategories.map((c, i) => {
-                const isSelected = selectedTx?.category_id === c.id || selectedTx?.category?.toLowerCase() === c.name.toLowerCase()
-                return (
-                  <TouchableOpacity
-                    key={`${c.name}-${i}`}
-                    style={[
-                      styles.categoryChip, 
-                      isSelected && styles.categoryChipActive,
-                      { 
-                        borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
-                        backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
-                      }
-                    ]}
-                    onPress={() => handleSelectRecentCategory(c.id)}
-                  >
-                    <ThemedText style={[
-                      styles.categoryChipText, 
-                      isSelected && styles.categoryChipTextActive,
-                      isSelected && c.color && { color: c.color }
-                    ]}>
-                      {c.icon ? `${c.icon} ` : ''}{shortenCategoryName(c.name)}
-                    </ThemedText>
-                  </TouchableOpacity>
-                )
-              })}
+            <View style={styles.categoryGrid}>
+              <View style={styles.categoryColumn}>
+                {availableCategories.slice(0, 3).map((c, i) => {
+                  const isSelected = selectedTx?.category_id === c.id || selectedTx?.category?.toLowerCase() === c.name.toLowerCase()
+                  return (
+                    <TouchableOpacity
+                      key={`${c.name}-${i}`}
+                      style={[
+                        styles.categoryChip, 
+                        isSelected && styles.categoryChipActive,
+                        { 
+                          borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
+                          backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
+                        }
+                      ]}
+                      onPress={() => handleSelectRecentCategory(c.id)}
+                    >
+                      <ThemedText 
+                        style={[
+                          styles.categoryChipText, 
+                          isSelected && styles.categoryChipTextActive,
+                          isSelected && c.color && { color: c.color }
+                        ]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {c.icon ? `${c.icon} ` : ''}{shortenCategoryName(c.name)}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+              <View style={styles.categoryColumn}>
+                {availableCategories.slice(3, 6).map((c, i) => {
+                  const isSelected = selectedTx?.category_id === c.id || selectedTx?.category?.toLowerCase() === c.name.toLowerCase()
+                  return (
+                    <TouchableOpacity
+                      key={`${c.name}-${i+3}`}
+                      style={[
+                        styles.categoryChip, 
+                        isSelected && styles.categoryChipActive,
+                        { 
+                          borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
+                          backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
+                        }
+                      ]}
+                      onPress={() => handleSelectRecentCategory(c.id)}
+                    >
+                      <ThemedText 
+                        style={[
+                          styles.categoryChipText, 
+                          isSelected && styles.categoryChipTextActive,
+                          isSelected && c.color && { color: c.color }
+                        ]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {c.icon ? `${c.icon} ` : ''}{shortenCategoryName(c.name)}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
             </View>
           </View>
         </View>
@@ -1623,6 +1734,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  categoryColumn: {
+    flex: 1,
+    maxWidth: '48%',
+    gap: 5,
+  },
   categoryChip: {
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -1630,6 +1751,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 3,
   },
   categoryChipActive: {
     backgroundColor: 'rgba(6,182,212,0.15)',
@@ -1638,8 +1762,8 @@ const styles = StyleSheet.create({
   categoryChipText: {
     color: '#cbd5e1',
     fontSize: 12,
-    marginRight: 10,
     fontWeight: '600',
+    textAlign: 'center',
   },
   categoryChipTextActive: {
     color: '#06b6d4',

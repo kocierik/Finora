@@ -62,6 +62,16 @@ export default function ExpensesScreen() {
 
   // Note: Do NOT early-return before hooks. Render guards are applied later to keep hook order stable.
 
+  // Default categories for new users
+  const DEFAULT_CATEGORIES = [
+    { name: 'Food & Drinks', icon: '🍽️', color: '#F59E0B', sort_order: 0 },
+    { name: 'Transport', icon: '🚗', color: '#10B981', sort_order: 1 },
+    { name: 'Home & Utilities', icon: '🏠', color: '#3B82F6', sort_order: 2 },
+    { name: 'Entertainment', icon: '🎬', color: '#EF4444', sort_order: 3 },
+    { name: 'Health & Personal', icon: '🏥', color: '#EC4899', sort_order: 4 },
+    { name: 'Miscellaneous', icon: '📦', color: '#8B5CF6', sort_order: 5 }
+  ]
+
   // Load categories from DB categories table
   const loadCategoriesFromDb = useCallback(async () => {
     if (!user) return
@@ -73,14 +83,41 @@ export default function ExpensesScreen() {
         .order('sort_order', { ascending: true })
       if (error) throw error
       
-      const normalized = (data || []).map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        icon: c.icon,
-        color: c.color,
-        sort_order: c.sort_order,
-      }))
-      setDbCategories(normalized)
+      // If no categories exist, create default ones
+      if (!data || data.length === 0) {
+        console.log('[Expenses] 📊 No categories found, creating default categories...')
+        const { data: newCategories, error: createError } = await supabase
+          .from('categories')
+          .insert(DEFAULT_CATEGORIES.map(cat => ({
+            ...cat,
+            user_id: user.id
+          })))
+          .select()
+        
+        if (createError) {
+          console.error('Error creating default categories:', createError)
+          return
+        }
+        
+        const normalized = (newCategories || []).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          icon: c.icon,
+          color: c.color,
+          sort_order: c.sort_order,
+        }))
+        setDbCategories(normalized)
+      } else {
+        const normalized = data.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          icon: c.icon,
+          color: c.color,
+          sort_order: c.sort_order,
+        }))
+        setDbCategories(normalized)
+      }
+      
       // Trigger UI that depends on categories
       setCategoryUpdateTrigger((prev) => prev + 1)
     } catch (e) {

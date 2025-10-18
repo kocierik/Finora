@@ -66,6 +66,16 @@ export default function ProfileScreen() {
 
   // Note: Avoid early returns before hooks; render guards applied just before JSX return
 
+  // Default categories for new users
+  const DEFAULT_CATEGORIES = [
+    { name: 'Food & Drinks', icon: '🍽️', color: '#F59E0B', sort_order: 0 },
+    { name: 'Transport', icon: '🚗', color: '#10B981', sort_order: 1 },
+    { name: 'Home & Utilities', icon: '🏠', color: '#3B82F6', sort_order: 2 },
+    { name: 'Entertainment', icon: '🎬', color: '#EF4444', sort_order: 3 },
+    { name: 'Health & Personal', icon: '🏥', color: '#EC4899', sort_order: 4 },
+    { name: 'Miscellaneous', icon: '📦', color: '#8B5CF6', sort_order: 5 }
+  ]
+
   // Load categories from database
   const loadCategoriesFromDb = async () => {
     if (!user) return
@@ -83,17 +93,46 @@ export default function ProfileScreen() {
         return
       }
       
-      setDbCategories(data || [])
-      
-      // Convert to editable format
-      const editable = (data || []).map(cat => ({
-        key: cat.name.toLowerCase().replace(/\s+/g, '_'),
-        name: cat.name,
-        icon: cat.icon,
-        color: cat.color
-      }))
-      
-      setEditableCategories(editable)
+      // If no categories exist, create default ones
+      if (!data || data.length === 0) {
+        console.log('[Profile] 📊 No categories found, creating default categories...')
+        const { data: newCategories, error: createError } = await supabase
+          .from('categories')
+          .insert(DEFAULT_CATEGORIES.map(cat => ({
+            ...cat,
+            user_id: user.id
+          })))
+          .select()
+        
+        if (createError) {
+          console.error('Error creating default categories:', createError)
+          return
+        }
+        
+        setDbCategories(newCategories || [])
+        
+        // Convert to editable format
+        const editable = (newCategories || []).map(cat => ({
+          key: cat.name.toLowerCase().replace(/\s+/g, '_'),
+          name: cat.name,
+          icon: cat.icon,
+          color: cat.color
+        }))
+        
+        setEditableCategories(editable)
+      } else {
+        setDbCategories(data)
+        
+        // Convert to editable format
+        const editable = data.map(cat => ({
+          key: cat.name.toLowerCase().replace(/\s+/g, '_'),
+          name: cat.name,
+          icon: cat.icon,
+          color: cat.color
+        }))
+        
+        setEditableCategories(editable)
+      }
       
       // Reload category counts when categories are updated
       await loadCategoryCounts()
