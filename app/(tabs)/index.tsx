@@ -6,7 +6,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/lib/supabase';
 import { syncPendingExpenses } from '@/services/expense-sync';
-import { fetchExpenses } from '@/services/expenses';
 import { logger } from '@/services/logger';
 import { fetchInvestments } from '@/services/portfolio';
 import { Expense } from '@/types';
@@ -56,7 +55,7 @@ export default function HomeScreen() {
   }
 
   const [expenses, setExpenses] = useState<Expense[]>([])
-  const [dbCategories, setDbCategories] = useState<{ name: string; icon?: string; color?: string }[]>([])
+  const [dbCategories, setDbCategories] = useState<{ id: string; name: string; icon: string; color: string; sort_order: number }[]>([])
   const [portfolioPoints, setPortfolioPoints] = useState<{ x: string; y: number }[]>([])
   const [kpis, setKpis] = useState<{ totalInvested: number; totalMarket?: number; monthExpenses: number } | null>(null)
   const [hideBalances, setHideBalances] = useState(false)
@@ -64,6 +63,7 @@ export default function HomeScreen() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [newAmount, setNewAmount] = useState('')
   const [newCategory, setNewCategory] = useState('Other')
+  const [newCategoryId, setNewCategoryId] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState('')
   const [newDate, setNewDate] = useState<string>(() => new Date().toISOString().split('T')[0])
   const [showCalendarModal, setShowCalendarModal] = useState(false)
@@ -115,35 +115,47 @@ export default function HomeScreen() {
       console.log(`[Home] ✅ Synced ${syncResult.synced} new expenses from Google Wallet`)
     }
     
-      const [{ data: inv }, { data: exp }, { data: profile }] = await Promise.all([
+      const [{ data: inv }, { data: exp }, { data: profile }, { data: categories }] = await Promise.all([
         fetchInvestments(user.id),
-        fetchExpenses(user.id),
-        supabase.from('profiles').select('display_name, categories_config').eq('id', user.id).maybeSingle(),
+        supabase
+          .from('expenses')
+          .select(`
+            *,
+            categories (
+              id,
+              name,
+              icon,
+              color
+            )
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle(),
+        supabase.from('categories').select('*').eq('user_id', user.id).order('sort_order', { ascending: true }),
       ])
-      setExpenses(exp)
+      setExpenses(exp || [])
       
       // Carica il nome del profilo
       if (profile?.display_name) {
         setUserDisplayName(profile.display_name)
       }
-      // Carica le categorie salvate dall'utente
-      const cats = (profile?.categories_config as any[]) || []
-      const normalizedCats = cats
-        .filter(Boolean)
-        .map((c: any) => ({
-          name: (c?.name || '').toString(),
-          icon: c?.icon || undefined,
-          color: c?.color || undefined,
-        }))
+      // Carica le categorie dalla tabella categories
+      const normalizedCats = (categories || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        icon: c.icon,
+        color: c.color,
+        sort_order: c.sort_order,
+      }))
       setDbCategories(normalizedCats)
       
-      const totalInvested = inv.reduce((s, it) => s + (it.quantity || 0) * (it.average_price || 0), 0)
+      const totalInvested = (inv || []).reduce((s, it) => s + (it.quantity || 0) * (it.average_price || 0), 0)
       // create a simple 5-point series from cumulative invested (placeholder until price feed)
-      const step = Math.max(1, Math.floor(inv.length / 5))
-      const series = inv.filter((_, i) => i % step === 0).slice(0, 5).map((it, i) => ({ x: `${i+1}`, y: (it.quantity || 0) * (it.average_price || 0) }))
+      const step = Math.max(1, Math.floor((inv || []).length / 5))
+      const series = (inv || []).filter((_, i) => i % step === 0).slice(0, 5).map((it, i) => ({ x: `${i+1}`, y: (it.quantity || 0) * (it.average_price || 0) }))
       setPortfolioPoints(series.length ? series : [{ x: '1', y: totalInvested }])
       const now = new Date()
-      const monthExpenses = exp.filter(e => sameMonth(e.date, now.getFullYear(), now.getMonth())).reduce((s, e) => s + (e.amount || 0), 0)
+      const monthExpenses = (exp || []).filter(e => sameMonth(e.date, now.getFullYear(), now.getMonth())).reduce((s, e) => s + (e.amount || 0), 0)
       setKpis({ totalInvested, monthExpenses })
   }, [user?.id])
 
@@ -279,7 +291,17 @@ export default function HomeScreen() {
            today.getDate() === transactionDate.getDate()
   }
 
-  const availableCategories = (dbCategories?.length ? dbCategories : DEFAULT_CATEGORIES.map(c => ({ name: c.name, color: c.color, icon: c.icon })))
+  const availableCategories = (dbCategories?.length ? dbCategories : DEFAULT_CATEGORIES.map(c => ({ id: `temp-${c.name}`, name: c.name, color: c.color, icon: c.icon, sort_order: 0 }))).slice(0, 6)
+
+  // Set default category ID when categories are loaded
+  useEffect(() => {
+    if (dbCategories.length > 0 && !newCategoryId) {
+      const otherCategory = dbCategories.find(c => c.name.toLowerCase() === 'other')
+      if (otherCategory) {
+        setNewCategoryId(otherCategory.id)
+      }
+    }
+  }, [dbCategories, newCategoryId])
 
   const getCategoryInfo = (name?: string | null) => {
     if (!name) return null
@@ -293,21 +315,28 @@ export default function HomeScreen() {
     setShowCategoryModal(true)
   }
 
-  const handleSelectRecentCategory = async (categoryName: string) => {
+  const handleSelectRecentCategory = async (categoryId: string) => {
     if (!user || !selectedTx) return
     try {
       const merchant = selectedTx.merchant
+      // Find the category details
+      const category = dbCategories.find(c => c.id === categoryId)
+      if (!category) {
+        console.error('Category not found:', categoryId)
+        return
+      }
+
       // Update DB for all transactions of same merchant
       const { error } = await supabase
         .from('expenses')
-        .update({ category: categoryName.toLowerCase() })
+        .update({ category_id: categoryId })
         .eq('user_id', user.id)
         .eq('merchant', merchant)
       if (error) throw error
 
       // Update local state
       setExpenses(prev => prev.map(it =>
-        it.merchant === merchant ? { ...it, category: categoryName.toLowerCase() } : it
+        it.merchant === merchant ? { ...it, category_id: categoryId, categories: category } : it
       ))
 
       // Notify other screens
@@ -549,7 +578,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.recentList}>
               {sortedExpenses.slice(0, UI_CONSTANTS.RECENT_TRANSACTIONS_LIMIT).map((tx, idx) => {
-                const info = getCategoryInfo(tx.category || 'Other')
+                const info = tx.categories || getCategoryInfo(tx.category || 'Other')
                 const clr = (info?.color || '#06b6d4')
                 
                 return (
@@ -685,7 +714,10 @@ export default function HomeScreen() {
                           backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
                         }
                       ]}
-                      onPress={() => setNewCategory(c.name)}
+                      onPress={() => {
+                        setNewCategory(c.name)
+                        setNewCategoryId(c.id)
+                      }}
                     >
                       <ThemedText style={[
                         styles.categoryChipText, 
@@ -906,7 +938,7 @@ export default function HomeScreen() {
                       items.push({
                         user_id: user.id,
                         amount: amountNum,
-                        category: newCategory.toLowerCase(),
+                        category_id: newCategoryId,
                         date: `${yyyy}-${mm}-${dd}`,
                         raw_notification: 'manual',
                         merchant: newTitle || 'Manual',
@@ -922,7 +954,7 @@ export default function HomeScreen() {
                     items.push({
                       user_id: user.id,
                       amount: amountNum,
-                      category: newCategory.toLowerCase(),
+                      category_id: newCategoryId,
                       date: newDate,
                       raw_notification: 'manual',
                       merchant: newTitle || 'Manual',
@@ -960,6 +992,7 @@ export default function HomeScreen() {
                   }
                   setNewAmount('')
                   setNewCategory('Other')
+                  setNewCategoryId(null)
                   setNewTitle('')
                   setNewDate(new Date().toISOString().split('T')[0])
                   setIsRecurring(false)
@@ -1008,7 +1041,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.categoryRow}>
               {availableCategories.map((c, i) => {
-                const isSelected = selectedTx?.category?.toLowerCase() === c.name.toLowerCase()
+                const isSelected = selectedTx?.category_id === c.id || selectedTx?.category?.toLowerCase() === c.name.toLowerCase()
                 return (
                   <TouchableOpacity
                     key={`${c.name}-${i}`}
@@ -1020,7 +1053,7 @@ export default function HomeScreen() {
                         backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
                       }
                     ]}
-                    onPress={() => handleSelectRecentCategory(c.name)}
+                    onPress={() => handleSelectRecentCategory(c.id)}
                   >
                     <ThemedText style={[
                       styles.categoryChipText, 

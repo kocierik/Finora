@@ -28,11 +28,26 @@ export type Expense = {
   user_id: string
   amount: number
   merchant: string
-  category?: string
+  category?: string // Legacy field, will be deprecated
+  category_id?: string
+  categories?: {
+    id: string
+    name: string
+    icon: string
+    color: string
+  }
   currency?: string
   date: string
   raw_notification?: string
   created_at?: string
+  // Recurring transaction support
+  is_recurring?: boolean
+  recurring_group_id?: string
+  recurring_frequency?: string
+  recurring_total_occurrences?: number
+  recurring_index?: number
+  recurring_infinite?: boolean
+  recurring_stopped?: boolean
 }
 
 export type WalletNotification = {

@@ -28,6 +28,7 @@ export default function ExpensesScreen() {
   const [selectedTransaction, setSelectedTransaction] = useState<Expense | null>(null)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [showResetModal, setShowResetModal] = useState(false)
   const [transactionToDelete, setTransactionToDelete] = useState<Expense | null>(null)
   const [autoAssignedCount, setAutoAssignedCount] = useState(0)
   const [categoryUpdateTrigger, setCategoryUpdateTrigger] = useState(0)
@@ -39,8 +40,8 @@ export default function ExpensesScreen() {
   const [selectedHistoryCategory, setSelectedHistoryCategory] = useState<string | null>(null)
   const [categoryHistory, setCategoryHistory] = useState<Expense[]>([])
   const [categoryHistoryLoading, setCategoryHistoryLoading] = useState(false)
-  // Categories loaded from DB (profiles.categories_config)
-  const [dbCategories, setDbCategories] = useState<{ name: string; icon: string; color: string }[]>([])
+  // Categories loaded from DB (categories table)
+  const [dbCategories, setDbCategories] = useState<{ id: string; name: string; icon: string; color: string; sort_order: number }[]>([])
   
   // Month navigation state
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0) // 0 = current month, -1 = previous, 1 = next
@@ -61,25 +62,24 @@ export default function ExpensesScreen() {
 
   // Note: Do NOT early-return before hooks. Render guards are applied later to keep hook order stable.
 
-  // Load categories from DB profiles.categories_config
+  // Load categories from DB categories table
   const loadCategoriesFromDb = useCallback(async () => {
     if (!user) return
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('categories_config')
-        .eq('id', user.id)
-        .single()
+        .from('categories')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('sort_order', { ascending: true })
       if (error) throw error
-      const cats = (data?.categories_config as any[]) || []
-      // Normalize shape and take first 6 for main grid later via memo
-      const normalized = cats
-        .filter(Boolean)
-        .map((c: any) => ({
-          name: c.name ?? c.key ?? 'Other',
-          icon: c.icon ?? '📦',
-          color: c.color ?? '#10b981',
-        }))
+      
+      const normalized = (data || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        icon: c.icon,
+        color: c.color,
+        sort_order: c.sort_order,
+      }))
       setDbCategories(normalized)
       // Trigger UI that depends on categories
       setCategoryUpdateTrigger((prev) => prev + 1)
@@ -112,7 +112,15 @@ export default function ExpensesScreen() {
       
       const { data } = await supabase
         .from('expenses')
-        .select('*')
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            icon,
+            color
+          )
+        `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
       
@@ -125,6 +133,14 @@ export default function ExpensesScreen() {
         }
         return dateB.getTime() - dateA.getTime()
       }) ?? []
+      
+      // Debug: Log sample transactions to see their category structure
+      console.log('[Expenses] 🔄 Sample transactions after fetch:', sortedItems.slice(0, 3).map(item => ({
+        merchant: item.merchant,
+        category_id: item.category_id,
+        categories: item.categories
+      })))
+      
       
       // Auto-assign categories for new transactions
       const updatedItems = await autoAssignCategories(sortedItems)
@@ -178,7 +194,15 @@ export default function ExpensesScreen() {
       
       const { data, error } = await supabase
         .from('expenses')
-        .select('*')
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            icon,
+            color
+          )
+        `)
         .eq('user_id', user.id)
         .gte('date', startDateStr)
         .lte('date', endDateStr)
@@ -235,24 +259,20 @@ export default function ExpensesScreen() {
       loadAllMonthItems(curYear, curMonth)
       // Force pie chart update
       setCategoryUpdateTrigger(prev => prev + 1)
+      // Force categories reload
+      loadCategoriesFromDb()
     })
 
     const subSettings = DeviceEventEmitter.addListener('settings:categoriesUpdated', () => {
       console.log('[Expenses] 🎨 Categories updated via settings, forcing UI refresh')
+      loadCategoriesFromDb()
+      fetchExpenses()
       setCategoryUpdateTrigger(prev => prev + 1)
     })
 
     return () => { clearInterval(interval); sub.remove(); subSettings.remove() }
   }, [fetchExpenses])
 
-
-  // Focus effect to reload data when tab comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      fetchExpenses()
-      loadExpenseThresholdsData()
-    }, [fetchExpenses, loadExpenseThresholdsData])
-  )
 
   // KPIs
   // Month calculations with navigation support
@@ -263,6 +283,17 @@ export default function ExpensesScreen() {
   const prevMonthDate = new Date(curYear, curMonth - 1, 1)
   const prevMonth = prevMonthDate.getMonth()
   const prevYear = prevMonthDate.getFullYear()
+
+  // Focus effect to reload data when tab comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchExpenses()
+      loadExpenseThresholdsData()
+      loadAllMonthItems(curYear, curMonth)
+      // Force pie chart update when tab comes into focus
+      setCategoryUpdateTrigger(prev => prev + 1)
+    }, [fetchExpenses, loadExpenseThresholdsData, loadAllMonthItems, curYear, curMonth])
+  )
   const monthTotal = items.filter((e) => sameMonth(e.date, curYear, curMonth)).reduce((s, e) => s + (e.amount || 0), 0)
   const prevTotal = items.filter((e) => sameMonth(e.date, prevYear, prevMonth)).reduce((s, e) => s + (e.amount || 0), 0)
   const delta = monthTotal - prevTotal
@@ -291,6 +322,7 @@ export default function ExpensesScreen() {
   // Spending categories for main grid (first 6)
   const categories = useMemo(() => {
     return (effectiveCategories || []).slice(0, 6).map(c => ({
+      id: (c as any).id || `temp-${c.name}`,
       name: c.name,
       icon: c.icon,
       color: c.color,
@@ -301,17 +333,21 @@ export default function ExpensesScreen() {
 
   // Main categories for selection (use all effective categories)
   const mainCategories = useMemo(() => {
-    return (effectiveCategories || []).map(c => ({
+    return (effectiveCategories || []).map(c => {
+      const category = c as any
+      return {
+        id: category.id || `temp-${c.name}`,
       name: c.name,
       icon: c.icon,
       color: c.color,
       amount: 0,
       percentage: 0,
-    }))
+      }
+    })
   }, [effectiveCategories])
 
-  // Available categories for selection (main categories only)
-  const availableCategories = mainCategories
+  // Available categories for selection (first 6 categories only)
+  const availableCategories = categories
 
   // i18n - category labels by current language
   const translateCategory = (name: string) => {
@@ -351,8 +387,8 @@ export default function ExpensesScreen() {
     
     return categories.map(cat => {
       const categoryItems = allMonthItems.filter(e => 
-        e.category && 
-        e.category.toLowerCase() === cat.name.toLowerCase()
+        e.categories && 
+        e.categories.name.toLowerCase() === cat.name.toLowerCase()
       )
       const amount = categoryItems.reduce((sum, e) => sum + (e.amount || 0), 0)
       const percentage = monthTotal > 0 ? (amount / monthTotal) * 100 : 0
@@ -429,9 +465,17 @@ export default function ExpensesScreen() {
   }, [categoryPulseAnim])
 
   // Open category history modal and fetch all-time history for that category
-  const openCategoryHistory = useCallback(async (categoryName: string) => {
+  const openCategoryHistory = useCallback(async (categoryId: string) => {
     if (!user) return
-    setSelectedHistoryCategory(categoryName)
+    
+    // Find the category details
+    const category = dbCategories.find(c => c.id === categoryId)
+    if (!category) {
+      console.error('Category not found:', categoryId)
+      return
+    }
+    
+    setSelectedHistoryCategory(category.name)
     setShowCategoryHistoryModal(true)
     setCategoryHistory([])
     setCategoryHistoryLoading(true)
@@ -444,9 +488,17 @@ export default function ExpensesScreen() {
 
       const { data, error } = await supabase
         .from('expenses')
-        .select('*')
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            icon,
+            color
+          )
+        `)
         .eq('user_id', user.id)
-        .eq('category', categoryName.toLowerCase())
+        .eq('category_id', categoryId)
         .gte('date', startDateStr)
         .lte('date', endDateStr)
         .order('date', { ascending: false })
@@ -457,16 +509,23 @@ export default function ExpensesScreen() {
     } finally {
       setCategoryHistoryLoading(false)
     }
-  }, [user, curYear, curMonth])
+  }, [user, curYear, curMonth, dbCategories])
 
-  const handleCategorySelect = useCallback(async (category: string) => {
+  const handleCategorySelect = useCallback(async (categoryId: string) => {
     if (!selectedTransaction || !user) return
 
     try {
+      // Find the category details
+      const category = dbCategories.find(c => c.id === categoryId)
+      if (!category) {
+        console.error('Category not found:', categoryId)
+        return
+      }
+
       // Update all transactions with the same merchant name
       const { error } = await supabase
         .from('expenses')
-        .update({ category: category.toLowerCase() })
+        .update({ category_id: categoryId })
         .eq('user_id', user.id)
         .eq('merchant', selectedTransaction.merchant)
 
@@ -475,11 +534,11 @@ export default function ExpensesScreen() {
       // Update local state for all matching transactions
       const updatedItems = items.map(item => 
         item.merchant === selectedTransaction.merchant 
-          ? { ...item, category: category.toLowerCase() }
+          ? { ...item, category_id: categoryId, categories: category }
           : item
       )
       
-      console.log('Updating categories for merchant:', selectedTransaction.merchant, 'to category:', category)
+      console.log('Updating categories for merchant:', selectedTransaction.merchant, 'to category:', category.name)
       console.log('Updated items count:', updatedItems.length)
       console.log('Items with new category:', updatedItems.filter(item => item.merchant === selectedTransaction.merchant).length)
       
@@ -488,7 +547,7 @@ export default function ExpensesScreen() {
       // Update month dataset used by pie chart so it refreshes immediately
       setAllMonthItems(prev => prev.map(item =>
         item.merchant === selectedTransaction.merchant
-          ? { ...item, category: category.toLowerCase() }
+          ? { ...item, category_id: categoryId, categories: category }
           : item
       ))
 
@@ -500,12 +559,51 @@ export default function ExpensesScreen() {
     } catch (error) {
       console.error('Error updating category:', error)
     }
-  }, [selectedTransaction, user])
+  }, [selectedTransaction, user, dbCategories])
 
   const closeCategoryModal = useCallback(() => {
     setShowCategoryModal(false)
     setSelectedTransaction(null)
   }, [])
+
+  // Reset all expenses function
+  const handleResetAllExpenses = useCallback(async () => {
+    if (!user) return
+    
+    try {
+      // Delete all expenses for the user
+      const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('user_id', user.id)
+      
+      if (error) throw error
+      
+      // Clear local state
+      setItems([])
+      setAllMonthItems([])
+      
+      // Force pie chart update
+      setCategoryUpdateTrigger(prev => prev + 1)
+      
+      setShowResetModal(false)
+      
+      Alert.alert(
+        'Reset Completato',
+        'Tutte le spese sono state eliminate con successo',
+        [{ text: 'OK', style: 'default' }]
+      )
+      
+      console.log('[Expenses] ✅ All expenses reset successfully')
+    } catch (error) {
+      console.error('[Expenses] ❌ Error resetting expenses:', error)
+      Alert.alert(
+        'Errore',
+        'Impossibile eliminare le spese. Riprova.',
+        [{ text: 'OK', style: 'default' }]
+      )
+    }
+  }, [user])
 
   const handleDeleteTransaction = useCallback(async (transaction: Expense) => {
     if (!transaction.id) {
@@ -729,15 +827,15 @@ export default function ExpensesScreen() {
     if (!user) return transactions
 
     const updatedTransactions = [...transactions]
-    const transactionsToUpdate: { id: string; category: string }[] = []
+    const transactionsToUpdate: { id: string; category_id: string }[] = []
 
     // Group transactions by merchant
     const merchantCategories = new Map<string, string>()
     
-    // First pass: collect existing categories for each merchant
+    // First pass: collect existing category_ids for each merchant
     for (const transaction of updatedTransactions) {
-      if (transaction.category && transaction.merchant) {
-        merchantCategories.set(transaction.merchant, transaction.category)
+      if (transaction.category_id && transaction.merchant) {
+        merchantCategories.set(transaction.merchant, transaction.category_id)
       }
     }
 
@@ -745,10 +843,13 @@ export default function ExpensesScreen() {
     for (let i = 0; i < updatedTransactions.length; i++) {
       const transaction = updatedTransactions[i]
       
-      if (!transaction.category && transaction.merchant && merchantCategories.has(transaction.merchant)) {
-        const category = merchantCategories.get(transaction.merchant)!
-        updatedTransactions[i] = { ...transaction, category }
-        transactionsToUpdate.push({ id: transaction.id!, category })
+      if (!transaction.category_id && transaction.merchant && merchantCategories.has(transaction.merchant)) {
+        const categoryId = merchantCategories.get(transaction.merchant)!
+        const category = dbCategories.find(c => c.id === categoryId)
+        if (category) {
+          updatedTransactions[i] = { ...transaction, category_id: categoryId, categories: category }
+          transactionsToUpdate.push({ id: transaction.id!, category_id: categoryId })
+        }
       }
     }
 
@@ -758,38 +859,64 @@ export default function ExpensesScreen() {
         for (const update of transactionsToUpdate) {
           await supabase
             .from('expenses')
-            .update({ category: update.category.toLowerCase() })
+            .update({ category_id: update.category_id })
             .eq('id', update.id)
         }
         console.log(`Auto-assigned categories to ${transactionsToUpdate.length} transactions`)
-        setAutoAssignedCount(transactionsToUpdate.length)
-        
-        // Clear the notification after 3 seconds
-        setTimeout(() => {
-          setAutoAssignedCount(0)
-        }, 3000)
+          setAutoAssignedCount(transactionsToUpdate.length)
+          
+          // Clear the notification after 3 seconds
+          setTimeout(() => {
+            setAutoAssignedCount(0)
+          }, 3000)
       } catch (error) {
         console.error('Error auto-assigning categories:', error)
       }
     }
 
     return updatedTransactions
-  }, [user])
+  }, [user, dbCategories])
 
   // Function to get category for a merchant
   const getMerchantCategory = useCallback((merchant: string) => {
-    const transaction = items.find(item => item.merchant === merchant && item.category)
-    return transaction?.category
-  }, [items])
+    // First try to find a transaction with categories already loaded
+    const transactionWithCategories = items.find(item => item.merchant === merchant && item.categories)
+    if (transactionWithCategories?.categories) {
+      return transactionWithCategories.categories
+    }
+    
+    // If no categories loaded, try to find by category_id and lookup in dbCategories
+    const transactionWithCategoryId = items.find(item => item.merchant === merchant && item.category_id)
+    if (transactionWithCategoryId?.category_id) {
+      const category = dbCategories.find(c => c.id === transactionWithCategoryId.category_id)
+      if (category) {
+        return category
+      }
+    }
+    
+    // Fallback to legacy category field
+    const transactionWithLegacyCategory = items.find(item => item.merchant === merchant && item.category)
+    if (transactionWithLegacyCategory?.category) {
+      const category = dbCategories.find(c => c.name.toLowerCase() === transactionWithLegacyCategory.category?.toLowerCase())
+      if (category) {
+        return category
+      }
+    }
+    
+    return null
+  }, [items, dbCategories])
 
   // Function to get category info for display
   const getCategoryInfo = useCallback((merchant: string) => {
     const category = getMerchantCategory(merchant)
-    const categoryToUse = category || 'Other' // Default to 'Other' if no category
+    if (category) {
+      return category
+    }
     
-    const categoryInfo = availableCategories.find(c => c.name.toLowerCase() === categoryToUse.toLowerCase())
-    return categoryInfo ? { ...categoryInfo, name: categoryToUse } : null
-  }, [getMerchantCategory])
+    // Fallback to 'Other' category if no category found
+    const otherCategory = dbCategories.find(c => c.name.toLowerCase() === 'other')
+    return otherCategory || null
+  }, [getMerchantCategory, dbCategories])
 
   if (loading) {
   return (
@@ -1078,7 +1205,7 @@ export default function ExpensesScreen() {
                     categoryPulseAnim.setValue(1)
                   }}
                   onPress={() => {
-                    openCategoryHistory(category.name)
+                    openCategoryHistory(category.id)
                   }}
                 >
                   <Animated.View
@@ -1179,6 +1306,18 @@ export default function ExpensesScreen() {
                 {isTransitioning ? t('loading') : t('recent_transactions')}
               </ThemedText>
               <View style={styles.headerActions}>
+                <Pressable 
+                  style={styles.resetButton}
+                  onPress={() => setShowResetModal(true)}
+                  disabled={refreshing || isTransitioning}
+                >
+                  <ThemedText style={[
+                    styles.resetButtonText,
+                    (refreshing || isTransitioning) && styles.resetButtonTextDisabled
+                  ]}>
+                    🗑️ Reset
+                  </ThemedText>
+                </Pressable>
                 <Pressable 
                   style={styles.syncButton}
                   onPress={syncFromNotifications}
@@ -1283,12 +1422,12 @@ export default function ExpensesScreen() {
                               </ThemedText>
                               {(() => {
                                 const categoryInfo = getCategoryInfo(item.merchant)
-                                const isAutoAssigned = !item.category && categoryInfo?.name === 'Other'
-                                const isDefaultOther = !item.category && !getMerchantCategory(item.merchant)
+                                const isAutoAssigned = !item.categories && categoryInfo?.name === 'Other'
+                                const isDefaultOther = !item.categories && !item.category_id && !item.category
                                 
                                 // Debug for specific merchant (simplified)
                                 if (DEBUG_MODE && item.merchant === 'CAFE DES CHINEU') {
-                                  console.log(`[Expenses] 🏪 ${item.merchant}: ${item.category || 'no category'} -> ${categoryInfo?.name || 'Other'}`)
+                                  console.log(`[Expenses] 🏪 ${item.merchant}: ${item.categories?.name || 'no category'} -> ${categoryInfo?.name || 'Other'}`)
                                 }
                                 
                                 // Show badge if categoryInfo exists
@@ -1456,7 +1595,7 @@ export default function ExpensesScreen() {
                           styles.categoryOptionButton,
                           { borderColor: category.color }
                         ]}
-                        onPress={() => handleCategorySelect(category.name)}
+                        onPress={() => handleCategorySelect(category.id)}
                       >
                         <LinearGradient
                           colors={[`${category.color}15`, `${category.color}08`]}
@@ -1520,7 +1659,7 @@ export default function ExpensesScreen() {
                 ) : (
                   categoryHistory.map(tx => {
                     // Trova il colore della categoria selezionata
-                    const categoryColor = dbCategories.find(cat => 
+                    const categoryColor = tx.categories?.color || dbCategories.find(cat => 
                       cat.name.toLowerCase() === selectedHistoryCategory?.toLowerCase()
                     )?.color
                     
@@ -1614,6 +1753,49 @@ export default function ExpensesScreen() {
                   }
                 }} style={[styles.modalButton, { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}> 
                   <ThemedText style={[styles.modalButtonText, { color: '#ef4444' }]}>{t('delete')}</ThemedText>
+                </Pressable>
+              </View>
+            </Card>
+          </Animated.View>
+        </View>
+      </Modal>
+
+      {/* Reset Confirmation Modal */}
+      <Modal
+        visible={showResetModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowResetModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}> 
+            <Card style={styles.modalCard}>
+              <LinearGradient
+                colors={['rgba(239, 68, 68, 0)', 'rgba(4, 32, 29, 0.06)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalGradient}
+              />
+              <View style={styles.modalHeader}>
+                <ThemedText style={styles.modalTitle}>Reset Spese</ThemedText>
+                <Pressable onPress={() => setShowResetModal(false)} style={styles.closeButton}>
+                  <ThemedText style={styles.closeButtonText}>✕</ThemedText>
+                </Pressable>
+              </View>
+              <View style={{ alignItems: 'center', padding: 16 }}>
+                <ThemedText style={styles.modalMessage}>
+                  Sei sicuro di voler eliminare TUTTE le spese? Questa azione non può essere annullata.
+                </ThemedText>
+                <ThemedText style={[styles.modalMessage, { marginTop: 8, fontSize: 12, color: '#ef4444' }]}>
+                  Verranno eliminate {items.length} transazioni
+                </ThemedText>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'flex-end' }}>
+                <Pressable onPress={() => setShowResetModal(false)} style={[styles.modalButton, { backgroundColor: UI_CONSTANTS.GLASS_BG_SM, borderColor: UI_CONSTANTS.GLASS_BORDER_SM }] }>
+                  <ThemedText style={styles.modalButtonText}>Annulla</ThemedText>
+                </Pressable>
+                <Pressable onPress={handleResetAllExpenses} style={[styles.modalButton, { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}> 
+                  <ThemedText style={[styles.modalButtonText, { color: '#ef4444' }]}>Elimina Tutto</ThemedText>
                 </Pressable>
               </View>
             </Card>
@@ -1957,6 +2139,25 @@ const styles = StyleSheet.create({
     color: '#10b981',
   },
   syncButtonTextDisabled: {
+    opacity: 0.6,
+  },
+  resetButton: {
+    width: 60,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  resetButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ef4444',
+  },
+  resetButtonTextDisabled: {
     opacity: 0.6,
   },
   sectionSubtitle: {

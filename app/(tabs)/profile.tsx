@@ -22,12 +22,14 @@ export default function ProfileScreen() {
   const [successMessage, setSuccessMessage] = useState('')
   const router = useRouter()
   const [editableCategories, setEditableCategories] = useState(categories)
+  const [dbCategories, setDbCategories] = useState<Array<{ id: string; name: string; icon: string; color: string; sort_order: number }>>([])
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({})
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [editIndex, setEditIndex] = useState<number | null>(null)
   const [editEmoji, setEditEmoji] = useState('')
   const [editName, setEditName] = useState('')
   const [editColor, setEditColor] = useState('')
+  const [categoriesLoading, setCategoriesLoading] = useState(false)
   const colorPalette = ['#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#EC4899', '#8B5CF6']
   const emojiSuggestions = ['📦','🚗','🛒','🛍️','🌃','✈️','🏥','📚','⚡','🎬']
   const firstGrapheme = (text: string) => (Array.from(text || '')[0] || '')
@@ -64,6 +66,96 @@ export default function ProfileScreen() {
 
   // Note: Avoid early returns before hooks; render guards applied just before JSX return
 
+  // Load categories from database
+  const loadCategoriesFromDb = async () => {
+    if (!user) return
+    
+    setCategoriesLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('sort_order', { ascending: true })
+      
+      if (error) {
+        console.error('Error loading categories:', error)
+        return
+      }
+      
+      setDbCategories(data || [])
+      
+      // Convert to editable format
+      const editable = (data || []).map(cat => ({
+        key: cat.name.toLowerCase().replace(/\s+/g, '_'),
+        name: cat.name,
+        icon: cat.icon,
+        color: cat.color
+      }))
+      
+      setEditableCategories(editable)
+      
+      // Reload category counts when categories are updated
+      await loadCategoryCounts()
+    } catch (error) {
+      console.error('Error loading categories:', error)
+    } finally {
+      setCategoriesLoading(false)
+    }
+  }
+
+  // Load category counts
+  const loadCategoryCounts = async () => {
+    if (!user) {
+      console.log('[Profile] 📊 No user, skipping category counts')
+      return
+    }
+    
+    console.log('[Profile] 📊 Loading category counts for user:', user.id)
+    
+    try {
+      // Query expenses with category_id and join with categories table
+      const { data: expensesData, error: expensesError } = await supabase
+        .from('expenses')
+        .select(`
+          id,
+          merchant,
+          category_id,
+          categories (
+            name
+          )
+        `)
+        .eq('user_id', user.id)
+      
+      console.log('[Profile] 📊 Expenses query result:', { data: expensesData, error: expensesError })
+      
+      if (expensesError) {
+        console.log('[Profile] ⚠️  Error querying expenses:', expensesError)
+        return
+      }
+      
+      if (!expensesData || expensesData.length === 0) {
+        console.log('[Profile] 📊 No expenses found for user')
+        setCategoryCounts({})
+        return
+      }
+      
+      const counts: Record<string, number> = {}
+      
+      console.log('[Profile] 📊 Processing expenses data...')
+      expensesData.forEach((expense: any) => {
+        // Use categories.name from the join, fallback to 'Other' if no category
+        const categoryName = expense.categories?.name || 'Other'
+        counts[categoryName] = (counts[categoryName] || 0) + 1
+      })
+      
+      console.log('[Profile] 📊 Final calculated category counts:', counts)
+      setCategoryCounts(counts)
+    } catch (e) {
+      console.log('[Profile] ⚠️  Error loading category counts:', e)
+    }
+  }
+
   useEffect(() => {
     ;(async () => {
       if (!user) return
@@ -96,21 +188,9 @@ export default function ProfileScreen() {
       } catch (error) {
         console.log('[Profile] ⚠️  Error loading expense thresholds:', error)
       }
-      // Load category counts
-      try {
-        const { data } = await supabase
-          .from('expenses')
-          .select('category')
-          .eq('user_id', user.id)
-        const counts: Record<string, number> = {}
-        ;(data || []).forEach((e: any) => {
-          const key = (e.category || 'Other').toString()
-          counts[key] = (counts[key] || 0) + 1
-        })
-        setCategoryCounts(counts)
-      } catch (e) {
-        console.log('[Profile] ⚠️  Error loading category counts:', e)
-      }
+      
+      // Load categories from database (this will also load category counts)
+      await loadCategoriesFromDb()
     })()
 
     // Entrance animations
@@ -153,6 +233,21 @@ export default function ProfileScreen() {
     setEditableCategories(categories)
   }, [categories])
 
+  // Listen for external category updates
+  useEffect(() => {
+    const handleCategoriesUpdate = () => {
+      loadCategoriesFromDb()
+    }
+
+    DeviceEventEmitter.addListener('settings:categoriesUpdated', handleCategoriesUpdate)
+    DeviceEventEmitter.addListener('expenses:externalUpdate', handleCategoriesUpdate)
+
+    return () => {
+      DeviceEventEmitter.removeAllListeners('settings:categoriesUpdated')
+      DeviceEventEmitter.removeAllListeners('expenses:externalUpdate')
+    }
+  }, [user])
+
   const save = async () => {
     if (!user) return
     setLoading(true)
@@ -183,27 +278,124 @@ export default function ProfileScreen() {
   }
 
   const saveCategories = async (override?: typeof editableCategories) => {
-    // Basic validation: limit to 6, ensure name/icon/color present
-    const source = override ?? editableCategories
-    const sanitized = (source || []).slice(0, 6).map(c => ({
-      key: c.key || (c.name || '').toLowerCase().replace(/\s+/g, '_') || 'other',
-      name: (c.name?.trim() || 'Other').slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH),
-      icon: normalizeEmoji(c.icon?.trim() || ''),
-      color: c.color?.trim() || '#10b981',
-    }))
-    setCategories(sanitized)
-    // Persist immediately to DB to ensure other tabs see the change
+    if (!user) return
+    
+    setCategoriesLoading(true)
     try {
-      if (user) {
-        await supabase
-          .from('profiles')
-          .upsert({ id: user.id, categories_config: sanitized, updated_at: new Date().toISOString() })
+      // Basic validation: limit to 6, ensure name/icon/color present
+      const source = override ?? editableCategories
+      const sanitized = (source || []).slice(0, 6).map((c, index) => ({
+        name: (c.name?.trim() || 'Other').slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH),
+        icon: normalizeEmoji(c.icon?.trim() || ''),
+        color: c.color?.trim() || '#10b981',
+        sort_order: index
+      }))
+      
+      // Get current categories to preserve IDs
+      const { data: currentCategories } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('sort_order', { ascending: true })
+      
+      const updatedCategories = []
+      
+      // Update existing categories or create new ones
+      for (let i = 0; i < sanitized.length; i++) {
+        const newCategory = sanitized[i]
+        const existingCategory = currentCategories?.[i]
+        
+        if (existingCategory) {
+          // Update existing category (preserve ID)
+          const { error } = await supabase
+            .from('categories')
+            .update({
+              name: newCategory.name,
+              icon: newCategory.icon,
+              color: newCategory.color,
+              sort_order: newCategory.sort_order,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingCategory.id)
+          
+          if (error) {
+            console.error('Error updating category:', error)
+            throw error
+          }
+          
+          updatedCategories.push({
+            id: existingCategory.id,
+            ...newCategory
+          })
+        } else {
+          // Create new category
+          const { data, error } = await supabase
+            .from('categories')
+            .insert({
+              ...newCategory,
+              user_id: user.id
+            })
+            .select()
+            .single()
+          
+          if (error) {
+            console.error('Error creating category:', error)
+            throw error
+          }
+          
+          updatedCategories.push(data)
+        }
       }
-    } catch {}
-    // Notify other screens to refresh
-    try { DeviceEventEmitter.emit('settings:categoriesUpdated') } catch {}
-    setSuccessMessage(language === 'it' ? 'Categorie aggiornate!' : 'Categories updated!')
-    setShowSuccessModal(true)
+      
+      // Delete any extra categories that are no longer needed
+      if (currentCategories && currentCategories.length > sanitized.length) {
+        const categoriesToDelete = currentCategories.slice(sanitized.length)
+        for (const category of categoriesToDelete) {
+          await supabase
+            .from('categories')
+            .delete()
+            .eq('id', category.id)
+        }
+      }
+      
+      // Update local state
+      setDbCategories(updatedCategories)
+      
+      // Also update the old categories config for backward compatibility
+      const legacyFormat = sanitized.map(c => ({
+        key: c.name.toLowerCase().replace(/\s+/g, '_'),
+        name: c.name,
+        icon: c.icon,
+        color: c.color,
+      }))
+      
+      setCategories(legacyFormat)
+      
+      // Persist to profiles table for backward compatibility
+      await supabase
+        .from('profiles')
+        .upsert({ 
+          id: user.id, 
+          categories_config: legacyFormat, 
+          updated_at: new Date().toISOString() 
+        })
+      
+      // Reload category counts after saving
+      await loadCategoryCounts()
+      
+      // Notify other screens to refresh
+      DeviceEventEmitter.emit('settings:categoriesUpdated')
+      DeviceEventEmitter.emit('expenses:externalUpdate')
+      
+      setSuccessMessage(language === 'it' ? 'Categorie aggiornate!' : 'Categories updated!')
+      setShowSuccessModal(true)
+    } catch (error) {
+      console.error('Error saving categories:', error)
+      setSuccessMessage(language === 'it' ? 'Errore nel salvare le categorie!' : 'Error saving categories!')
+      setShowSuccessModal(true)
+    } finally {
+      setCategoriesLoading(false)
+    }
   }
 
   const openEditModal = (index: number) => {
@@ -420,10 +612,13 @@ export default function ProfileScreen() {
           ]}
         >
           <Card variant="default" style={styles.premiumCard}>
-            <View style={styles.cardHeader}>
-              <ThemedText style={styles.cardTitle}>{language === 'it' ? 'Categorie di spesa' : 'Spending Categories'}</ThemedText>
-            </View>
-            <View style={styles.categoryList}>
+             <View style={styles.cardHeader}>
+               <ThemedText style={styles.cardTitle}>{language === 'it' ? 'Categorie di spesa' : 'Spending Categories'}</ThemedText>
+               {categoriesLoading && (
+                 <ActivityIndicator size="small" color="#06b6d4" style={{ marginLeft: 8 }} />
+               )}
+             </View>
+             <View style={styles.categoryList}>
               {editableCategories.slice(0, 6).map((cat, idx) => {
                 const count = categoryCounts[cat.name] || 0
                 return (
@@ -542,9 +737,15 @@ export default function ProfileScreen() {
                   <Pressable style={[styles.modalButtonSecondary]} onPress={() => setEditModalVisible(false)}>
                     <ThemedText style={styles.modalButtonSecondaryText}>{language === 'it' ? 'Annulla' : 'Cancel'}</ThemedText>
                   </Pressable>
-                  <Pressable style={[styles.modalButtonPrimary]} onPress={applyEdit}>
-                    <ThemedText style={styles.modalButtonPrimaryText}>{language === 'it' ? 'Salva' : 'Save'}</ThemedText>
-                  </Pressable>
+                   <Pressable 
+                     style={[styles.modalButtonPrimary, categoriesLoading && styles.primaryButtonDisabled]} 
+                     onPress={applyEdit}
+                     disabled={categoriesLoading}
+                   >
+                     <ThemedText style={styles.modalButtonPrimaryText}>
+                       {categoriesLoading ? (language === 'it' ? 'Salvando...' : 'Saving...') : (language === 'it' ? 'Salva' : 'Save')}
+                     </ThemedText>
+                   </Pressable>
                 </View>
               </View>
             </Card>
@@ -1456,5 +1657,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 })
+
 
 

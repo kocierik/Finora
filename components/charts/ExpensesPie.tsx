@@ -87,7 +87,8 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
   const currentMonthItems = items.filter(e => sameMonth(e.date, selectedYear, selectedMonth));
   
   const byCat = currentMonthItems.reduce<Record<string, number>>((acc, e) => {
-    const key = e.category ?? 'Other';
+    // Use the new category structure: prefer categories.name, fallback to category
+    const key = e.categories?.name ?? e.category ?? 'Other';
     acc[key] = (acc[key] ?? 0) + e.amount;
     return acc;
   }, {});
@@ -106,7 +107,13 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
     currentMonthItems: currentMonthItems.length,
     byCat,
     allCategories: Object.keys(byCat),
-    sampleItems: currentMonthItems.slice(0, 3).map(e => ({ merchant: e.merchant, category: e.category, amount: e.amount, date: e.date }))
+    sampleItems: currentMonthItems.slice(0, 3).map(e => ({ 
+      merchant: e.merchant, 
+      category: e.category, 
+      categories: e.categories,
+      amount: e.amount, 
+      date: e.date 
+    }))
   });
 
   // Calculate angles for each category
@@ -124,6 +131,16 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
       { name: c.name, icon: c.icon, color: c.color }
     ])
   )
+
+  // Map of categories from the new structure (from expenses.categories)
+  const expenseCategories = new Map(
+    currentMonthItems
+      .filter(e => e.categories)
+      .map(e => [
+        (e.categories?.name || '').toLowerCase(),
+        { name: e.categories?.name, icon: e.categories?.icon, color: e.categories?.color }
+      ])
+  )
   
   // Get all unique categories from the data
   const allCategoriesFromData = Object.keys(byCat);
@@ -135,7 +152,19 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
       const amount = byCat[catName];
       const percentage = totalAmount > 0 ? (amount / totalAmount) * 100 : 0;
       
-      // Prefer user-configured category if present
+      // Prefer expense categories (from the new structure) if present
+      const expenseCategory = expenseCategories.get(catName.toLowerCase());
+      if (expenseCategory && expenseCategory.name) {
+        return {
+          name: expenseCategory.name,
+          amount,
+          percentage,
+          color: expenseCategory.color || '#10b981',
+          icon: (expenseCategory.icon ?? '')
+        };
+      }
+      
+      // Then check user-configured category if present
       const userConfigured = userCategories.get(catName.toLowerCase());
       if (userConfigured) {
         return {
@@ -513,6 +542,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
+
 
 
 
