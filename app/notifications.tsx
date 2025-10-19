@@ -1,7 +1,10 @@
 import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
 import { UI as UI_CONSTANTS } from '@/constants/branding'
+import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
+import { sendBulkCategoryReminder, sendCategoryReminder, sendInteractiveCategoryReminder, sendWeeklyBulkCategoryReminder } from '@/services/category-reminder'
+import { sendDeepLinkCategoryNotification } from '@/services/deep-link-notifications'
 import {
   checkNotificationPermission,
   requestNotificationPermission,
@@ -17,12 +20,46 @@ import {
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
 import * as Notifications from 'expo-notifications'
 import { router } from 'expo-router'
-import { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { DeviceEventEmitter, FlatList, Linking, Platform, Pressable, StyleSheet, View } from 'react-native'
 
 type FilterType = 'all' | 'wallet' | 'other'
 
+// Componente memoizzato per l'item della notifica
+const NotificationItem = React.memo(({ item, t, locale }: { 
+  item: StoredNotification, 
+  t: (key: string) => string, 
+  locale: string 
+}) => (
+  <Pressable style={({ pressed }) => [
+    styles.card,
+    pressed && styles.cardPressed,
+  ]}
+  android_ripple={{ color: UI_CONSTANTS.ACCENT_CYAN_BG }}
+  >
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+        <View style={styles.accentDot} />
+        <ThemedText type="defaultSemiBold" style={styles.titleText}>
+          {item.title || t('no_title')}
+        </ThemedText>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <ThemedText style={styles.timeText}>
+          {new Date(item.receivedAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+        </ThemedText>
+        {item.isWalletNotification && (
+          <ThemedText style={styles.metaWallet}>💳 {t('wallet_badge')}</ThemedText>
+        )}
+      </View>
+    </View>
+    <ThemedText style={styles.messageText}>{item.text || t('no_text')}</ThemedText>
+    <ThemedText style={styles.metaText}>📱 {item.app}</ThemedText>
+  </Pressable>
+))
+
 export default function NotificationsScreen() {
+  const { user } = useAuth()
   const { t, locale, language } = useSettings()
   const [notifications, setNotifications] = useState<StoredNotification[]>([])
   const [filteredNotifications, setFilteredNotifications] = useState<StoredNotification[]>([])
@@ -176,6 +213,73 @@ export default function NotificationsScreen() {
     }
   }
 
+  const handleTestCategoryReminder = async () => {
+    addLog('🧪 Testing category reminder notification...')
+    try {
+      await sendCategoryReminder({
+        merchant: 'TEST MERCHANT',
+        amount: 12.50,
+        currency: '€',
+        expenseId: 'test-123'
+      })
+      addLog('✅ Category reminder test notification sent')
+    } catch (error) {
+      addLog('❌ Failed to send category reminder test: ' + error)
+    }
+  }
+
+  const handleTestBulkReminder = async () => {
+    addLog('🧪 Testing bulk category reminder notification...')
+    try {
+      await sendBulkCategoryReminder(3)
+      addLog('✅ Bulk category reminder test notification sent')
+    } catch (error) {
+      addLog('❌ Failed to send bulk category reminder test: ' + error)
+    }
+  }
+
+  const handleTestWeeklyBulkReminder = async () => {
+    addLog('🧪 Testing weekly bulk category reminder notification...')
+    try {
+      await sendWeeklyBulkCategoryReminder(5)
+      addLog('✅ Weekly bulk category reminder test notification sent')
+    } catch (error) {
+      addLog('❌ Failed to send weekly bulk category reminder test: ' + error)
+    }
+  }
+
+  const handleTestInteractiveReminder = async () => {
+    addLog('🧪 Testing interactive category reminder notification...')
+    try {
+      // Usa l'utente reale se disponibile, altrimenti un UUID di test
+      const testUserId = user?.id || '00000000-0000-0000-0000-000000000000'
+      await sendInteractiveCategoryReminder({
+        merchant: 'TEST MERCHANT',
+        amount: 15.99,
+        currency: '€',
+        expenseId: 'test-interactive-123'
+      }, testUserId)
+      addLog('✅ Interactive category reminder test notification sent')
+    } catch (error) {
+      addLog('❌ Failed to send interactive category reminder test: ' + error)
+    }
+  }
+
+  const handleTestDeepLinkReminder = async () => {
+    addLog('🧪 Testing deep link category reminder notification...')
+    try {
+      await sendDeepLinkCategoryNotification(
+        'test-deeplink-123',
+        'TEST MERCHANT',
+        25.50,
+        '€'
+      )
+      addLog('✅ Deep link category reminder test notification sent')
+    } catch (error) {
+      addLog('❌ Failed to send deep link category reminder test: ' + error)
+    }
+  }
+
   const handleClearLogs = () => {
     setLogs([])
     addLog('🗑️  Logs cleared')
@@ -324,15 +428,40 @@ export default function NotificationsScreen() {
 
   const renderInfoCard = () => null
 
-  const displayedNotifications = filteredNotifications.slice(0, 500)
+  const displayedNotifications = useMemo(() => 
+    filteredNotifications.slice(0, 500), 
+    [filteredNotifications]
+  )
+
+  // Funzione memoizzata per il renderItem
+  const renderItem = useCallback(({ item }: { item: StoredNotification }) => (
+    <NotificationItem item={item} t={t} locale={locale} />
+  ), [t, locale])
+
+  // Funzione memoizzata per keyExtractor
+  const keyExtractor = useCallback((item: StoredNotification) => item.id, [])
+
+  // Funzione memoizzata per getItemLayout (opzionale, per performance migliori)
+  const getItemLayout = useCallback((data: ArrayLike<StoredNotification> | null | undefined, index: number) => ({
+    length: 100, // Altezza approssimativa di ogni item
+    offset: 100 * index,
+    index,
+  }), [])
 
   return (
     <FlatList
       data={displayedNotifications}
-      keyExtractor={(item) => item.id}
+      keyExtractor={keyExtractor}
+      renderItem={renderItem}
+      getItemLayout={getItemLayout}
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={true}
       style={{ flex: 1 }}
+      removeClippedSubviews={true}
+      maxToRenderPerBatch={10}
+      updateCellsBatchingPeriod={50}
+      initialNumToRender={10}
+      windowSize={10}
       ListHeaderComponent={
         <View style={{ gap: 12 }}>
           <View style={styles.headerRow}>
@@ -360,6 +489,42 @@ export default function NotificationsScreen() {
           >
             <ThemedText style={styles.primaryButtonText}>🧪 Test Wallet Notification</ThemedText>
           </Pressable>
+          
+          {/* Bottoni di test per notifiche di promemoria categoria */}
+          <Pressable 
+            style={[styles.primaryButton, { marginTop: 8, backgroundColor: 'rgba(59, 130, 246, 0.12)', borderColor: 'rgba(59, 130, 246, 0.35)' }]}
+            onPress={handleTestCategoryReminder}
+          >
+            <ThemedText style={styles.primaryButtonText}>💳 Test Category Reminder</ThemedText>
+          </Pressable>
+          
+          <Pressable 
+            style={[styles.primaryButton, { marginTop: 8, backgroundColor: 'rgba(168, 85, 247, 0.12)', borderColor: 'rgba(168, 85, 247, 0.35)' }]}
+            onPress={handleTestBulkReminder}
+          >
+            <ThemedText style={styles.primaryButtonText}>📋 Test Bulk Reminder</ThemedText>
+          </Pressable>
+          
+          <Pressable 
+            style={[styles.primaryButton, { marginTop: 8, backgroundColor: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.35)' }]}
+            onPress={handleTestWeeklyBulkReminder}
+          >
+            <ThemedText style={styles.primaryButtonText}>📅 Test Weekly Reminder</ThemedText>
+          </Pressable>
+          
+          <Pressable 
+            style={[styles.primaryButton, { marginTop: 8, backgroundColor: 'rgba(34, 197, 94, 0.12)', borderColor: 'rgba(34, 197, 94, 0.35)' }]}
+            onPress={handleTestInteractiveReminder}
+          >
+            <ThemedText style={styles.primaryButtonText}>⚡ Test Interactive Reminder</ThemedText>
+          </Pressable>
+          
+          <Pressable 
+            style={[styles.primaryButton, { marginTop: 8, backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.35)' }]}
+            onPress={handleTestDeepLinkReminder}
+          >
+            <ThemedText style={styles.primaryButtonText}>🔗 Test Deep Link Reminder</ThemedText>
+          </Pressable>
         </View>
       }
       ListEmptyComponent={
@@ -368,33 +533,6 @@ export default function NotificationsScreen() {
           <ThemedText style={{ opacity: 0.7, textAlign: 'center', fontSize: 12, marginTop: 4 }}>{t('try_send_test')}</ThemedText>
         </Card>
       }
-      renderItem={({ item }) => (
-        <Pressable style={({ pressed }) => [
-          styles.card,
-          pressed && styles.cardPressed,
-        ]}
-        android_ripple={{ color: UI_CONSTANTS.ACCENT_CYAN_BG }}
-        >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <View style={styles.accentDot} />
-              <ThemedText type="defaultSemiBold" style={styles.titleText}>
-                {item.title || t('no_title')}
-              </ThemedText>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <ThemedText style={styles.timeText}>
-                {new Date(item.receivedAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-              </ThemedText>
-              {item.isWalletNotification && (
-                <ThemedText style={styles.metaWallet}>💳 {t('wallet_badge')}</ThemedText>
-              )}
-            </View>
-          </View>
-          <ThemedText style={styles.messageText}>{item.text || t('no_text')}</ThemedText>
-          <ThemedText style={styles.metaText}>📱 {item.app}</ThemedText>
-        </Pressable>
-      )}
       ListFooterComponent={null}
     />
   )

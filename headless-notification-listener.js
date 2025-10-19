@@ -1,4 +1,5 @@
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
+import * as Notifications from 'expo-notifications'
 import { AppRegistry, DeviceEventEmitter } from 'react-native'
 import { RNAndroidNotificationListenerHeadlessJsName } from 'react-native-android-notification-listener'
 
@@ -72,7 +73,6 @@ const headlessNotificationListener = async ({ notification }) => {
       try {
         const title = notifData.title || ''
         const text = notifData.text || notifData.bigText || ''
-        
         console.log('[HEADLESS] 📝 Parsing expense from notification...')
         console.log('[HEADLESS]    Title: ' + title)
         console.log('[HEADLESS]    Text: ' + text)
@@ -95,7 +95,6 @@ const headlessNotificationListener = async ({ notification }) => {
                    merchant,
                    date: new Date().toISOString().split('T')[0],
                    raw_notification: text,
-                   category: 'Other',
                    // category_id will be resolved during sync
                  }
           
@@ -161,6 +160,62 @@ const headlessNotificationListener = async ({ notification }) => {
             timestamp: Date.now(),
             data: { amount: expenseData.amount, merchant: expenseData.merchant }
           })
+          
+          // Invia notifica di promemoria per impostare la categoria
+          try {
+            console.log('[HEADLESS] 🔔 Sending category reminder notification...')
+            
+            // Configura il canale Android per notifiche di promemoria
+            await Notifications.setNotificationChannelAsync('category_reminder', {
+              name: 'Promemoria Categoria',
+              importance: Notifications.AndroidImportance.HIGH,
+              vibrationPattern: [0, 250, 250, 250],
+              lightColor: '#06b6d4',
+              enableVibrate: true,
+              lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+              sound: 'default',
+            })
+            
+            // Invia la notifica di promemoria (normale, non interattiva nel headless)
+            // Le notifiche interattive verranno gestite quando l'app è aperta
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: '💰 Nuovo Pagamento Rilevato',
+                body: `Ricordati di impostare la categoria per ${merchant} - ${amount}${currency}`,
+                subtitle: 'Finora',
+                data: {
+                  type: 'category_reminder',
+                  expenseId: `pending-${Date.now()}`,
+                  merchant: merchant,
+                  amount: amount,
+                  currency: currency
+                },
+                sound: 'default',
+                priority: Notifications.AndroidNotificationPriority.HIGH
+              },
+              trigger: null // Invia immediatamente
+            })
+            
+            console.log('[HEADLESS] ✅ Category reminder notification sent')
+            
+            DeviceEventEmitter.emit('headless_log', {
+              level: 'INFO',
+              message: 'Category reminder notification sent',
+              source: 'HeadlessTask',
+              timestamp: Date.now(),
+              data: { merchant: merchant, amount: amount }
+            })
+          } catch (notificationError) {
+            console.log('[HEADLESS] ⚠️  Failed to send category reminder notification:', notificationError.message)
+            
+            DeviceEventEmitter.emit('headless_log', {
+              level: 'WARN',
+              message: 'Failed to send category reminder notification',
+              source: 'HeadlessTask',
+              timestamp: Date.now(),
+              data: { error: notificationError.message }
+            })
+          }
         } else {
           console.log('[HEADLESS] ⚠️  Could not parse amount from notification text')
           

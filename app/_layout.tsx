@@ -1,6 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
@@ -11,7 +12,12 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SettingsProvider } from '@/context/SettingsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useDatabaseSync } from '@/hooks/use-database-sync';
+import { setupCategoryReminderChannel } from '@/services/category-reminder';
+import { setupDeepLinkNotificationHandler } from '@/services/deep-link-notifications';
+import { syncPendingExpenses } from '@/services/expense-sync';
+import { setupInteractiveNotificationChannel, setupNotificationResponseHandler } from '@/services/interactive-notifications';
 import { useWalletListener } from '@/services/wallet-listener';
+import { startWeeklyReminderScheduler } from '@/services/weekly-reminder-scheduler';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -42,6 +48,43 @@ function RootNavigator() {
   
   // Sync settings with database
   useDatabaseSync()
+  
+  // Setup notification channels and handlers
+  React.useEffect(() => {
+    setupCategoryReminderChannel()
+    setupInteractiveNotificationChannel()
+    setupNotificationResponseHandler()
+    setupDeepLinkNotificationHandler()
+  }, [])
+  
+  // Start weekly reminder scheduler
+  React.useEffect(() => {
+    startWeeklyReminderScheduler()
+  }, [])
+  
+  // Sync pending expenses when user is authenticated
+  React.useEffect(() => {
+    if (user) {
+      const syncExpenses = async () => {
+        try {
+          const result = await syncPendingExpenses(user.id)
+          if (result.synced > 0) {
+            console.log(`[RootNavigator] ✅ Synced ${result.synced} pending expenses`)
+          }
+        } catch (error) {
+          console.warn('[RootNavigator] Failed to sync pending expenses:', error)
+        }
+      }
+      
+      // Sync immediately when user is authenticated
+      syncExpenses()
+      
+      // Also sync every 30 seconds while app is active
+      const interval = setInterval(syncExpenses, 30000)
+      
+      return () => clearInterval(interval)
+    }
+  }, [user])
   
   // console.log('[RootNavigator] 🔄 Auth state:', { user: !!user, loading })
   

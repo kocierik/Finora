@@ -4,6 +4,7 @@ import { Expense } from '@/types'
 import * as FileSystem from 'expo-file-system'
 import { useEffect } from 'react'
 import { DeviceEventEmitter, Platform } from 'react-native'
+import { sendInteractiveCategoryReminder } from './category-reminder'
 import { logger } from './logger'
 import { checkNotificationPermission, requestNotificationPermission } from './notification-service'
 
@@ -77,6 +78,46 @@ export function useWalletListener() {
         // console.log(JSON.stringify(payload, null, 2))
       } catch {
         // console.log('[WalletListener] 📱 Incoming notification (non-serializable)')
+      }
+      
+      // Controlla se è una notifica di Google Wallet
+      const isWalletNotification = payload.isWalletNotification || 
+        payload.app?.toLowerCase().includes('wallet') ||
+        payload.packageName?.toLowerCase().includes('wallet')
+      
+      if (isWalletNotification) {
+        // console.log('[WalletListener] 🎯 Google Wallet notification detected (app is open)')
+        
+        // Estrai i dati della spesa dalla notifica
+        const title = payload.title || ''
+        const text = payload.text || ''
+        
+        // Parse la spesa (stesso pattern del headless task)
+        const amountMatch = text.match(/([\d.,]+)\s*([€$£])/i)
+        if (amountMatch) {
+          const amount = parseFloat(amountMatch[1].replace(',', '.'))
+          const currency = amountMatch[2]
+          
+          // Estrai merchant dal title
+          let merchant = title
+          if (title.includes(':')) {
+            merchant = title.split(':')[0].trim()
+          }
+          
+          // Invia notifica interattiva per categorizzare immediatamente
+          try {
+            await sendInteractiveCategoryReminder({
+              merchant,
+              amount,
+              currency,
+              expenseId: `pending-${Date.now()}`
+            }, user.id)
+            
+            // console.log('[WalletListener] ✅ Interactive category reminder sent for', merchant)
+          } catch (error) {
+            // console.log('[WalletListener] ⚠️  Failed to send interactive category reminder:', error)
+          }
+        }
       }
       
       // Il headless task salva già le notifiche E le spese in memoria quando l'app è chiusa

@@ -279,7 +279,7 @@ export default function OnboardingScreen() {
       try {
       await Notifications.scheduleNotificationAsync({
         content: {
-            title: t('test_notif_title') || 'Hello!',
+            title: t('test_notif_title') || '🎉 Hello!', // Aggiunta icona
             body: t('test_notif_body') || 'Can you see me inside the Finora app?',
           subtitle: 'Finora',
         },

@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase'
 import { Expense } from '@/types'
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
 import { DeviceEventEmitter } from 'react-native'
+import { sendWeeklyBulkCategoryReminder } from './category-reminder'
 
 type PendingExpense = {
   amount: number
@@ -66,29 +67,69 @@ export async function syncPendingExpenses(userId: string): Promise<{ synced: num
       return { synced: 0, errors: 0 }
     }
     
+    // Invia notifica di promemoria settimanale se ci sono spese pendenti da categorizzare
+    if (unsyncedExpenses.length > 0) {
+      try {
+        await sendWeeklyBulkCategoryReminder(unsyncedExpenses.length)
+      } catch (error) {
+        console.warn('[ExpenseSync] Failed to send weekly bulk category reminder:', error)
+      }
+    }
+    
     let syncedCount = 0
     let errorCount = 0
     
     // Sincronizza ogni spesa
     for (const expense of unsyncedExpenses) {
       try {
-        // Se abbiamo un category_id, usalo; altrimenti cerca la categoria "Other" per l'utente
+        // Se abbiamo un category_id, usalo; altrimenti cerca la categoria "Miscellaneous" per l'utente
         let categoryId = expense.category_id
         
         if (!categoryId) {
-          // Cerca la categoria "Other" per l'utente
-          const { data: otherCategory } = await supabase
+          // Cerca la categoria "Miscellaneous" per l'utente
+          let { data: miscellaneousCategory } = await supabase
             .from('categories')
             .select('id')
             .eq('user_id', userId)
-            .eq('name', 'Other')
+            .eq('name', 'Miscellaneous')
             .single()
           
-          if (otherCategory) {
-            categoryId = otherCategory.id
+          if (!miscellaneousCategory) {
+            // Se non esiste "Miscellaneous", cerca la prima categoria disponibile
+            const { data: firstCategory } = await supabase
+              .from('categories')
+              .select('id')
+              .eq('user_id', userId)
+              .order('sort_order', { ascending: true })
+              .limit(1)
+              .single()
+            
+            if (firstCategory) {
+              categoryId = firstCategory.id
+            } else {
+              // Se non ci sono categorie, crea "Miscellaneous"
+              const { data: newCategory, error: createError } = await supabase
+                .from('categories')
+                .insert({
+                  user_id: userId,
+                  name: 'Miscellaneous',
+                  icon: '📦',
+                  color: '#8B5CF6',
+                  sort_order: 999
+                })
+                .select('id')
+                .single()
+              
+              if (createError || !newCategory) {
+                console.warn('[ExpenseSync] Failed to create Miscellaneous category:', createError)
+                errorCount++
+                continue
+              }
+              
+              categoryId = newCategory.id
+            }
           } else {
-            errorCount++
-            continue
+            categoryId = miscellaneousCategory.id
           }
         }
         
@@ -113,7 +154,7 @@ export async function syncPendingExpenses(userId: string): Promise<{ synced: num
           .order('created_at', { ascending: false })
         
         if (existingExpenses && existingExpenses.length > 0) {
-          // Controlla se c'è una spesa con differenza temporale di 2 secondi o meno
+          // Duplicati: consenti SOLO la regola dei 2 secondi (nessuna finestra di 5 minuti)
           const now = new Date()
           const isDuplicate = existingExpenses.some(existing => {
             const existingTime = new Date(existing.created_at)
@@ -122,15 +163,6 @@ export async function syncPendingExpenses(userId: string): Promise<{ synced: num
           })
           
           if (isDuplicate) {
-            // Marca come sincronizzata anche se è un duplicato
-            expense.synced = true
-            continue
-          }
-          
-          // Se non è un duplicato temporale ma è identico, controlla se è troppo recente (es. ultimi 5 minuti)
-          const mostRecent = existingExpenses[0]
-          const timeDiff = Math.abs(now.getTime() - new Date(mostRecent.created_at).getTime())
-          if (timeDiff <= 300000) { // 5 minuti in millisecondi
             // Marca come sincronizzata anche se è un duplicato
             expense.synced = true
             continue

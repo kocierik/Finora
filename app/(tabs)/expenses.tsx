@@ -7,6 +7,7 @@ import { DEFAULT_CATEGORIES } from '@/constants/categories'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
+import { sendWeeklyBulkCategoryReminder } from '@/services/category-reminder'
 import { syncPendingExpenses } from '@/services/expense-sync'
 import { calculateActivityPercentage, getExpenseLevel, getExpenseLevelColor, getExpenseLevelText, loadExpenseThresholds, type ExpenseThresholds } from '@/services/expense-thresholds'
 import { deleteExpense } from '@/services/expenses'
@@ -129,6 +130,15 @@ export default function ExpensesScreen() {
       const pendingExpenses = JSON.parse(data)
       const unsyncedCount = pendingExpenses.filter((e: any) => !e.synced).length
       setPendingExpensesCount(unsyncedCount)
+      
+      // Invia notifica di promemoria settimanale se ci sono spese pendenti
+      if (unsyncedCount > 0) {
+        try {
+          await sendWeeklyBulkCategoryReminder(unsyncedCount)
+        } catch (error) {
+          console.warn('[ExpensesScreen] Failed to send weekly bulk category reminder:', error)
+        }
+      }
     } catch (error) {
       setPendingExpensesCount(0)
     }
@@ -924,9 +934,9 @@ export default function ExpensesScreen() {
       return category
     }
     
-    // Fallback to 'Other' category if no category found
-    const otherCategory = dbCategories.find(c => c.name.toLowerCase() === 'other')
-    return otherCategory || null
+    // Fallback to 'Miscellaneous' category if no category found
+    const miscellaneousCategory = dbCategories.find(c => c.name.toLowerCase() === 'miscellaneous')
+    return miscellaneousCategory || null
   }, [getMerchantCategory, dbCategories])
 
   if (loading) {
@@ -1433,7 +1443,7 @@ export default function ExpensesScreen() {
                               </ThemedText>
                               {(() => {
                                 const categoryInfo = getCategoryInfo(item.merchant)
-                                const isAutoAssigned = !item.categories && categoryInfo?.name === 'Other'
+                                const isAutoAssigned = !item.categories && categoryInfo?.name === 'Miscellaneous'
                                 const isDefaultOther = !item.categories && !item.category_id && !item.category
                                 
                                 // Debug for specific merchant (simplified)
@@ -1456,7 +1466,7 @@ export default function ExpensesScreen() {
                                     </ThemedText>
                                   </View>
                                 ) : (
-                                  // Fallback badge for Other if no categoryInfo found
+                                  // Fallback badge for Miscellaneous if no categoryInfo found
                                   <View style={[
                                     styles.categoryBadge, 
                                     { 
@@ -1466,7 +1476,7 @@ export default function ExpensesScreen() {
                                     }
                                   ]}>
                                     <ThemedText style={[styles.categoryBadgeText, { color: '#10b981' }]}>
-                                      📦 Other ✨
+                                      📦 Miscellaneous ✨
                                     </ThemedText>
                                   </View>
                                 )
