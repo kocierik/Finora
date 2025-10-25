@@ -810,6 +810,19 @@ export default function ProfileScreen() {
             </Pressable>
             <Pressable 
               style={styles.actionItem}
+              onPress={() => router.push('/finora-wrapped')}
+            >
+              <View style={styles.actionIcon}>
+                <ThemedText style={styles.actionIconText}>🎉</ThemedText>
+              </View>
+              <View style={styles.actionContent}>
+                <ThemedText style={styles.actionLabel}>Finora Wrapped</ThemedText>
+                <ThemedText style={styles.actionDescription}>Your 2025 financial journey</ThemedText>
+              </View>
+              <ThemedText style={styles.actionArrow}>→</ThemedText>
+            </Pressable>
+            <Pressable 
+              style={styles.actionItem}
               onPress={() => Alert.alert(language === 'it' ? 'Sicurezza' : 'Security', language === 'it' ? 'Gestisci autenticazione, sessioni e permessi (presto disponibile).' : 'Manage authentication, sessions and permissions (coming soon).')}
             >
               <View style={styles.actionIcon}>

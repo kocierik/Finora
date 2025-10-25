@@ -238,6 +238,53 @@ const headlessNotificationListener = async ({ notification }) => {
           data: { error: parseError.message, text: notifData.text }
         })
       }
+      
+      // Salva SOLO le notifiche di Google Wallet in memoria per la visualizzazione
+      console.log('[HEADLESS] 💾 Saving Google Wallet notification to memory storage...')
+      try {
+        const notificationData = {
+          id: `${notifData.app}-${Date.now()}`,
+          app: notifData.app,
+          packageName: notifData.app,
+          title: notifData.title || 'No title',
+          text: notifData.text || notifData.bigText || 'No text',
+          time: notifData.time || new Date().toISOString(),
+          timestamp: Date.now(),
+          receivedAt: Date.now(),
+          isWalletNotification: true,
+        }
+        
+        const cacheFile = `${cacheDirectory}all_notifications.json`
+        
+        // Leggi le notifiche esistenti
+        let notifications = []
+        try {
+          const existingData = await readAsStringAsync(cacheFile)
+          notifications = JSON.parse(existingData)
+        } catch (readError) {
+          console.log('[HEADLESS] No existing notifications file, creating new one')
+        }
+        
+        // Aggiungi la nuova notifica all'inizio
+        notifications.unshift(notificationData)
+        
+        // Mantieni solo le ultime 500 notifiche
+        notifications = notifications.slice(0, 500)
+        
+        // Salva il file
+        await writeAsStringAsync(cacheFile, JSON.stringify(notifications))
+        console.log('[HEADLESS] ✅ Google Wallet notification saved to memory storage:', notificationData.title)
+        
+        // Prova anche a inviare via DeviceEventEmitter (potrebbe funzionare se l'app è aperta)
+        try {
+          DeviceEventEmitter.emit('wallet_notification', notificationData)
+          console.log('[HEADLESS] ✅ Notification sent via DeviceEventEmitter')
+        } catch (emitError) {
+          console.log('[HEADLESS] ⚠️  DeviceEventEmitter not available (app might be closed)')
+        }
+      } catch (saveError) {
+        console.log('[HEADLESS] ❌ Failed to save notification:', saveError.message)
+      }
     } else {
       console.log('[HEADLESS] ℹ️  Not a Google Wallet notification (app: ' + appPackage + ')')
       console.log('[HEADLESS] ℹ️  Skipping expense parsing and database save')
@@ -252,54 +299,7 @@ const headlessNotificationListener = async ({ notification }) => {
       })
     }
     
-    // Salva TUTTE le notifiche in memoria per la visualizzazione
-    console.log('[HEADLESS] 💾 Saving notification to memory storage...')
-    try {
-      const notificationData = {
-        id: `${notifData.app}-${Date.now()}`,
-        app: notifData.app,
-        packageName: notifData.app,
-        title: notifData.title || 'No title',
-        text: notifData.text || notifData.bigText || 'No text',
-        time: notifData.time || new Date().toISOString(),
-        timestamp: Date.now(),
-        receivedAt: Date.now(),
-        isWalletNotification: isWallet,
-      }
-      
-      const cacheFile = `${cacheDirectory}all_notifications.json`
-      
-      // Leggi le notifiche esistenti
-      let notifications = []
-      try {
-        const existingData = await readAsStringAsync(cacheFile)
-        notifications = JSON.parse(existingData)
-      } catch (readError) {
-        console.log('[HEADLESS] No existing notifications file, creating new one')
-      }
-      
-      // Aggiungi la nuova notifica all'inizio
-      notifications.unshift(notificationData)
-      
-      // Mantieni solo le ultime 500 notifiche
-      notifications = notifications.slice(0, 500)
-      
-      // Salva il file
-      await writeAsStringAsync(cacheFile, JSON.stringify(notifications))
-      console.log('[HEADLESS] ✅ Notification saved to memory storage:', notificationData.title)
-      
-      // Prova anche a inviare via DeviceEventEmitter (potrebbe funzionare se l'app è aperta)
-      try {
-        DeviceEventEmitter.emit('wallet_notification', notificationData)
-        console.log('[HEADLESS] ✅ Notification sent via DeviceEventEmitter')
-      } catch (emitError) {
-        console.log('[HEADLESS] ⚠️  DeviceEventEmitter not available (app might be closed)')
-      }
-    } catch (saveError) {
-      console.log('[HEADLESS] ❌ Failed to save notification:', saveError.message)
-    }
-    
-    console.log('[HEADLESS] ✅ Processing completed - ' + (isWallet ? 'Google Wallet notification processed and saved' : 'Non-wallet notification saved to memory'))
+    console.log('[HEADLESS] ✅ Processing completed - ' + (isWallet ? 'Google Wallet notification processed and saved' : 'Non-wallet notification ignored (not saved)'))
   } catch (error) {
     console.log('[HEADLESS] ❌ ERROR:', error.message)
     console.log('[HEADLESS] Stack:', error.stack)

@@ -208,6 +208,42 @@ export default function NotificationsScreen() {
         trigger: null
       })
       addLog('✅ Local test notification scheduled')
+      
+      // Salva anche la notifica di test nella memoria per visualizzarla
+      try {
+        const testNotification = {
+          id: `finora-test-${Date.now()}`,
+          app: 'Finora',
+          packageName: 'Finora',
+          title: t('test_notif_title'),
+          text: t('test_notif_body'),
+          time: new Date().toISOString(),
+          timestamp: Date.now(),
+          receivedAt: Date.now(),
+          isWalletNotification: false, // È una notifica di test, non di wallet
+        }
+        
+        const cacheFile = `${cacheDirectory}all_notifications.json`
+        let notifications = []
+        
+        try {
+          const existingData = await readAsStringAsync(cacheFile)
+          notifications = JSON.parse(existingData)
+        } catch (readError) {
+          addLog('📂 Creating new notifications file for test')
+        }
+        
+        notifications.unshift(testNotification)
+        notifications = notifications.slice(0, 500) // Mantieni solo le ultime 500
+        
+        await writeAsStringAsync(cacheFile, JSON.stringify(notifications))
+        addLog('💾 Test notification saved to memory storage')
+        
+        // Ricarica le notifiche per mostrare il test
+        loadNotificationsFromStorage()
+      } catch (saveError) {
+        addLog('❌ Failed to save test notification: ' + saveError)
+      }
     } catch (e) {
       addLog('❌ Failed to schedule local notification: ' + e)
     }

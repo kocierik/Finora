@@ -101,6 +101,8 @@ function RootNavigator() {
       <Stack.Screen name="auth/index" />
       <Stack.Screen name="expo-development-client" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="notifications" />
+      <Stack.Screen name="finora-wrapped" />
     </Stack>
   )
 }
