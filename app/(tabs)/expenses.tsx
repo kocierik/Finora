@@ -26,13 +26,15 @@ export default function ExpensesScreen() {
   // Debug flag to reduce excessive logging
   const DEBUG_MODE = __DEV__ && false // Set to true for detailed debugging
   const [items, setItems] = useState<Expense[]>([])
+  const [incomes, setIncomes] = useState<any[]>([])
   const [hideBalances, setHideBalances] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [selectedTransaction, setSelectedTransaction] = useState<Expense | null>(null)
+  const [selectedTransaction, setSelectedTransaction] = useState<Expense | any | null>(null)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [transactionToDelete, setTransactionToDelete] = useState<Expense | null>(null)
+  const [incomeToDelete, setIncomeToDelete] = useState<any | null>(null)
   const [autoAssignedCount, setAutoAssignedCount] = useState(0)
   const [categoryUpdateTrigger, setCategoryUpdateTrigger] = useState(0)
   const [expenseThresholds, setExpenseThresholds] = useState<ExpenseThresholds>({ moderate: 1000, high: 1500 })
@@ -155,21 +157,28 @@ export default function ExpensesScreen() {
         setCategoryUpdateTrigger(prev => prev + 1)
       }
       
-      const { data } = await supabase
-        .from('expenses')
-        .select(`
-          *,
-          categories (
-            id,
-            name,
-            icon,
-            color
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+      const [{ data: expensesData }, { data: incomesData }] = await Promise.all([
+        supabase
+          .from('expenses')
+          .select(`
+            *,
+            categories (
+              id,
+              name,
+              icon,
+              color
+            )
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('incomes')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+      ])
       
-      const sortedItems = (data as Expense[])?.sort((a, b) => {
+      const sortedItems = (expensesData as Expense[])?.sort((a, b) => {
         // Sort by date descending, then by created_at descending
         const dateA = new Date(a.date)
         const dateB = new Date(b.date)
@@ -178,6 +187,8 @@ export default function ExpensesScreen() {
         }
         return dateB.getTime() - dateA.getTime()
       }) ?? []
+      
+      setIncomes(incomesData || [])
       
       // Debug: Log sample transactions to see their category structure
       
@@ -364,6 +375,60 @@ export default function ExpensesScreen() {
 
   // Filter items for selected month
   const selectedMonthItems = items.filter((e) => sameMonth(e.date, curYear, curMonth))
+  const selectedMonthIncomes = incomes.filter((i) => sameMonth(i.date, curYear, curMonth))
+
+  // Calculate month income total
+  const monthIncomeTotal = selectedMonthIncomes.reduce((sum, income) => sum + (income.amount || 0), 0)
+
+  // Combine expenses and incomes for the selected month
+  const allMonthTransactions = useMemo(() => {
+    const expenseTransactions = selectedMonthItems.map(expense => ({
+      id: expense.id,
+      type: 'expense' as const,
+      amount: -expense.amount, // Negative for expenses
+      description: expense.merchant || 'Expense',
+      category: expense.categories?.name || expense.category || 'Other',
+      categoryIcon: expense.categories?.icon || '💳',
+      categoryColor: expense.categories?.color || '#06b6d4',
+      date: expense.date,
+      created_at: expense.created_at,
+      isRecurring: expense.is_recurring,
+      raw_notification: expense.raw_notification,
+      // Keep original expense data for compatibility
+      originalData: expense
+    }))
+
+    const incomeTransactions = selectedMonthIncomes.map(income => ({
+      id: income.id,
+      type: 'income' as const,
+      amount: income.amount, // Positive for incomes
+      description: income.description || income.source || 'Income',
+      category: income.category || 'work',
+      categoryIcon: income.source === 'salary' ? '💼' : 
+                   income.source === 'freelance' ? '💻' :
+                   income.source === 'investment' ? '📈' :
+                   income.source === 'bonus' ? '🎁' : '💰',
+      categoryColor: income.category === 'work' ? '#10b981' :
+                    income.category === 'passive' ? '#8B5CF6' :
+                    income.category === 'investment' ? '#F59E0B' : '#6366F1',
+      date: income.date,
+      created_at: income.created_at,
+      isRecurring: income.is_recurring,
+      raw_notification: 'manual',
+      // Keep original income data for compatibility
+      originalData: income
+    }))
+
+    return [...expenseTransactions, ...incomeTransactions]
+      .sort((a, b) => {
+        const dateA = new Date(a.date)
+        const dateB = new Date(b.date)
+        if (dateA.getTime() === dateB.getTime()) {
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        }
+        return dateB.getTime() - dateA.getTime()
+      })
+  }, [selectedMonthItems, selectedMonthIncomes])
 
   // Debug log for month calculation (simplified)
   if (DEBUG_MODE) {
@@ -371,6 +436,22 @@ export default function ExpensesScreen() {
 
   // Prefer DB categories if available, otherwise fall back to settings
   const effectiveCategories = useMemo(() => (dbCategories?.length ? dbCategories : (configuredCategories || [])), [dbCategories, configuredCategories])
+
+  // Income categories
+  const incomeCategories = [
+    { id: 'work', name: 'Work', icon: '💼', color: '#10b981' },
+    { id: 'passive', name: 'Passive', icon: '💰', color: '#8B5CF6' },
+    { id: 'investment', name: 'Investment', icon: '📈', color: '#F59E0B' },
+    { id: 'other', name: 'Other', icon: '🎁', color: '#6366F1' }
+  ]
+
+  // Get available categories based on transaction type
+  const getAvailableCategories = () => {
+    if (selectedTransaction?.type === 'income') {
+      return incomeCategories
+    }
+    return effectiveCategories
+  }
 
   // Spending categories for main grid (first 6)
   const categories = useMemo(() => {
@@ -470,8 +551,23 @@ export default function ExpensesScreen() {
   }, [user, fetchExpenses])
 
   const handleTransactionPress = useCallback((transaction: Expense) => {
-    setSelectedTransaction(transaction)
+    setSelectedTransaction({ ...transaction, type: 'expense' })
     setShowCategoryModal(true)
+  }, [])
+
+  const handleIncomePress = useCallback((income: any) => {
+    setSelectedTransaction({ ...income, type: 'income' })
+    setShowCategoryModal(true)
+  }, [])
+
+  const handleDeleteIncome = useCallback(async (income: any) => {
+    if (!income.id) {
+      console.error('Cannot delete income without ID')
+      return
+    }
+
+    setShowConfirmModal(true)
+    setIncomeToDelete(income)
   }, [])
 
   // Category card pulse animation state
@@ -543,48 +639,64 @@ export default function ExpensesScreen() {
     if (!selectedTransaction || !user) return
 
     try {
-      // Find the category details
-      const category = dbCategories.find(c => c.id === categoryId)
-      if (!category) {
-        console.error('Category not found:', categoryId)
-        return
+      // Check if it's an income or expense transaction
+      if (selectedTransaction.type === 'income') {
+        // Handle income category update
+        const { error } = await supabase
+          .from('incomes')
+          .update({ category: categoryId })
+          .eq('user_id', user.id)
+          .eq('id', selectedTransaction.id)
+        if (error) throw error
+
+        // Update local state
+        setIncomes(prev => prev.map(it =>
+          it.id === selectedTransaction.id ? { ...it, category: categoryId } : it
+        ))
+      } else {
+        // Handle expense category update (existing logic)
+        // Find the category details
+        const category = dbCategories.find(c => c.id === categoryId)
+        if (!category) {
+          console.error('Category not found:', categoryId)
+          return
+        }
+
+        // Update all transactions with the same merchant name
+        const { error } = await supabase
+          .from('expenses')
+          .update({ category_id: categoryId })
+          .eq('user_id', user.id)
+          .eq('merchant', selectedTransaction.merchant)
+
+        if (error) throw error
+
+        // Update local state for all matching transactions
+        const updatedItems = items.map(item => 
+          item.merchant === selectedTransaction.merchant 
+            ? { ...item, category_id: categoryId, categories: category }
+            : item
+        )
+        
+        setItems(updatedItems)
+
+        // Update month dataset used by pie chart so it refreshes immediately
+        setAllMonthItems(prev => prev.map(item =>
+          item.merchant === selectedTransaction.merchant
+            ? { ...item, category_id: categoryId, categories: category }
+            : item
+        ))
+
+        // Trigger recalculation of memoized category totals
+        setCategoryUpdateTrigger(prev => prev + 1)
       }
-
-      // Update all transactions with the same merchant name
-      const { error } = await supabase
-        .from('expenses')
-        .update({ category_id: categoryId })
-        .eq('user_id', user.id)
-        .eq('merchant', selectedTransaction.merchant)
-
-      if (error) throw error
-
-      // Update local state for all matching transactions
-      const updatedItems = items.map(item => 
-        item.merchant === selectedTransaction.merchant 
-          ? { ...item, category_id: categoryId, categories: category }
-          : item
-      )
-      
-      
-      setItems(updatedItems)
-
-      // Update month dataset used by pie chart so it refreshes immediately
-      setAllMonthItems(prev => prev.map(item =>
-        item.merchant === selectedTransaction.merchant
-          ? { ...item, category_id: categoryId, categories: category }
-          : item
-      ))
-
-      // Trigger recalculation of memoized category totals
-      setCategoryUpdateTrigger(prev => prev + 1)
 
       setShowCategoryModal(false)
       setSelectedTransaction(null)
     } catch (error) {
       console.error('Error updating category:', error)
     }
-  }, [selectedTransaction, user, dbCategories])
+  }, [selectedTransaction, user, dbCategories, items])
 
   const closeCategoryModal = useCallback(() => {
     setShowCategoryModal(false)
@@ -1283,6 +1395,49 @@ export default function ExpensesScreen() {
           </View>
         </Animated.View>
 
+        {/* Income Section */}
+        {monthIncomeTotal > 0 && (
+          <Animated.View 
+            style={[
+              styles.incomeSection,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <ThemedText style={styles.sectionTitle}>{language === 'it' ? 'Guadagni del mese' : 'Monthly income'}</ThemedText>
+              <ThemedText style={styles.sectionSubtitle}>{language === 'it' ? 'Entrate registrate' : 'Recorded income'}</ThemedText>
+            </View>
+            
+            <Card variant="default" style={styles.incomeCard}>
+              <LinearGradient
+                colors={['rgba(16, 185, 129, 0.08)', 'rgba(34, 197, 94, 0.04)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.incomeGradient}
+              />
+              <View style={styles.incomeContent}>
+                <View style={styles.incomeIcon}>
+                  <ThemedText style={styles.incomeIconText}>💰</ThemedText>
+                </View>
+                <View style={styles.incomeDetails}>
+                  <ThemedText style={styles.incomeLabel}>
+                    {language === 'it' ? 'Totale guadagni' : 'Total income'}
+                  </ThemedText>
+                  <ThemedText style={styles.incomeAmount}>
+                    {hideBalances ? '••••• €' : monthIncomeTotal.toLocaleString(locale, { style: 'currency', currency })}
+                  </ThemedText>
+                  <ThemedText style={styles.incomeCount}>
+                    {selectedMonthIncomes.length} {language === 'it' ? 'entrate' : 'incomes'}
+                  </ThemedText>
+                </View>
+              </View>
+            </Card>
+          </Animated.View>
+        )}
+
         {/* Chart Section */}
         <Animated.View 
           style={[
@@ -1366,15 +1521,15 @@ export default function ExpensesScreen() {
               </View>
           </View>
             <ThemedText style={styles.sectionSubtitle}>
-              {selectedMonthItems.length} {selectedMonthItems.length !== 1 ? t('transactions') : t('transaction')} • {language === 'it' ? 'Ultimo aggiornamento' : 'Last update'}: {new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+              {allMonthTransactions.length} {allMonthTransactions.length !== 1 ? t('transactions') : t('transaction')} • {language === 'it' ? 'Ultimo aggiornamento' : 'Last update'}: {new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
             </ThemedText>
           </View>
           
-          {selectedMonthItems.length > 0 ? (
+          {allMonthTransactions.length > 0 ? (
             <View style={styles.transactionsList}>
-              {selectedMonthItems.slice(0, visibleTransactionsCount).map((item, index) => (
+              {allMonthTransactions.slice(0, visibleTransactionsCount).map((transaction, index) => (
                 <Animated.View
-                  key={item.id ?? index}
+                  key={transaction.id ?? index}
                   style={[
                     styles.transactionItem,
                     {
@@ -1390,7 +1545,7 @@ export default function ExpensesScreen() {
                 >
                   <Pressable
                     style={styles.transactionPressable}
-                    onPress={() => handleTransactionPress(item)}
+                    onPress={() => transaction.type === 'expense' ? handleTransactionPress(transaction.originalData) : handleIncomePress(transaction.originalData)}
                     onPressIn={() => {
                       Animated.spring(scaleAnim1, { toValue: 0.98, useNativeDriver: true }).start()
                     }}
@@ -1399,8 +1554,8 @@ export default function ExpensesScreen() {
                     }}
                   >
                     {(() => {
-                      const categoryInfo = getCategoryInfo(item.merchant)
-                      const categoryColor = categoryInfo?.color || '#06b6d4'
+                      const isIncome = transaction.type === 'income'
+                      const categoryColor = transaction.categoryColor
                       
                       return (
                         <Card variant="subtle" style={[
@@ -1418,14 +1573,19 @@ export default function ExpensesScreen() {
                           <View style={styles.transactionContent}>
                             <View style={styles.transactionLeft}>
                               <View style={[
-                                styles.transactionIcon,
-                                {
-                                  backgroundColor: `${categoryColor}15`,
-                                  borderColor: `${categoryColor}30`
+                                styles.categoryBadge, 
+                                { 
+                                  backgroundColor: `${categoryColor}20`,
+                                  borderColor: `${categoryColor}40`,
+                                  borderWidth: 1,
+                                  marginRight: 12,
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 8,
+                                  borderRadius: 12,
                                 }
                               ]}>
-                                <ThemedText style={styles.transactionIconText}>
-                                  {item.raw_notification === 'manual' ? '✍️' : '💳'}
+                                <ThemedText style={[styles.categoryBadgeText, { color: categoryColor, fontSize: 20 }]} numberOfLines={1} ellipsizeMode="tail">
+                                  {transaction.categoryIcon}
                                 </ThemedText>
                               </View>
                               <View style={styles.transactionText}>
@@ -1434,63 +1594,26 @@ export default function ExpensesScreen() {
                                     styles.transactionMerchant,
                                     { color: categoryColor }
                                   ]}>
-                                    {item.merchant ?? '—'}
+                                    {transaction.description ?? '—'}
                                   </ThemedText>
                                 </View>
                             <View style={styles.transactionDateRow}>
                               <ThemedText style={styles.transactionDate}>
-                                {formatDateWithLocale(item.date, language, locale)}
+                                {formatDateWithLocale(transaction.date, language, locale)}
                               </ThemedText>
-                              {(() => {
-                                const categoryInfo = getCategoryInfo(item.merchant)
-                                const isAutoAssigned = !item.categories && categoryInfo?.name === 'Miscellaneous'
-                                const isDefaultOther = !item.categories && !item.category_id && !item.category
-                                
-                                // Debug for specific merchant (simplified)
-                                if (DEBUG_MODE && item.merchant === 'CAFE DES CHINEU') {
-                                }
-                                
-                                // Show badge if categoryInfo exists
-                                return categoryInfo ? (
-                                  <View style={[
-                                    styles.categoryBadge, 
-                                    { 
-                                      backgroundColor: `${categoryInfo.color}20`,
-                                      borderColor: isAutoAssigned || isDefaultOther ? `${categoryInfo.color}40` : 'transparent',
-                                      borderWidth: isAutoAssigned || isDefaultOther ? 1 : 0,
-                                    }
-                                  ]}>
-                                    <ThemedText style={[styles.categoryBadgeText, { color: categoryInfo.color }]} numberOfLines={1} ellipsizeMode="tail">
-                                      {categoryInfo.icon} {shortenCategory(categoryInfo.name)}
-                                      {(isAutoAssigned || isDefaultOther) && ' ✨'}
-                                    </ThemedText>
-                                  </View>
-                                ) : (
-                                  // Fallback badge for Miscellaneous if no categoryInfo found
-                                  <View style={[
-                                    styles.categoryBadge, 
-                                    { 
-                                      backgroundColor: '#10b98120',
-                                      borderColor: '#10b98140',
-                                      borderWidth: 1,
-                                    }
-                                  ]}>
-                                    <ThemedText style={[styles.categoryBadgeText, { color: '#10b981' }]}>
-                                      📦 Miscellaneous ✨
-                                    </ThemedText>
-                                  </View>
-                                )
-                              })()}
                             </View>
                           </View>
                         </View>
                         <View style={styles.transactionRight}>
-                          <ThemedText style={[styles.transactionAmount, item.amount > 0 ? { color: '#ef4444' } : { color: '#22c55e' }]}>
-              {Math.abs(item.amount ?? 0).toLocaleString(locale, { style: 'currency', currency })}
-            </ThemedText>
+                          <ThemedText style={[
+                            styles.transactionAmount, 
+                            isIncome ? { color: '#10b981' } : { color: '#ef4444' }
+                          ]}>
+                            {isIncome ? '+' : '-'}{Math.abs(transaction.amount).toLocaleString(locale, { style: 'currency', currency })}
+                          </ThemedText>
                           <TouchableOpacity
                             style={styles.deleteButton}
-                            onPress={() => handleDeleteTransaction(item)}
+                            onPress={() => isIncome ? handleDeleteIncome(transaction.originalData) : handleDeleteTransaction(transaction.originalData)}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           >
                             <ThemedText style={styles.deleteButtonText}>🗑️</ThemedText>
@@ -1498,8 +1621,8 @@ export default function ExpensesScreen() {
                         </View>
                       </View>
                     </Card>
-                      )
-                    })()}
+                  )
+                })()}
                   </Pressable>
                 </Animated.View>
               ))}
@@ -1558,7 +1681,12 @@ export default function ExpensesScreen() {
                 style={styles.modalGradient}
               />
               <View style={styles.modalHeader}>
-                <ThemedText style={styles.modalTitle}>Seleziona Categoria</ThemedText>
+                <ThemedText style={styles.modalTitle}>
+                  {selectedTransaction?.type === 'income' 
+                    ? (language === 'it' ? 'Seleziona Categoria Entrata' : 'Select Income Category')
+                    : (language === 'it' ? 'Seleziona Categoria' : 'Select Category')
+                  }
+                </ThemedText>
                 <Pressable onPress={closeCategoryModal} style={styles.closeButton}>
                   <ThemedText style={styles.closeButtonText}>✕</ThemedText>
                 </Pressable>
@@ -1584,7 +1712,10 @@ export default function ExpensesScreen() {
                   )}
                 </View>
                 <ThemedText style={styles.transactionInfoNote}>
-                  La categoria verrà applicata a {items.filter(item => item.merchant === selectedTransaction?.merchant).length} transazioni di questo merchant
+                  {selectedTransaction?.type === 'income'
+                    ? (language === 'it' ? 'La categoria verrà applicata a questa entrata' : 'Category will be applied to this income')
+                    : (language === 'it' ? `La categoria verrà applicata a ${items.filter(item => item.merchant === selectedTransaction?.merchant).length} transazioni di questo merchant` : `Category will be applied to ${items.filter(item => item.merchant === selectedTransaction?.merchant).length} transactions from this merchant`)
+                  }
                 </ThemedText>
               </View>
 
@@ -1594,7 +1725,7 @@ export default function ExpensesScreen() {
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.categoriesGrid}>
-                  {availableCategories.map((category, index) => (
+                  {getAvailableCategories().map((category, index) => (
                     <Animated.View
                       key={category.name}
                       style={[
@@ -1615,7 +1746,7 @@ export default function ExpensesScreen() {
                           styles.categoryOptionButton,
                           { borderColor: category.color }
                         ]}
-                        onPress={() => handleCategorySelect(category.id)}
+                        onPress={() => handleCategorySelect((category as any).id || category.name)}
                       >
                         <LinearGradient
                           colors={[`${category.color}15`, `${category.color}08`]}
@@ -1740,32 +1871,54 @@ export default function ExpensesScreen() {
                 style={styles.modalGradient}
               />
               <View style={styles.modalHeader}>
-                <ThemedText style={styles.modalTitle}>{t('delete_transaction')}</ThemedText>
+                <ThemedText style={styles.modalTitle}>
+                  {incomeToDelete ? (language === 'it' ? 'Elimina entrata' : 'Delete income') : t('delete_transaction')}
+                </ThemedText>
               </View>
               <View style={{ alignItems: 'center', padding: 16 }}>
-                <ThemedText style={styles.modalMessage}>{t('delete_confirm_text')}</ThemedText>
+                <ThemedText style={styles.modalMessage}>
+                  {incomeToDelete 
+                    ? (language === 'it' ? 'Sei sicuro di voler eliminare questa entrata?' : 'Are you sure you want to delete this income?')
+                    : t('delete_confirm_text')
+                  }
+                </ThemedText>
               </View>
               <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'flex-end' }}>
-                <Pressable onPress={() => { setShowConfirmModal(false); setTransactionToDelete(null) }} style={[styles.modalButton, { backgroundColor: UI_CONSTANTS.GLASS_BG_SM, borderColor: UI_CONSTANTS.GLASS_BORDER_SM }] }>
+                <Pressable onPress={() => { setShowConfirmModal(false); setTransactionToDelete(null); setIncomeToDelete(null) }} style={[styles.modalButton, { backgroundColor: UI_CONSTANTS.GLASS_BG_SM, borderColor: UI_CONSTANTS.GLASS_BORDER_SM }] }>
                   <ThemedText style={styles.modalButtonText}>{t('cancel')}</ThemedText>
                 </Pressable>
                 <Pressable onPress={async () => {
-                  if (!transactionToDelete?.id) return
                   try {
-                    const { error } = await deleteExpense(transactionToDelete.id!)
-                    if (error) throw error
-                    
-                    // Update items list
-                    setItems(prev => prev.filter(i => i.id !== transactionToDelete.id))
-                    
-                    // Update month dataset for pie chart
-                    setAllMonthItems(prev => prev.filter(i => i.id !== transactionToDelete.id))
-                    
-                    // Force pie chart update
-                    setCategoryUpdateTrigger(prev => prev + 1)
+                    if (transactionToDelete?.id) {
+                      // Handle expense deletion
+                      const { error } = await deleteExpense(transactionToDelete.id!)
+                      if (error) throw error
+                      
+                      // Update items list
+                      setItems(prev => prev.filter(i => i.id !== transactionToDelete.id))
+                      
+                      // Update month dataset for pie chart
+                      setAllMonthItems(prev => prev.filter(i => i.id !== transactionToDelete.id))
+                      
+                      // Force pie chart update
+                      setCategoryUpdateTrigger(prev => prev + 1)
+                    } else if (incomeToDelete?.id) {
+                      // Handle income deletion
+                      const { error } = await supabase
+                        .from('incomes')
+                        .delete()
+                        .eq('user_id', user!.id)
+                        .eq('id', incomeToDelete.id)
+                      
+                      if (error) throw error
+
+                      // Update local state
+                      setIncomes(prev => prev.filter(it => it.id !== incomeToDelete.id))
+                    }
                     
                     setShowConfirmModal(false)
                     setTransactionToDelete(null)
+                    setIncomeToDelete(null)
                     
                   } catch (e) {
                     Alert.alert('Errore', 'Impossibile eliminare la transazione. Riprova.')
@@ -2189,6 +2342,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
   },
+  categoryColumn: {
+    flex: 1,
+    gap: 12,
+  },
   categoryCard: {
     width: '47%',
     marginBottom: 12,
@@ -2263,6 +2420,66 @@ const styles = StyleSheet.create({
     color: Brand.colors.text.muted,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  incomeSection: {
+    paddingHorizontal: 12,
+    marginBottom: 24,
+  },
+  incomeCard: {
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  incomeGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+  },
+  incomeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  incomeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  incomeIconText: {
+    fontSize: 24,
+  },
+  incomeDetails: {
+    flex: 1,
+  },
+  incomeLabel: {
+    fontSize: 14,
+    color: Brand.colors.text.secondary,
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  incomeAmount: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#10b981',
+    marginBottom: 2,
+    letterSpacing: 0.5,
+  },
+  incomeCount: {
+    fontSize: 12,
+    color: Brand.colors.text.tertiary,
+    fontWeight: '500',
   },
   chartSection: {
     paddingHorizontal: 12,

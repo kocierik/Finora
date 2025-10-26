@@ -55,6 +55,7 @@ export default function HomeScreen() {
   }
 
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [incomes, setIncomes] = useState<any[]>([])
   const [dbCategories, setDbCategories] = useState<{ id: string; name: string; icon: string; color: string; sort_order: number }[]>([])
   const [portfolioPoints, setPortfolioPoints] = useState<{ x: string; y: number }[]>([])
   const [kpis, setKpis] = useState<{ totalInvested: number; totalMarket?: number; monthExpenses: number } | null>(null)
@@ -76,7 +77,19 @@ export default function HomeScreen() {
   const [formError, setFormError] = useState<string | null>(null)
   // Category edit modal for recent transactions
   const [showCategoryModal, setShowCategoryModal] = useState(false)
-  const [selectedTx, setSelectedTx] = useState<Expense | null>(null)
+  const [isIncomeCategoryModal, setIsIncomeCategoryModal] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [incomeToDelete, setIncomeToDelete] = useState<any | null>(null)
+  const [transactionToDelete, setTransactionToDelete] = useState<any | null>(null)
+  const [selectedTx, setSelectedTx] = useState<Expense | any | null>(null)
+  
+  // Income categories
+  const incomeCategories = [
+    { id: 'work', name: language === 'it' ? 'Lavoro' : 'Work', icon: '💼', color: '#10b981' },
+    { id: 'passive', name: language === 'it' ? 'Passivo' : 'Passive', icon: '💰', color: '#8B5CF6' },
+    { id: 'investment', name: language === 'it' ? 'Investimento' : 'Investment', icon: '📈', color: '#F59E0B' },
+    { id: 'other', name: language === 'it' ? 'Altro' : 'Other', icon: '💵', color: '#6366F1' }
+  ]
   // Recurring fields
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurringFrequency, setRecurringFrequency] = useState<'weekly' | 'monthly'>('monthly')
@@ -86,6 +99,22 @@ export default function HomeScreen() {
     const d = new Date()
     return new Date(d.getFullYear(), d.getMonth(), d.getDate())
   })
+  
+  // Income states
+  const [showAddIncomeModal, setShowAddIncomeModal] = useState(false)
+  const [newIncomeAmount, setNewIncomeAmount] = useState('')
+  const [newIncomeSource, setNewIncomeSource] = useState('salary')
+  const [newIncomeCategory, setNewIncomeCategory] = useState('work')
+  const [newIncomeDescription, setNewIncomeDescription] = useState('')
+  const [newIncomeDate, setNewIncomeDate] = useState<string>(() => new Date().toISOString().split('T')[0])
+  const [showIncomeCalendarModal, setShowIncomeCalendarModal] = useState(false)
+  const [submittingIncome, setSubmittingIncome] = useState(false)
+  const [incomeFormError, setIncomeFormError] = useState<string | null>(null)
+  // Income recurring fields
+  const [isIncomeRecurring, setIsIncomeRecurring] = useState(false)
+  const [incomeRecurringFrequency, setIncomeRecurringFrequency] = useState<'weekly' | 'monthly' | 'yearly'>('monthly')
+  const [incomeRecurringOccurrences, setIncomeRecurringOccurrences] = useState<string>('6')
+  const [incomeRecurringInfinite, setIncomeRecurringInfinite] = useState<boolean>(false)
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -104,7 +133,7 @@ export default function HomeScreen() {
     
     // Note: Expense synchronization is handled in the Expenses tab to avoid duplicates
     
-      const [{ data: inv }, { data: exp }, { data: profile }, { data: categories }] = await Promise.all([
+      const [{ data: inv }, { data: exp }, { data: inc }, { data: profile }, { data: categories }] = await Promise.all([
         fetchInvestments(user.id),
         supabase
           .from('expenses')
@@ -119,10 +148,16 @@ export default function HomeScreen() {
           `)
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
+        supabase
+          .from('incomes')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
         supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle(),
         supabase.from('categories').select('*').eq('user_id', user.id).order('sort_order', { ascending: true }),
       ])
       setExpenses(exp || [])
+      setIncomes(inc || [])
       
       // Carica il nome del profilo
       if (profile?.display_name) {
@@ -180,6 +215,37 @@ export default function HomeScreen() {
       const monthExpenses = (exp || []).filter(e => sameMonth(e.date, now.getFullYear(), now.getMonth())).reduce((s, e) => s + (e.amount || 0), 0)
       setKpis({ totalInvested, monthExpenses })
   }, [user?.id])
+
+  // Animate modal when it opens
+  useEffect(() => {
+    if (showCategoryModal) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 30,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    }
+  }, [showCategoryModal])
 
   // Carica i dati al mount
   useEffect(() => {
@@ -318,6 +384,14 @@ export default function HomeScreen() {
 
   const availableCategories = (dbCategories?.length ? dbCategories : DEFAULT_CATEGORIES.map(c => ({ id: `temp-${c.name}`, name: c.name, color: c.color, icon: c.icon, sort_order: 0 }))).slice(0, 6)
 
+  // Get available categories based on transaction type
+  const getAvailableCategories = () => {
+    if (isIncomeCategoryModal) {
+      return incomeCategories
+    }
+    return availableCategories
+  }
+
   // Set default category ID when categories are loaded
   useEffect(() => {
     if (dbCategories.length > 0 && !newCategoryId) {
@@ -337,12 +411,55 @@ export default function HomeScreen() {
 
   const openRecentCategoryModal = (tx: Expense) => {
     setSelectedTx(tx)
+    setIsIncomeCategoryModal(false)
     setShowCategoryModal(true)
+  }
+
+  const openRecentIncomeCategoryModal = (income: any) => {
+    setSelectedTx(income)
+    setIsIncomeCategoryModal(true)
+    setShowCategoryModal(true)
+  }
+
+  const handleDeleteIncome = async (income: any) => {
+    if (!income.id) {
+      console.error('Cannot delete income without ID')
+      return
+    }
+
+    setShowConfirmModal(true)
+    setIncomeToDelete(income)
+  }
+
+  const handleDeleteExpense = async (expense: any) => {
+    if (!expense.id) {
+      console.error('Cannot delete expense without ID')
+      return
+    }
+
+    setShowConfirmModal(true)
+    setTransactionToDelete(expense)
   }
 
   const handleSelectRecentCategory = async (categoryId: string) => {
     if (!user || !selectedTx) return
     try {
+      // Check if it's an income category modal
+      if (isIncomeCategoryModal) {
+        // Handle income category update
+        const { error } = await supabase
+          .from('incomes')
+          .update({ category: categoryId })
+          .eq('user_id', user.id)
+          .eq('id', selectedTx.id)
+        if (error) throw error
+
+        // Update local state
+        setIncomes(prev => prev.map(it =>
+          it.id === selectedTx.id ? { ...it, category: categoryId } : it
+        ))
+      } else {
+        // Handle expense category update (existing logic)
       const merchant = selectedTx.merchant
       // Find the category details
       const category = dbCategories.find(c => c.id === categoryId)
@@ -363,18 +480,60 @@ export default function HomeScreen() {
       setExpenses(prev => prev.map(it =>
         it.merchant === merchant ? { ...it, category_id: categoryId, categories: category } : it
       ))
+      }
 
       // Notify other screens
       DeviceEventEmitter.emit('expenses:externalUpdate')
     } catch (e) {
     } finally {
       setShowCategoryModal(false)
+      setIsIncomeCategoryModal(false)
       setSelectedTx(null)
     }
   }
 
+  // Combine expenses and incomes for recent transactions
+  const allTransactions = useMemo(() => {
+    const expenseTransactions = expenses.map(expense => ({
+      id: expense.id,
+      type: 'expense' as const,
+      amount: -expense.amount, // Negative for expenses
+      description: expense.merchant || 'Expense',
+      category: expense.categories?.name || expense.category || 'Other',
+      categoryIcon: expense.categories?.icon || '💳',
+      categoryColor: expense.categories?.color || '#06b6d4',
+      date: expense.date,
+      created_at: expense.created_at,
+      isRecurring: expense.is_recurring,
+      raw_notification: expense.raw_notification,
+      originalData: expense
+    }))
+
+    const incomeTransactions = incomes.map(income => ({
+      id: income.id,
+      type: 'income' as const,
+      amount: income.amount, // Positive for incomes
+      description: income.description || income.source || 'Income',
+      category: income.category || 'work',
+      categoryIcon: income.source === 'salary' ? '💼' : 
+                   income.source === 'freelance' ? '💻' :
+                   income.source === 'investment' ? '📈' :
+                   income.source === 'bonus' ? '🎁' : '💰',
+      categoryColor: income.category === 'work' ? '#10b981' :
+                    income.category === 'passive' ? '#8B5CF6' :
+                    income.category === 'investment' ? '#F59E0B' : '#6366F1',
+      date: income.date,
+      created_at: income.created_at,
+      isRecurring: income.is_recurring,
+      raw_notification: 'manual',
+      originalData: income
+    }))
+
+    return [...expenseTransactions, ...incomeTransactions]
+  }, [expenses, incomes])
+
   // Ensure consistent ordering client-side as a fallback
-  const sortedExpenses = useMemo(() => {
+  const sortedTransactions = useMemo(() => {
     const parseDate = (s?: string) => {
       if (!s) return 0
       const parts = s.includes('/') ? s.split('/') : []
@@ -396,22 +555,22 @@ export default function HomeScreen() {
     // Filtra le transazioni:
     // 1. Precedenti o uguali alla data corrente (incluso oggi)
     // 2. Del mese della data selezionata (sempre)
-    const filteredExpenses = expenses.filter(expense => {
-      const expenseDate = parseDate(expense.date)
-      const expenseDateObj = new Date(expenseDate)
+    const filteredTransactions = allTransactions.filter(transaction => {
+      const transactionDate = parseDate(transaction.date)
+      const transactionDateObj = new Date(transactionDate)
       const selectedDate = new Date(newDate)
       
       // Includi sempre le transazioni del mese della data selezionata
-      const isInSelectedMonth = expenseDateObj.getFullYear() === selectedDate.getFullYear() && 
-                               expenseDateObj.getMonth() === selectedDate.getMonth()
+      const isInSelectedMonth = transactionDateObj.getFullYear() === selectedDate.getFullYear() && 
+                               transactionDateObj.getMonth() === selectedDate.getMonth()
       
       // Includi le transazioni precedenti o uguali alla data corrente (incluso oggi)
-      const isTodayOrBefore = expenseDate <= today.getTime()
+      const isTodayOrBefore = transactionDate <= today.getTime()
       
       return isInSelectedMonth || isTodayOrBefore
     })
 
-    return [...filteredExpenses].sort((a, b) => {
+    return [...filteredTransactions].sort((a, b) => {
       const da = parseDate(a.date)
       const db = parseDate(b.date)
       if (db !== da) return db - da
@@ -419,7 +578,7 @@ export default function HomeScreen() {
       const cb = b.created_at ? new Date(b.created_at).getTime() : 0
       return cb - ca
     })
-  }, [expenses, newDate])
+  }, [allTransactions, newDate])
 
   return (
     <View style={styles.container}>
@@ -566,22 +725,43 @@ export default function HomeScreen() {
 
         </View>
         <View style={styles.fabContainer}>
+          <View style={styles.fabRow}>
           <Pressable
             style={({ pressed }) => [
               styles.fab,
+                styles.fabExpense,
               pressed && { transform: [{ scale: 0.98 }] }
             ]}
             onPress={() => setShowAddModal(true)}
           >
             <LinearGradient
-              colors={UI_CONSTANTS.GRADIENT_CYAN_BG_LIGHT as any}
+                colors={['rgba(239, 68, 68, 0.12)', 'rgba(239, 68, 68, 0.06)']}
               start={{ x: 1.1, y: 1.1 }}
               end={{ x: 0.9, y: 0.9 }}
               style={styles.fabGradient}
             />
-            <ThemedText style={styles.fabIcon}>＋</ThemedText>
-          <ThemedText style={styles.fabLabel}>{t('add_transaction')}</ThemedText>
+              <ThemedText style={[styles.fabIcon, { color: '#ef4444' }]}>－</ThemedText>
+              <ThemedText style={styles.fabLabel}>{language === 'it' ? 'Spesa' : 'Expense'}</ThemedText>
+            </Pressable>
+            
+            <Pressable
+              style={({ pressed }) => [
+                styles.fab,
+                styles.fabIncome,
+                pressed && { transform: [{ scale: 0.98 }] }
+              ]}
+              onPress={() => setShowAddIncomeModal(true)}
+            >
+              <LinearGradient
+                colors={['rgba(16, 185, 129, 0.12)', 'rgba(16, 185, 129, 0.06)']}
+                start={{ x: 1.1, y: 1.1 }}
+                end={{ x: 0.9, y: 0.9 }}
+                style={styles.fabGradient}
+              />
+              <ThemedText style={[styles.fabIcon, { color: '#10b981' }]}>＋</ThemedText>
+              <ThemedText style={styles.fabLabel}>{language === 'it' ? 'Entrata' : 'Income'}</ThemedText>
           </Pressable>
+          </View>
         </View>
         {/* Recent Transactions */}
         <Animated.View 
@@ -597,16 +777,16 @@ export default function HomeScreen() {
                 {language === 'it' ? 'Transazioni recenti' : 'Recent transactions'}
               </ThemedText>
               <ThemedText style={styles.recentCount}>
-            {/* {Math.min(3, expenses.length)} / {expenses.length} */}
+                {allTransactions.length} {language === 'it' ? 'transazioni' : 'transactions'}
               </ThemedText>
             </View>
             <View style={styles.recentList}>
-              {sortedExpenses.slice(0, UI_CONSTANTS.RECENT_TRANSACTIONS_LIMIT).map((tx, idx) => {
-                const info = tx.categories || getCategoryInfo(tx.category || 'Other')
-                const clr = (info?.color || '#06b6d4')
+              {sortedTransactions.slice(0, UI_CONSTANTS.RECENT_TRANSACTIONS_LIMIT).map((tx, idx) => {
+                const clr = tx.categoryColor
+                const isIncome = tx.type === 'income'
                 
                 return (
-                  <View 
+                  <TouchableOpacity 
                     key={tx.id ?? idx} 
                     style={[
                       styles.recentItem,
@@ -615,18 +795,21 @@ export default function HomeScreen() {
                         borderBottomColor: `${clr}20`
                       }
                     ]}
+                    onPress={() => isIncome ? openRecentIncomeCategoryModal(tx.originalData) : openRecentCategoryModal(tx.originalData)}
+                    hitSlop={UI_CONSTANTS.HIT_SLOP_MEDIUM as any}
                   >
                     <View style={styles.recentLeft}>
-                      <View 
-                        style={[
-                          styles.recentIcon,
-                          {
-                            backgroundColor: `${clr}15`,
-                            borderColor: `${clr}30`
-                          }
-                        ]}
-                      >
-                        <ThemedText style={styles.recentIconText}>{tx.raw_notification === 'manual' ? '✍️' : '💳'}</ThemedText>
+                      <View style={[
+                        styles.homeCategoryBadge, 
+                        { 
+                          backgroundColor: `${clr}20`, 
+                          borderColor: `${clr}40`, 
+                          marginRight: 10 
+                        }
+                      ]}>
+                        <ThemedText style={[styles.homeCategoryBadgeText, { color: clr }]} numberOfLines={1}>
+                          {tx.categoryIcon}
+                        </ThemedText>
                       </View>
                       <View style={styles.recentTextBlock}>
                         <ThemedText 
@@ -636,7 +819,7 @@ export default function HomeScreen() {
                           ]} 
                           numberOfLines={1}
                         >
-                          {tx.merchant || '—'}
+                          {tx.description || '—'}
                         </ThemedText>
                         <ThemedText style={styles.recentDate}>
                           {isToday(tx.date) 
@@ -646,22 +829,25 @@ export default function HomeScreen() {
                         </ThemedText>
                       </View>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => openRecentCategoryModal(tx)}
-                      style={[styles.homeCategoryBadge, { backgroundColor: `${clr}20`, borderColor: `${clr}40`, marginRight: 10 }]}
-                      hitSlop={UI_CONSTANTS.HIT_SLOP_MEDIUM as any}
-                    >
-                      <ThemedText style={[styles.homeCategoryBadgeText, { color: clr }]} numberOfLines={1}>
-                        {info?.icon ? `${info.icon} ` : ''}{shortenCategoryName(info?.name || (tx.category || 'Other'))}
+                    <View style={styles.recentRight}>
+                      <ThemedText style={[
+                        styles.recentAmount, 
+                        isIncome ? { color: '#10b981' } : { color: '#ef4444' }
+                      ]}> 
+                        {isIncome ? '+' : '-'}{Math.abs(tx.amount).toLocaleString(language === 'it' ? 'it-IT' : 'en-US', { style: 'currency', currency: 'EUR' })}
                       </ThemedText>
+                    <TouchableOpacity
+                        style={styles.deleteButton}
+                        onPress={() => isIncome ? handleDeleteIncome(tx.originalData) : handleDeleteExpense(tx.originalData)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <ThemedText style={styles.deleteButtonText}>🗑️</ThemedText>
                     </TouchableOpacity>
-                    <ThemedText style={[styles.recentAmount, (tx.amount ?? 0) > 0 ? { color: '#ef4444' } : { color: UI_CONSTANTS.SUCCESS_TEXT }]}> 
-                      {Math.abs(tx.amount ?? 0).toLocaleString(language === 'it' ? 'it-IT' : 'en-US', { style: 'currency', currency: 'EUR' })}
-                    </ThemedText>
                   </View>
+                  </TouchableOpacity>
                 )
               })}
-              {expenses.length === 0 && (
+              {allTransactions.length === 0 && (
                 <View style={{ paddingVertical: 12, alignItems: 'center' }}>
                   <ThemedText style={{ color: Brand.colors.text.secondary }}>
                     {language === 'it' ? 'Nessuna transazione' : 'No transactions'}
@@ -1084,90 +1270,517 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
+      {/* Add Income Modal */}
+      <Modal
+        visible={showAddIncomeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddIncomeModal(false)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_DARK }]}> 
+          <View style={styles.addModalCard}>
+            <LinearGradient
+              colors={[ 'rgba(16,185,129,0.10)', 'rgba(34,197,94,0.06)', 'transparent' ]}
+              style={styles.addModalGradient}
+            />
+            <View style={styles.addModalHeader}>
+              <ThemedText style={styles.addModalTitle}>{language === 'it' ? 'Aggiungi Entrata' : 'Add Income'}</ThemedText>
+              <Pressable onPress={() => setShowAddIncomeModal(false)} style={styles.addModalClose}>
+                <ThemedText style={styles.addModalCloseText}>✕</ThemedText>
+              </Pressable>
+            </View>
+            {!!incomeFormError && (
+              <View style={styles.errorBox}>
+                <ThemedText style={styles.errorTitle}>{t('error_prefix')}{incomeFormError}</ThemedText>
+              </View>
+            )}
+            <View style={styles.formRow}>
+              <ThemedText style={styles.formLabel}>{language === 'it' ? 'Descrizione' : 'Description'}</ThemedText>
+              <TextInput
+                style={styles.input}
+                placeholder={language === 'it' ? 'Stipendio, freelance...' : 'Salary, freelance...'}
+                placeholderTextColor="#94a3b8"
+                value={newIncomeDescription}
+                onChangeText={setNewIncomeDescription}
+              />
+            </View>
+            <View style={styles.formRow}>
+              <ThemedText style={styles.formLabel}>{t('amount')}</ThemedText>
+              <TextInput
+                style={styles.input}
+                placeholder="0.00"
+                placeholderTextColor="#94a3b8"
+                keyboardType="decimal-pad"
+                value={newIncomeAmount}
+                onChangeText={setNewIncomeAmount}
+              />
+            </View>
+            <View style={styles.formRow}>
+              <ThemedText style={styles.formLabel}>{language === 'it' ? 'Fonte' : 'Source'}</ThemedText>
+              <View style={styles.categoryRow}>
+                {[
+                  { key: 'salary', label: language === 'it' ? 'Stipendio' : 'Salary', icon: '💼' },
+                  { key: 'freelance', label: language === 'it' ? 'Freelance' : 'Freelance', icon: '💻' },
+                  { key: 'investment', label: language === 'it' ? 'Investimenti' : 'Investment', icon: '📈' },
+                  { key: 'bonus', label: language === 'it' ? 'Bonus' : 'Bonus', icon: '🎁' },
+                  { key: 'other', label: language === 'it' ? 'Altro' : 'Other', icon: '💰' }
+                ].map((source) => (
+                    <TouchableOpacity
+                    key={source.key}
+                      style={[
+                        styles.categoryChip, 
+                      newIncomeSource === source.key && styles.categoryChipActive,
+                        { 
+                        borderColor: newIncomeSource === source.key ? '#10b981' : UI_CONSTANTS.GLASS_BORDER_MD,
+                        backgroundColor: newIncomeSource === source.key ? 'rgba(16,185,129,0.20)' : undefined
+                        }
+                      ]}
+                    onPress={() => setNewIncomeSource(source.key)}
+                    >
+                      <ThemedText 
+                        style={[
+                          styles.categoryChipText, 
+                        newIncomeSource === source.key && styles.categoryChipTextActive,
+                        newIncomeSource === source.key && { color: '#10b981' }
+                        ]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                      {source.icon} {source.label}
+                      </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.formRow}>
+              <ThemedText style={styles.formLabel}>{language === 'it' ? 'Categoria' : 'Category'}</ThemedText>
+              <View style={styles.categoryRow}>
+                {[
+                  { key: 'work', label: language === 'it' ? 'Lavoro' : 'Work', icon: '💼' },
+                  { key: 'passive', label: language === 'it' ? 'Passiva' : 'Passive', icon: '🏠' },
+                  { key: 'investment', label: language === 'it' ? 'Investimenti' : 'Investment', icon: '📈' },
+                  { key: 'other', label: language === 'it' ? 'Altro' : 'Other', icon: '💰' }
+                ].map((category) => (
+                  <TouchableOpacity
+                    key={category.key}
+                    style={[
+                      styles.categoryChip, 
+                      newIncomeCategory === category.key && styles.categoryChipActive,
+                      { 
+                        borderColor: newIncomeCategory === category.key ? '#10b981' : UI_CONSTANTS.GLASS_BORDER_MD,
+                        backgroundColor: newIncomeCategory === category.key ? 'rgba(16,185,129,0.20)' : undefined
+                      }
+                    ]}
+                    onPress={() => setNewIncomeCategory(category.key)}
+                  >
+                    <ThemedText 
+                      style={[
+                        styles.categoryChipText, 
+                        newIncomeCategory === category.key && styles.categoryChipTextActive,
+                        newIncomeCategory === category.key && { color: '#10b981' }
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {category.icon} {category.label}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.formRow}>
+              <ThemedText style={styles.formLabel}>{t('date')}</ThemedText>
+              <Pressable style={styles.input} onPress={() => setShowIncomeCalendarModal(true)}>
+                <ThemedText style={{ color: '#E8EEF8' }}>{newIncomeDate}</ThemedText>
+              </Pressable>
+            </View>
+
+            {/* Income Recurring Controls */}
+            <View style={styles.formRow}>
+              <TouchableOpacity
+                onPress={() => setIsIncomeRecurring(!isIncomeRecurring)}
+                style={[styles.toggleRow, isIncomeRecurring && styles.toggleRowActive]}
+              >
+                <View style={[styles.toggleIndicator, isIncomeRecurring && styles.toggleIndicatorOn]} />
+                <ThemedText style={[styles.toggleLabel, isIncomeRecurring && styles.toggleLabelActive]}>
+                  {language === 'it' ? 'Entrata ricorrente' : 'Recurring income'}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            {isIncomeRecurring && (
+              <>
+                <View style={styles.formRow}>
+                  <ThemedText style={styles.formLabel}>{language === 'it' ? 'Frequenza' : 'Frequency'}</ThemedText>
+                  <View style={styles.categoryRow}>
+                    {(['monthly','weekly','yearly'] as const).map((freq) => (
+                      <TouchableOpacity
+                        key={freq}
+                        style={[styles.categoryChip, incomeRecurringFrequency === freq && !incomeRecurringInfinite && styles.categoryChipActive]}
+                        onPress={() => {
+                          setIncomeRecurringFrequency(freq);
+                          setIncomeRecurringInfinite(false);
+                        }}
+                      >
+                        <ThemedText style={[styles.categoryChipText, incomeRecurringFrequency === freq && !incomeRecurringInfinite && styles.categoryChipTextActive]}>
+                          {freq === 'monthly' ? (language === 'it' ? 'Mensile' : 'Monthly') :
+                           freq === 'weekly' ? (language === 'it' ? 'Settimanale' : 'Weekly') :
+                           (language === 'it' ? 'Annuale' : 'Yearly')}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    ))}
+                    {/* Infinite toggle chip */}
+                    <TouchableOpacity
+                      key="infinite"
+                      style={[styles.categoryChip, incomeRecurringInfinite && styles.categoryChipActive]}
+                      onPress={() => {
+                        setIncomeRecurringInfinite(!incomeRecurringInfinite);
+                        if (!incomeRecurringInfinite) {
+                          setIncomeRecurringFrequency('monthly'); // Reset to default when enabling infinite
+                        }
+                      }}
+                    >
+                      <ThemedText style={[styles.categoryChipText, incomeRecurringInfinite && styles.categoryChipTextActive]}>
+                        {language === 'it' ? 'Senza fine' : 'Never ends'}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                {!incomeRecurringInfinite && (
+                  <View style={styles.formRow}>
+                    <ThemedText style={styles.formLabel}>{language === 'it' ? 'Occorrenze' : 'Occurrences'}</ThemedText>
+                    <TextInput
+                      style={styles.input}
+                      keyboardType="number-pad"
+                      placeholder="6"
+                      placeholderTextColor="#94a3b8"
+                      value={incomeRecurringOccurrences}
+                      onChangeText={setIncomeRecurringOccurrences}
+                    />
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* Income Calendar Modal */}
+            <Modal
+              visible={showIncomeCalendarModal}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setShowIncomeCalendarModal(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.addModalCard}>
+                  <ThemedText style={styles.addModalTitle}>{t('select_date')}</ThemedText>
+                  <View style={styles.calendarContainer}>
+                    <View style={styles.calendarHeader}>
+                     <Pressable onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))} style={styles.calendarNav}>
+                        <ThemedText style={styles.calendarNavText}>‹</ThemedText>
+                      </Pressable>
+                      <ThemedText style={styles.calendarMonthText}>
+                        {calendarMonth.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
+                      </ThemedText>
+                     <Pressable
+                       disabled={(calendarMonth.getFullYear() === new Date().getFullYear() && calendarMonth.getMonth() >= new Date().getMonth())}
+                       onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
+                       style={[styles.calendarNav, (calendarMonth.getFullYear() === new Date().getFullYear() && calendarMonth.getMonth() >= new Date().getMonth()) && { opacity: 0.4 }]}
+                     >
+                        <ThemedText style={styles.calendarNavText}>›</ThemedText>
+                      </Pressable>
+                    </View>
+                  <View style={styles.calendarWeekRow}>
+                    {['L', 'M', 'M', 'G', 'V', 'S', 'D'].map((d, i) => (
+                      <ThemedText key={`wd-${i}`} style={styles.calendarWeekText}>{d}</ThemedText>
+                    ))}
+                  </View>
+                    <View style={styles.calendarGrid}>
+                      {(() => {
+                       const firstDay = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay() || 7
+                       const today = new Date()
+                       const isCurrentCalendarMonth = calendarMonth.getFullYear() === today.getFullYear() && calendarMonth.getMonth() === today.getMonth()
+                       const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate()
+                        const cells: any[] = []
+                        const leading = firstDay - 1
+                        for (let i = 0; i < leading; i++) cells.push(null)
+                        for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+                        return cells.map((day, idx) => {
+                          const isEmpty = day === null
+                          const yyyy = calendarMonth.getFullYear()
+                          const mm = String(calendarMonth.getMonth() + 1).padStart(2, '0')
+                          const dd = String(day || 1).padStart(2, '0')
+                          const value = `${yyyy}-${mm}-${dd}`
+                          const isSelected = !isEmpty && newIncomeDate === value
+                          const disableFuture = isCurrentCalendarMonth && !isEmpty && day! > today.getDate()
+                          return (
+                            <TouchableOpacity
+                              key={idx}
+                              disabled={isEmpty || disableFuture}
+                              style={[
+                                styles.calendarCell,
+                                isSelected && styles.calendarCellSelected,
+                                isEmpty && styles.calendarCellEmpty,
+                                disableFuture && { opacity: 0.4 }
+                              ]}
+                            onPress={() => { setNewIncomeDate(value); setShowIncomeCalendarModal(false) }}
+                            >
+                              {!isEmpty && (
+                                <ThemedText style={[styles.calendarCellText, isSelected && styles.calendarCellTextSelected]}>
+                                  {day}
+                                </ThemedText>
+                              )}
+                    </TouchableOpacity>
+                  )
+                        })
+                      })()}
+              </View>
+                </View>
+                  <Pressable onPress={() => setShowIncomeCalendarModal(false)} style={[styles.submitButton, { marginTop: 12 }]}>
+                    <ThemedText style={styles.submitButtonText}>{t('close')}</ThemedText>
+                  </Pressable>
+                </View>
+              </View>
+            </Modal>
+
+            <Pressable
+              style={({ pressed }) => [styles.submitButton, pressed && { opacity: 0.9 }]}
+              onPress={async () => {
+                if (!user || submittingIncome) return
+                setSubmittingIncome(true)
+                try {
+                  const amountNum = parseFloat((newIncomeAmount || '').replace(',', '.'))
+                  if (!newIncomeDescription || newIncomeDescription.trim().length === 0) {
+                    setIncomeFormError(language === 'it' ? 'Descrizione obbligatoria' : 'Description required')
+                    return
+                  }
+                  if (!amountNum || isNaN(amountNum) || amountNum <= 0) {
+                    setIncomeFormError(language === 'it' ? 'Importo non valido' : 'Invalid amount')
+                    return
+                  }
+                  if (!newIncomeDate) {
+                    setIncomeFormError(language === 'it' ? 'Data obbligatoria' : 'Date required')
+                    return
+                  }
+                  
+                  const items: any[] = []
+                  if (isIncomeRecurring) {
+                    const count = incomeRecurringInfinite ? 1 : Math.min(36, Math.max(1, parseInt(incomeRecurringOccurrences || '1', 10) || 1))
+                    const selectedDate = new Date(newIncomeDate)
+                    const today = new Date()
+                    today.setHours(0, 0, 0, 0) // Reset time to start of day
+                    
+                    // Per le entrate ricorrenti:
+                    // - Se la data selezionata è nel futuro: inizia da quella data
+                    // - Se la data selezionata è nel passato: inizia dal periodo successivo a oggi
+                    let start: Date
+                    if (selectedDate >= today) {
+                      // Data futura: inizia dalla data selezionata
+                      start = new Date(selectedDate)
+                    } else {
+                      // Data passata: inizia dal periodo successivo a oggi
+                      start = new Date(today)
+                      if (incomeRecurringFrequency === 'monthly') {
+                        start.setMonth(start.getMonth() + 1)
+                      } else if (incomeRecurringFrequency === 'weekly') {
+                        start.setDate(start.getDate() + 7)
+                      } else if (incomeRecurringFrequency === 'yearly') {
+                        start.setFullYear(start.getFullYear() + 1)
+                      }
+                    }
+                    
+                    const groupId = `rec-income-${user.id}-${Date.now()}`
+                    for (let i = 0; i < count; i++) {
+                      const d = new Date(start)
+                      if (incomeRecurringFrequency === 'monthly') {
+                        d.setMonth(d.getMonth() + i)
+                      } else if (incomeRecurringFrequency === 'weekly') {
+                        d.setDate(d.getDate() + i * 7)
+                      } else if (incomeRecurringFrequency === 'yearly') {
+                        d.setFullYear(d.getFullYear() + i)
+                      }
+                      const yyyy = d.getFullYear()
+                      const mm = String(d.getMonth() + 1).padStart(2, '0')
+                      const dd = String(d.getDate()).padStart(2, '0')
+                      items.push({
+                        user_id: user.id,
+                        amount: amountNum,
+                        source: newIncomeSource,
+                        category: newIncomeCategory,
+                        currency: 'EUR',
+                        date: `${yyyy}-${mm}-${dd}`,
+                        description: newIncomeDescription,
+                        is_recurring: true,
+                        recurring_group_id: groupId,
+                        recurring_frequency: incomeRecurringFrequency,
+                        recurring_total_occurrences: incomeRecurringInfinite ? null : count,
+                        recurring_index: i + 1,
+                        recurring_infinite: incomeRecurringInfinite,
+                      })
+                    }
+                  } else {
+                    items.push({
+                      user_id: user.id,
+                      amount: amountNum,
+                      source: newIncomeSource,
+                      category: newIncomeCategory,
+                      currency: 'EUR',
+                      date: newIncomeDate,
+                      description: newIncomeDescription,
+                      is_recurring: false,
+                    })
+                  }
+                  
+                  const { error } = await supabase.from('incomes').insert(items)
+                  
+                  if (error) {
+                    if (logger && logger.error) {
+                      logger.error('Failed to save income', { error: error.message }, 'Home')
+                    }
+                    setIncomeFormError(error.message || (language === 'it' ? 'Errore durante il salvataggio' : 'Error saving income'))
+                    return
+                  }
+                  
+                  if (logger && logger.info) {
+                    logger.info('Income saved successfully', { 
+                      amount: amountNum,
+                      source: newIncomeSource,
+                      category: newIncomeCategory 
+                    }, 'Home')
+                  }
+                  
+                  await loadData()
+                  DeviceEventEmitter.emit('expenses:externalUpdate')
+                  
+                  // For recurring incomes, add a small delay and force refresh
+                  if (isIncomeRecurring) {
+                    setTimeout(async () => {
+                      await loadData()
+                      DeviceEventEmitter.emit('expenses:externalUpdate')
+                    }, 500)
+                  }
+                  
+                  setNewIncomeAmount('')
+                  setNewIncomeSource('salary')
+                  setNewIncomeCategory('work')
+                  setNewIncomeDescription('')
+                  setNewIncomeDate(new Date().toISOString().split('T')[0])
+                  setIsIncomeRecurring(false)
+                  setIncomeRecurringFrequency('monthly')
+                  setIncomeRecurringOccurrences('6')
+                  setIncomeRecurringInfinite(false)
+                  setIncomeFormError(null)
+                  setShowAddIncomeModal(false)
+                  // Show toast
+                  const toastMessage = isIncomeRecurring 
+                    ? (language === 'it' ? `Entrate ricorrenti aggiunte (${items.length}) ✅` : `Recurring incomes added (${items.length}) ✅`)
+                    : (language === 'it' ? 'Entrata aggiunta ✅' : 'Income added ✅')
+                  setToast({ visible: true, text: toastMessage })
+                  setTimeout(() => setToast({ visible: false, text: '' }), 2000)
+                } catch (e: any) {
+                  setIncomeFormError(e?.message || (language === 'it' ? 'Impossibile salvare l\'entrata' : 'Unable to save income'))
+                } finally {
+                  setSubmittingIncome(false)
+                }
+              }}
+            >
+              <ThemedText style={styles.submitButtonText}>
+                {submittingIncome ? (language === 'it' ? 'Salvando...' : 'Saving...') : (language === 'it' ? 'Aggiungi Entrata' : 'Add Income')}
+              </ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {toast.visible && (
         <View style={styles.toast}>
           <ThemedText style={styles.toastText}>{toast.text}</ThemedText>
         </View>
       )}
 
-      {/* Category Selection Modal (reuse styles) */}
+      {/* Delete Confirmation Modal */}
       <Modal
-        visible={showCategoryModal}
+        visible={showConfirmModal}
         transparent
         animationType="fade"
-        onRequestClose={() => { setShowCategoryModal(false); setSelectedTx(null) }}
+        onRequestClose={() => { setShowConfirmModal(false); setIncomeToDelete(null); setTransactionToDelete(null) }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.addModalCard}>
             <View style={styles.addModalHeader}>
-              <ThemedText style={styles.addModalTitle}>{t('select_category')}</ThemedText>
-              <Pressable onPress={() => { setShowCategoryModal(false); setSelectedTx(null) }} style={styles.addModalClose}>
+              <ThemedText style={styles.addModalTitle}>
+                {incomeToDelete ? (language === 'it' ? 'Elimina entrata' : 'Delete income') : (language === 'it' ? 'Elimina spesa' : 'Delete expense')}
+              </ThemedText>
+              <Pressable onPress={() => { setShowConfirmModal(false); setIncomeToDelete(null); setTransactionToDelete(null) }} style={styles.addModalClose}>
                 <ThemedText style={styles.addModalCloseText}>✕</ThemedText>
               </Pressable>
             </View>
-            <View style={styles.categoryGrid}>
-              <View style={styles.categoryColumn}>
-                {availableCategories.slice(0, 3).map((c, i) => {
-                  const isSelected = selectedTx?.category_id === c.id || selectedTx?.category?.toLowerCase() === c.name.toLowerCase()
-                  return (
-                    <TouchableOpacity
-                      key={`${c.name}-${i}`}
-                      style={[
-                        styles.categoryChip, 
-                        isSelected && styles.categoryChipActive,
-                        { 
-                          borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
-                          backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
-                        }
-                      ]}
-                      onPress={() => handleSelectRecentCategory(c.id)}
-                    >
-                      <ThemedText 
-                        style={[
-                          styles.categoryChipText, 
-                          isSelected && styles.categoryChipTextActive,
-                          isSelected && c.color && { color: c.color }
-                        ]}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                      >
-                        {c.icon ? `${c.icon} ` : ''}{shortenCategoryName(c.name)}
-                      </ThemedText>
-                    </TouchableOpacity>
-                  )
-                })}
-              </View>
-              <View style={styles.categoryColumn}>
-                {availableCategories.slice(3, 6).map((c, i) => {
-                  const isSelected = selectedTx?.category_id === c.id || selectedTx?.category?.toLowerCase() === c.name.toLowerCase()
-                  return (
-                    <TouchableOpacity
-                      key={`${c.name}-${i+3}`}
-                      style={[
-                        styles.categoryChip, 
-                        isSelected && styles.categoryChipActive,
-                        { 
-                          borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
-                          backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
-                        }
-                      ]}
-                      onPress={() => handleSelectRecentCategory(c.id)}
-                    >
-                      <ThemedText 
-                        style={[
-                          styles.categoryChipText, 
-                          isSelected && styles.categoryChipTextActive,
-                          isSelected && c.color && { color: c.color }
-                        ]}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                      >
-                        {c.icon ? `${c.icon} ` : ''}{shortenCategoryName(c.name)}
-                      </ThemedText>
-                    </TouchableOpacity>
-                  )
-                })}
-              </View>
+            <View style={{ alignItems: 'center', padding: 16 }}>
+              <ThemedText style={{ color: '#E8EEF8', textAlign: 'center', fontSize: 16 }}>
+                {incomeToDelete ? (language === 'it' ? 'Sei sicuro di voler eliminare questa entrata?' : 'Are you sure you want to delete this income?') : (language === 'it' ? 'Sei sicuro di voler eliminare questa spesa?' : 'Are you sure you want to delete this expense?')}
+              </ThemedText>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
+              <Pressable 
+                onPress={() => { setShowConfirmModal(false); setIncomeToDelete(null); setTransactionToDelete(null) }} 
+                style={[styles.submitButton, { backgroundColor: 'rgba(100, 100, 100, 0.2)', borderColor: 'rgba(100, 100, 100, 0.3)' }]}
+              >
+                <ThemedText style={styles.submitButtonText}>{language === 'it' ? 'Annulla' : 'Cancel'}</ThemedText>
+              </Pressable>
+              <Pressable 
+                onPress={async () => {
+                  if (!user) return
+                  
+                  try {
+                    if (incomeToDelete?.id) {
+                      // Delete income
+                      const { error } = await supabase
+                        .from('incomes')
+                        .delete()
+                        .eq('user_id', user.id)
+                        .eq('id', incomeToDelete.id)
+                      
+                      if (error) throw error
+
+                      // Update local state
+                      setIncomes(prev => prev.filter(it => it.id !== incomeToDelete.id))
+
+                      // Show toast
+                      setToast({ visible: true, text: language === 'it' ? 'Entrata eliminata ✅' : 'Income deleted ✅' })
+                    } else if (transactionToDelete?.id) {
+                      // Delete expense
+                      const { error } = await supabase
+                        .from('expenses')
+                        .delete()
+                        .eq('user_id', user.id)
+                        .eq('id', transactionToDelete.id)
+                      
+                      if (error) throw error
+
+                      // Update local state
+                      setExpenses(prev => prev.filter(it => it.id !== transactionToDelete.id))
+
+                      // Show toast
+                      setToast({ visible: true, text: language === 'it' ? 'Spesa eliminata ✅' : 'Expense deleted ✅' })
+                    } else {
+                      return
+                    }
+
+                    // Notify other screens
+                    DeviceEventEmitter.emit('expenses:externalUpdate')
+                    setTimeout(() => setToast({ visible: false, text: '' }), 2000)
+
+                    setShowConfirmModal(false)
+                    setIncomeToDelete(null)
+                    setTransactionToDelete(null)
+                  } catch (e) {
+                    console.error('Error deleting transaction:', e)
+                    setToast({ visible: true, text: language === 'it' ? 'Errore nell\'eliminazione' : 'Error deleting transaction' })
+                    setTimeout(() => setToast({ visible: false, text: '' }), 2000)
+                  }
+                }} 
+                style={[styles.submitButton, { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}
+              >
+                <ThemedText style={[styles.submitButtonText, { color: '#ef4444' }]}>{language === 'it' ? 'Elimina' : 'Delete'}</ThemedText>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -1517,15 +2130,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   recentList: {
-    gap: 2,
+    gap: 8,
   },
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    height: 60,
     borderBottomWidth: 1,
     borderRightWidth: 1,
     borderLeftWidth: 1,
@@ -1569,6 +2183,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 12,
   },
+  recentRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deleteButton: {
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  deleteButtonText: {
+    fontSize: 12,
+    color: '#ef4444',
+  },
   homeCategoryBadge: {
     alignSelf: 'flex-start',
     borderWidth: 1,
@@ -1587,6 +2215,11 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     alignItems: 'center',
   },
+  fabRow: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'center',
+  },
   fab: {
     backgroundColor: 'rgba(6,182,212,0.12)',
     borderColor: 'rgba(6,182,212,0.35)',
@@ -1598,6 +2231,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     overflow: 'hidden',
+    flex: 1,
+    maxWidth: 140,
+  },
+  fabExpense: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+  },
+  fabIncome: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   fabGradient: {
     position: 'absolute',
@@ -1617,14 +2260,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.2,
-  },
-  // Add modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
   },
   addModalCard: {
     width: '100%',
@@ -1773,6 +2408,7 @@ const styles = StyleSheet.create({
     color: '#E8EEF8',
     fontWeight: '800',
     letterSpacing: 0.3,
+    paddingHorizontal: 5,
   },
   errorBox: {
     marginTop: 8,
@@ -1881,5 +2517,126 @@ const styles = StyleSheet.create({
   },
   calendarCellTextSelected: {
     color: '#06b6d4',
+  },
+  // Modal styles (from expenses tab)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgb(5, 5, 5)',
+    opacity: 0.95,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  modalContainer: {
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  modalCard: {
+    padding: 24,
+    borderRadius: 24,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  modalGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
+  modalScrollView: {
+    maxHeight: 400,
+  },
+  modalScrollContent: {
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Brand.colors.text.primary,
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeButtonText: {
+    fontSize: 16,
+    color: Brand.colors.text.secondary,
+    fontWeight: '600',
+  },
+  transactionInfo: {
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  transactionInfoMerchant: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Brand.colors.text.primary,
+    marginBottom: 8,
+  },
+  transactionAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  transactionInfoAmount: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Brand.colors.text.primary,
+  },
+  transactionInfoNote: {
+    fontSize: 14,
+    color: Brand.colors.text.secondary,
+    lineHeight: 20,
+  },
+  categoriesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  categoryOption: {
+    width: '47%',
+    marginBottom: 12,
+  },
+  categoryOptionButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  categoryOptionGradient: {
+    padding: 16,
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+  categoryOptionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  categoryOptionIconText: {
+    fontSize: 20,
+  },
+  categoryOptionName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Brand.colors.text.primary,
+    textAlign: 'center',
   },
 });

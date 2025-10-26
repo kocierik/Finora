@@ -1,112 +1,356 @@
 import { ThemedText } from '@/components/themed-text'
-import { Card } from '@/components/ui/Card'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
+import { calculateWrappedData, WrappedData } from '@/services/wrapped-analytics'
+import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient'
+import * as Sharing from 'expo-sharing'
 import React, { useEffect, useRef, useState } from 'react'
 import {
-    Animated,
-    Dimensions,
-    Pressable,
-    ScrollView,
-    Share,
-    StyleSheet,
-    View
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Vibration,
+  View
 } from 'react-native'
+import ViewShot from 'react-native-view-shot'
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
 
-interface WrappedData {
-  totalExpenses: number
-  totalIncome: number
-  savings: number
-  savingsRate: number
-  incomeGrowth: number
-  topCategory: string
-  topCategoryAmount: number
-  monthlyBalances: Array<{ month: string; balance: number; income: number; expenses: number }>
-  insights: Array<{ title: string; value: string; icon: string }>
+// Animated Counter Component
+const AnimatedCounter = ({ value, duration = 2000, style }: { value: number; duration?: number; style?: any }) => {
+  const animatedValue = useRef(new Animated.Value(0)).current
+  const [displayValue, setDisplayValue] = useState(0)
+
+  useEffect(() => {
+    Animated.timing(animatedValue, {
+      toValue: value,
+      duration,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start()
+
+    const listener = animatedValue.addListener(({ value: currentValue }) => {
+      setDisplayValue(Math.round(currentValue))
+    })
+
+    return () => {
+      animatedValue.removeListener(listener)
+    }
+  }, [value, duration])
+
+  return (
+    <Animated.Text style={style}>
+      €{displayValue.toLocaleString()}
+    </Animated.Text>
+  )
 }
 
-// Mock data - in real app, this would come from your database
-const mockWrappedData: WrappedData = {
-  totalExpenses: 12450,
-  totalIncome: 24800,
-  savings: 12350,
-  savingsRate: 49.8,
-  incomeGrowth: 14,
-  topCategory: 'Travel',
-  topCategoryAmount: 3200,
-  monthlyBalances: [
-    { month: 'Jan', balance: 1200, income: 2100, expenses: 1800 },
-    { month: 'Feb', balance: 1500, income: 2100, expenses: 1700 },
-    { month: 'Mar', balance: 1900, income: 2200, expenses: 1800 },
-    { month: 'Apr', balance: 2300, income: 2200, expenses: 1600 },
-    { month: 'May', balance: 2700, income: 2300, expenses: 1900 },
-    { month: 'Jun', balance: 3100, income: 2300, expenses: 1500 },
-    { month: 'Jul', balance: 3600, income: 2400, expenses: 1800 },
-    { month: 'Aug', balance: 4000, income: 2400, expenses: 2000 },
-    { month: 'Sep', balance: 4400, income: 2500, expenses: 2100 },
-    { month: 'Oct', balance: 4800, income: 2500, expenses: 1900 },
-    { month: 'Nov', balance: 5200, income: 2600, expenses: 2000 },
-    { month: 'Dec', balance: 5600, income: 2600, expenses: 1800 }
-  ],
-  insights: [
-    { title: 'Dining expenses reduced by', value: '12%', icon: '🍽️' },
-    { title: 'Savings rate increased by', value: '8%', icon: '📊' },
-    { title: 'On track to save by mid-2026', value: '€3,200', icon: '💎' }
-  ]
+// Progress Bar Component
+const ProgressBar = ({ percentage, color, animated = true }: { percentage: number; color: string; animated?: boolean }) => {
+  const progressAnim = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    if (animated) {
+      Animated.timing(progressAnim, {
+        toValue: percentage,
+        duration: 1500,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start()
+    } else {
+      progressAnim.setValue(percentage)
+    }
+  }, [percentage, animated])
+
+  return (
+    <View style={styles.progressBarContainer}>
+      <Animated.View
+        style={[
+          styles.progressBar,
+          {
+            backgroundColor: color,
+            width: progressAnim.interpolate({
+              inputRange: [0, 100],
+              outputRange: ['0%', '100%'],
+              extrapolate: 'clamp',
+            }),
+          },
+        ]}
+      />
+    </View>
+  )
 }
 
-const categoryData = [
-  { name: 'Food', amount: 2800, color: '#00B4D8', percentage: 22.5 },
-  { name: 'Travel', amount: 3200, color: '#C084FC', percentage: 25.7 },
-  { name: 'Bills', amount: 2400, color: '#06b6d4', percentage: 19.3 },
-  { name: 'Entertainment', amount: 1800, color: '#8B5CF6', percentage: 14.5 },
-  { name: 'Shopping', amount: 1200, color: '#A855F7', percentage: 9.6 },
-  { name: 'Other', amount: 1050, color: '#D8B4FE', percentage: 8.4 }
-]
+// Loading Dots Component
+const LoadingDots = () => {
+  const dot1Anim = useRef(new Animated.Value(0.4)).current
+  const dot2Anim = useRef(new Animated.Value(0.7)).current
+  const dot3Anim = useRef(new Animated.Value(1)).current
+
+  useEffect(() => {
+    const animateDots = () => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.parallel([
+            Animated.timing(dot1Anim, {
+              toValue: 1,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+            Animated.timing(dot2Anim, {
+              toValue: 0.4,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+            Animated.timing(dot3Anim, {
+              toValue: 0.7,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.parallel([
+            Animated.timing(dot1Anim, {
+              toValue: 0.7,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+            Animated.timing(dot2Anim, {
+              toValue: 1,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+            Animated.timing(dot3Anim, {
+              toValue: 0.4,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.parallel([
+            Animated.timing(dot1Anim, {
+              toValue: 0.4,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+            Animated.timing(dot2Anim, {
+              toValue: 0.7,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+            Animated.timing(dot3Anim, {
+              toValue: 1,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+          ]),
+        ])
+      ).start()
+    }
+
+    animateDots()
+  }, [])
+
+  return (
+    <View style={styles.loadingDots}>
+      <Animated.View style={[styles.loadingDot, { opacity: dot1Anim }]} />
+      <Animated.View style={[styles.loadingDot, { opacity: dot2Anim }]} />
+      <Animated.View style={[styles.loadingDot, { opacity: dot3Anim }]} />
+    </View>
+  )
+}
+
+// Floating Particle Component
+const FloatingParticle = ({ delay = 0, color = '#06b6d4' }: { delay?: number; color?: string }) => {
+  const floatAnim = useRef(new Animated.Value(0)).current
+  const opacityAnim = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    const animate = () => {
+      Animated.parallel([
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(floatAnim, {
+              toValue: 1,
+              duration: 3000,
+              easing: Easing.inOut(Easing.sin),
+              useNativeDriver: true,
+            }),
+            Animated.timing(floatAnim, {
+              toValue: 0,
+              duration: 3000,
+              easing: Easing.inOut(Easing.sin),
+              useNativeDriver: true,
+            }),
+          ])
+        ),
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(opacityAnim, {
+              toValue: 1,
+              duration: 2000,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacityAnim, {
+              toValue: 0.3,
+              duration: 2000,
+              useNativeDriver: true,
+            }),
+          ])
+        ),
+      ]).start()
+    }
+
+    const timer = setTimeout(animate, delay)
+    return () => clearTimeout(timer)
+  }, [delay])
+
+  const translateY = floatAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -20],
+  })
+
+  return (
+    <Animated.View
+      style={[
+        styles.floatingParticle,
+        {
+          backgroundColor: color,
+          opacity: opacityAnim,
+          transform: [{ translateY }],
+        },
+      ]}
+    />
+  )
+}
+
+// Default category colors for fallback
+const defaultCategoryColors = ['#00B4D8', '#C084FC', '#06b6d4', '#8B5CF6', '#A855F7', '#D8B4FE']
 
 export default function FinoraWrappedScreen() {
   const { user } = useAuth()
   const { t, currency } = useSettings()
   const [currentPage, setCurrentPage] = useState(0)
-  const [data] = useState<WrappedData>(mockWrappedData)
+  const [data, setData] = useState<WrappedData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isAnimating, setIsAnimating] = useState(false)
   
   const fadeAnim = useRef(new Animated.Value(0)).current
   const scaleAnim = useRef(new Animated.Value(0.8)).current
   const slideAnim = useRef(new Animated.Value(50)).current
+  const backgroundAnim = useRef(new Animated.Value(0)).current
   const scrollViewRef = useRef<ScrollView>(null)
+  const loadingIconScale = useRef(new Animated.Value(1)).current
 
   useEffect(() => {
-    // Initial animation
+    // Load user data
+    const loadUserData = async () => {
+      if (!user?.id) return
+      
+      try {
+        setIsLoading(true)
+        const wrappedData = await calculateWrappedData(user.id)
+        setData(wrappedData)
+      } catch (error) {
+        console.error('Error loading wrapped data:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadUserData()
+  }, [user?.id])
+
+  // Loading icon animation
+  useEffect(() => {
+    if (isLoading) {
+      const animateIcon = () => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(loadingIconScale, {
+              toValue: 1.1,
+              duration: 1000,
+              easing: Easing.inOut(Easing.ease),
+              useNativeDriver: true,
+            }),
+            Animated.timing(loadingIconScale, {
+              toValue: 1,
+              duration: 1000,
+              easing: Easing.inOut(Easing.ease),
+              useNativeDriver: true,
+            }),
+          ])
+        ).start()
+      }
+      animateIcon()
+    }
+  }, [isLoading])
+
+  useEffect(() => {
+    if (!data) return
+
+    // Enhanced initial animation sequence
+    setIsAnimating(true)
+    
+    Animated.sequence([
+      // Background fade in
+      Animated.timing(backgroundAnim, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      // Main content animation
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+          duration: 1200,
+          easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(scaleAnim, {
         toValue: 1,
-        duration: 800,
+          duration: 1200,
+          easing: Easing.out(Easing.back(1.2)),
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 800,
+          duration: 1200,
+          easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       })
-    ]).start()
-  }, [])
+      ])
+    ]).start(() => {
+      setIsAnimating(false)
+    })
+  }, [data])
 
   const handleScroll = (event: any) => {
     const contentOffsetX = event.nativeEvent.contentOffset.x
-    const pageIndex = Math.round(contentOffsetX / screenWidth)
+    const pageIndex = Math.min(Math.round(contentOffsetX / screenWidth), 4) // Max 5 pages (0-4)
+    
+    if (pageIndex !== currentPage) {
+      // Haptic feedback on page change
+      if (Platform.OS === 'ios') {
+        Vibration.vibrate(50)
+      } else {
+        Vibration.vibrate(100)
+      }
     setCurrentPage(pageIndex)
+    }
   }
 
   const handleShare = async () => {
+    if (!data) return
+    
     try {
-      const message = `Check out my 2025 Finora Wrapped! 💎\n\nTotal Income: ${currency}${data.totalIncome.toLocaleString()}\nTotal Spent: ${currency}${data.totalExpenses.toLocaleString()}\nSaved: ${currency}${data.savings.toLocaleString()} (${data.savingsRate}%)\n\nBuilding my financial story, one smart move at a time 💎\n\n#FinoraWrapped #FinancialJourney`
+      const message = `Check out my 2025 Finora Wrapped! 💎\n\nTotal Income: ${currency}${data.totalIncome.toLocaleString()}\nTotal Spent: ${currency}${data.totalExpenses.toLocaleString()}\nSaved: ${currency}${data.savings.toLocaleString()} (${data.savingsRate.toFixed(1)}%)\n\nBuilding my financial story, one smart move at a time 💎\n\n#FinoraWrapped #FinancialJourney`
       
       await Share.share({
         message,
@@ -117,10 +361,47 @@ export default function FinoraWrappedScreen() {
     }
   }
 
+  // Loading state
+  if (isLoading || !data) {
+    return (
+      <View style={styles.loadingScreen}>
+        <ExpoLinearGradient
+          colors={['#0a0a0f', '#1a1a2e', '#16213e', '#0a0a0f']}
+          style={styles.loadingGradientBackground}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+        <View style={styles.loadingContent}>
+          <Animated.View style={[styles.loadingIconContainer, { transform: [{ scale: loadingIconScale }] }]}>
+            <ThemedText style={styles.loadingIcon}>💎</ThemedText>
+          </Animated.View>
+          <ThemedText style={styles.loadingTitle}>Finora Wrapped</ThemedText>
+          <ThemedText style={styles.loadingText}>Loading your financial story...</ThemedText>
+          <LoadingDots />
+        </View>
+      </View>
+    )
+  }
+
   return (
     <View style={styles.container}>
-      {/* Dark theme background */}
-      <View style={styles.backgroundDark} />
+      {/* Enhanced gradient background */}
+      <Animated.View 
+        style={[
+          styles.backgroundGradient,
+          { opacity: backgroundAnim }
+        ]}
+      >
+        <ExpoLinearGradient
+          colors={['#0a0a0f', '#1a1a2e', '#16213e', '#0a0a0f']}
+          style={styles.gradientBackground}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+      </Animated.View>
+      
+      {/* Floating particles */}
+
       
       <Animated.View 
         style={[
@@ -147,19 +428,21 @@ export default function FinoraWrappedScreen() {
           <SpendingStoryPage data={data} />
           <EarningsJourneyPage data={data} />
           <BalanceEvolutionPage data={data} />
-          <AIInsightsPage data={data} />
           <FinalSummaryPage data={data} onShare={handleShare} />
         </ScrollView>
       </Animated.View>
 
-      {/* Page indicators */}
+      {/* Enhanced page indicators */}
       <View style={styles.pageIndicators}>
-        {[0, 1, 2, 3, 4, 5].map((index) => (
-          <View
+        {[0, 1, 2, 3, 4].map((index) => (
+          <Animated.View
             key={index}
             style={[
               styles.indicator,
-              { opacity: index === currentPage ? 1 : 0.3 }
+              { 
+                opacity: index === currentPage ? 1 : 0.3,
+                transform: [{ scale: index === currentPage ? 1.2 : 1 }]
+              }
             ]}
           />
         ))}
@@ -173,6 +456,7 @@ const IntroPage = () => {
   return (
     <View style={styles.pageContainer}>
       <View style={styles.introContent}>
+      <ThemedText style={{ fontSize: 64, marginBottom: 12, textAlign: 'center', lineHeight: 72 }}>💎</ThemedText>
         <ThemedText style={styles.introTitle}>
           Your 2025{'\n'}Finora Wrapped
         </ThemedText>
@@ -201,20 +485,38 @@ const SpendingStoryPage = ({ data }: any) => {
 
       <View style={styles.spendingContent}>
         <View style={styles.largeNumberContainer}>
-          <ThemedText style={styles.largeNumber}>
-            €{data.totalExpenses.toLocaleString()}
-          </ThemedText>
+          <AnimatedCounter 
+            value={data.totalExpenses} 
+            style={styles.largeNumber}
+            duration={2500}
+          />
           <ThemedText style={styles.largeNumberLabel}>total expenses</ThemedText>
         </View>
 
         <View style={styles.categoryList}>
-          {categoryData.slice(0, 4).map((category, index) => (
-            <View key={index} style={[styles.categoryItem, { borderColor: category.color + '40' }]}>
+          {data.categoryData && data.categoryData.length > 0 ? (
+            data.categoryData.map((category: { name: string; amount: number; color: string; percentage: number }, index: number) => (
+              <View key={index} style={[styles.categoryCardHorizontal, { borderColor: category.color + '40' }]}>
+                <View style={styles.categoryCardContent}>
               <View style={[styles.categoryColor, { backgroundColor: category.color }]} />
               <ThemedText style={styles.categoryName}>{category.name}</ThemedText>
               <ThemedText style={styles.categoryAmount}>€{category.amount.toLocaleString()}</ThemedText>
+                  <ThemedText style={styles.categoryPercentage}>{category.percentage.toFixed(1)}%</ThemedText>
+                  <View style={styles.progressBarContainer}>
+                    <View style={[styles.progressBarFill, { 
+                      width: `${category.percentage}%`,
+                      backgroundColor: category.color
+                    }]} />
             </View>
-          ))}
+                </View>
+              </View>
+            ))
+          ) : (
+            <View style={styles.noDataContainer}>
+              <ThemedText style={styles.noDataText}>No expense data available</ThemedText>
+              <ThemedText style={styles.noDataSubtext}>Start tracking your expenses to see insights</ThemedText>
+            </View>
+          )}
         </View>
 
         <View style={styles.insightCard}>
@@ -229,38 +531,84 @@ const SpendingStoryPage = ({ data }: any) => {
 
 // Earnings Journey Page Component
 const EarningsJourneyPage = ({ data }: any) => {
+  const totalIncome = data.monthlyBalances.reduce((sum: number, month: any) => sum + month.income, 0)
+  const monthsWithIncome = data.monthlyBalances.filter((month: any) => month.income > 0)
+  const averageMonthlyIncome = data.monthlyBalances.length > 0 ? totalIncome / data.monthlyBalances.length : 0
+
   return (
     <View style={styles.pageContainer}>
       <View style={styles.pageHeader}>
         <ThemedText style={styles.pageTitle}>
-          And you earned it 💼
+          Your earning journey 💼
+        </ThemedText>
+        <ThemedText style={styles.pageSubtitle}>
+          Building wealth, one month at a time
         </ThemedText>
       </View>
 
       <View style={styles.earningsContent}>
-        <View style={styles.largeNumberContainer}>
-          <ThemedText style={styles.largeNumber}>
-            €{data.totalIncome.toLocaleString()}
-          </ThemedText>
-          <ThemedText style={styles.largeNumberLabel}>total income</ThemedText>
+        {/* Income Overview Cards */}
+        <View style={styles.earningsOverviewGrid}>
+          <View style={styles.earningsOverviewCard}>
+            <ThemedText style={styles.earningsOverviewLabel} numberOfLines={1} ellipsizeMode="tail">Total Income</ThemedText>
+            <AnimatedCounter 
+              value={totalIncome} 
+              style={styles.earningsOverviewValue}
+              duration={2500}
+            />
         </View>
 
-        <View style={styles.growthHighlight}>
-          <ThemedText style={styles.growthText}>
-            +{data.incomeGrowth}% growth since 2024 🎉
+          <View style={styles.earningsOverviewCard}>
+            <ThemedText style={styles.earningsOverviewLabel} numberOfLines={1} ellipsizeMode="tail">Av. Monthly</ThemedText>
+            <AnimatedCounter 
+              value={averageMonthlyIncome} 
+              style={styles.earningsOverviewValue}
+              duration={2500}
+            />
+          </View>
+          
+          <View style={styles.earningsOverviewCard}>
+            <ThemedText style={styles.earningsOverviewLabel} numberOfLines={1} ellipsizeMode="tail">Growth Rate</ThemedText>
+            <ThemedText style={[styles.earningsOverviewGrowth, { color: data.incomeGrowth >= 0 ? '#4ade80' : '#f87171' }]}>
+              {data.incomeGrowth >= 0 ? '+' : ''}{data.incomeGrowth.toFixed(1)}%
           </ThemedText>
+          </View>
         </View>
 
-        <View style={styles.monthlyList}>
-          {data.monthlyBalances.slice(0, 6).map((month: any, index: number) => {
-            const colors = ['#00B4D8', '#C084FC', '#06b6d4', '#8B5CF6', '#A855F7', '#D8B4FE']
-            return (
-              <View key={index} style={[styles.monthlyItem, { borderColor: colors[index] + '40' }]}>
-                <ThemedText style={styles.monthlyName}>{month.month}</ThemedText>
-                <ThemedText style={styles.monthlyIncome}>€{month.income.toLocaleString()}</ThemedText>
+        {/* Monthly Income Chart */}
+        <View style={styles.monthlyEarningsContainer}>
+          <ThemedText style={styles.monthlyEarningsTitle}>Monthly Income Trend</ThemedText>
+          <View style={styles.monthlyEarningsGrid}>
+            {data.monthlyBalances.map((month: any, index: number) => (
+              <View key={month.monthNumber} style={[styles.monthlyEarningsCardCompact, { 
+                borderColor: month.income > 0 ? defaultCategoryColors[index % defaultCategoryColors.length] + '40' : 'rgba(255, 255, 255, 0.1)',
+                opacity: month.income > 0 ? 1 : 0.6
+              }]}>
+                <ThemedText style={styles.monthlyEarningsMonthCompact}>{month.month}</ThemedText>
+                <AnimatedCounter 
+                  value={month.income} 
+                  style={styles.monthlyEarningsAmountCompact}
+                  duration={1500}
+                />
+                <View style={styles.monthlyEarningsBarCompact}>
+                  <View style={[styles.monthlyEarningsBarFillCompact, { 
+                    width: month.income > 0 ? `${Math.min((month.income / Math.max(...data.monthlyBalances.map((m: any) => m.income))) * 100, 100)}%` : '0%',
+                    backgroundColor: month.income > 0 ? defaultCategoryColors[index % defaultCategoryColors.length] : 'rgba(255, 255, 255, 0.1)'
+                  }]} />
               </View>
-            )
-          })}
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Earnings Insight */}
+        <View style={styles.earningsInsight}>
+          <ThemedText style={styles.earningsInsightText}>
+            {monthsWithIncome.length > 0 
+              ? `📊 You have income data for ${monthsWithIncome.length} months this year`
+              : '📊 Start tracking your income to see your earning journey'
+            }
+          </ThemedText>
         </View>
       </View>
     </View>
@@ -269,41 +617,80 @@ const EarningsJourneyPage = ({ data }: any) => {
 
 // Balance Evolution Page Component
 const BalanceEvolutionPage = ({ data }: any) => {
+  const startingBalance = data.monthlyBalances[0]?.balance || 0
+  const currentBalance = data.monthlyBalances[data.monthlyBalances.length - 1]?.balance || 0
+  const balanceGrowth = startingBalance > 0 ? ((currentBalance - startingBalance) / startingBalance) * 100 : 0
+  const totalGrowth = currentBalance - startingBalance
+  
+  // Calculate average monthly flow using only months with actual cash flow (non-zero balance)
+  const monthsWithCashFlow = data.monthlyBalances.filter((m: any) => m.balance !== 0)
+  const averageMonthlyFlow = monthsWithCashFlow.length > 0 
+    ? monthsWithCashFlow.reduce((sum: number, month: any) => sum + month.balance, 0) / monthsWithCashFlow.length 
+    : 0
+
   return (
     <View style={styles.pageContainer}>
       <View style={styles.pageHeader}>
         <ThemedText style={styles.pageTitle}>
-          Your financial balance over time
+          Cash Flow Evolution 📈
+        </ThemedText>
+        <ThemedText style={styles.pageSubtitle}>
+          Your monthly income vs expenses journey
         </ThemedText>
       </View>
 
       <View style={styles.balanceContent}>
-        <View style={styles.balanceStats}>
-          <View style={styles.balanceStat}>
-            <ThemedText style={styles.balanceLabel}>Starting Balance</ThemedText>
-            <ThemedText style={styles.balanceValue}>€{data.monthlyBalances[0].balance.toLocaleString()}</ThemedText>
+
+        {/* Detailed Cash Flow Stats */}
+        <View style={styles.balanceStatsContainer}>
+          <View style={styles.balanceStatCard}>
+            <ThemedText style={styles.balanceStatLabel} numberOfLines={1} ellipsizeMode="tail">Best Cash Flow Month</ThemedText>
+            <ThemedText style={styles.balanceStatValue}>
+              {data.monthlyBalances.reduce((max: any, month: any) => 
+                month.balance > max.balance ? month : max
+              ).month}
+            </ThemedText>
+            <ThemedText style={styles.balanceStatAmount}>
+              €{Math.max(...data.monthlyBalances.map((m: any) => m.balance)).toLocaleString()}
+            </ThemedText>
           </View>
-          <View style={styles.balanceStat}>
-            <ThemedText style={styles.balanceLabel}>Current Balance</ThemedText>
-            <ThemedText style={styles.balanceValue}>€{data.monthlyBalances[data.monthlyBalances.length - 1].balance.toLocaleString()}</ThemedText>
+          
+          <View style={styles.balanceStatCard}>
+            <ThemedText style={styles.balanceStatLabel} numberOfLines={1} ellipsizeMode="tail">Av. Monthly Flow</ThemedText>
+            <ThemedText style={styles.balanceStatValue}>
+              €{averageMonthlyFlow.toLocaleString()}
+            </ThemedText>
           </View>
         </View>
 
-        <View style={styles.monthlyList}>
-          {data.monthlyBalances.slice(0, 6).map((month: any, index: number) => {
-            const colors = ['#00B4D8', '#C084FC', '#06b6d4', '#8B5CF6', '#A855F7', '#D8B4FE']
+        {/* Compact Monthly Chart */}
+        <View style={styles.balanceChartContainer}>
+          <ThemedText style={styles.balanceChartTitle}>Monthly Cash Flow Trend</ThemedText>
+          <View style={styles.balanceChartCompact}>
+            {data.monthlyBalances.map((month: any, index: number) => {
+              const maxBalance = Math.max(...data.monthlyBalances.map((m: any) => m.balance))
+              const heightPercentage = maxBalance > 0 ? (month.balance / maxBalance) * 100 : 0
+              
             return (
-              <View key={index} style={[styles.monthlyItem, { borderColor: colors[index] + '40' }]}>
-                <ThemedText style={styles.monthlyName}>{month.month}</ThemedText>
-                <ThemedText style={styles.monthlyBalance}>€{month.balance.toLocaleString()}</ThemedText>
+                <View key={month.monthNumber} style={styles.balanceChartItemCompact}>
+                  <View style={styles.balanceChartBarCompact}>
+                    <View style={[styles.balanceChartBarFillCompact, { 
+                      height: `${Math.max(heightPercentage, 8)}%`,
+                      backgroundColor: month.balance !== 0 ? defaultCategoryColors[index % defaultCategoryColors.length] : 'rgba(255, 255, 255, 0.1)',
+                      opacity: month.balance !== 0 ? 1 : 0.6
+                    }]} />
+                  </View>
+                  <ThemedText style={styles.balanceChartMonthCompact}>{month.month}</ThemedText>
               </View>
             )
           })}
+          </View>
         </View>
 
-        <View style={styles.insightCard}>
-          <ThemedText style={styles.insightText}>
-            You managed to save more than you spent for 7 months straight 👏
+        {/* Growth Insights */}
+        <View style={styles.balanceInsight}>
+          <ThemedText style={styles.balanceInsightText}>
+            {totalGrowth >= 0 ? '💰' : '📉'} {totalGrowth >= 0 ? 'You had positive cash flow this year!' : 'Focus on increasing your income or reducing expenses this year.'}
           </ThemedText>
         </View>
       </View>
@@ -311,31 +698,89 @@ const BalanceEvolutionPage = ({ data }: any) => {
   )
 }
 
-// AI Insights Page Component
-const AIInsightsPage = ({ data }: any) => {
+// Instagram Share Component (identical to final page but without buttons)
+const InstagramShareView = ({ data }: any) => {
+  const totalIncome = data.monthlyBalances.reduce((sum: number, month: any) => sum + month.income, 0)
+  const totalExpenses = data.totalExpenses
+  const savings = totalIncome - totalExpenses
+  const savingsRate = totalIncome > 0 ? (savings / totalIncome) * 100 : 0
+  
+  // Find top category amount
+  const topCategoryAmount = data.categoryBreakdown?.find((cat: any) => cat.name === data.topCategory)?.amount || 0
+
   return (
-    <View style={styles.pageContainer}>
-      <View style={styles.pageHeader}>
-        <ThemedText style={styles.pageTitle}>
-          Finora's take on your future 🔮
+    <View style={styles.instagramContainer}>
+      <ExpoLinearGradient
+        colors={['#0a0a0f', '#1a1a2e', '#16213e', '#0a0a0f']}
+        style={StyleSheet.absoluteFillObject}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
+      
+      <View style={styles.instagramPageHeader}>
+        <ThemedText style={styles.instagramPageTitle}>
+          🎉 Your Financial Journey
+        </ThemedText>
+        <ThemedText style={styles.instagramPageSubtitle}>
+          Smart moves. Strong progress. Brighter future.
         </ThemedText>
       </View>
 
-      <View style={styles.insightsContent}>
-        {data.insights.map((insight: any, index: number) => {
-          const colors = ['#00B4D8', '#C084FC', '#06b6d4']
-          return (
-            <Card key={index} style={[styles.insightCard, { borderColor: colors[index] + '40' }]}>
-              <View style={styles.insightCardContent}>
-                <ThemedText style={styles.insightIcon}>{insight.icon}</ThemedText>
-                <View style={styles.insightTextContainer}>
-                  <ThemedText style={styles.insightTitle}>{insight.title}</ThemedText>
-                  <ThemedText style={styles.insightValue}>{insight.value}</ThemedText>
-                </View>
-              </View>
-            </Card>
-          )
-        })}
+      <View style={styles.instagramSummaryContent}>
+        {/* Main Stats */}
+        <View style={styles.instagramMainStatsContainer}>
+          <View style={styles.instagramMainStatCard}>
+            <ThemedText style={styles.instagramMainStatIcon}>💰</ThemedText>
+            <ThemedText style={styles.instagramMainStatLabel}>Total Income</ThemedText>
+            <AnimatedCounter 
+              value={totalIncome} 
+              style={styles.instagramMainStatValue}
+              duration={2500}
+            />
+          </View>
+          
+          <View style={styles.instagramMainStatCard}>
+            <ThemedText style={styles.instagramMainStatIcon}>💳</ThemedText>
+            <ThemedText style={styles.instagramMainStatLabel}>Total Spent</ThemedText>
+            <AnimatedCounter 
+              value={totalExpenses} 
+              style={styles.instagramMainStatValue}
+              duration={2500}
+            />
+          </View>
+        </View>
+        
+        {/* Savings Highlight */}
+        <View style={styles.instagramSavingsHighlight}>
+          <ThemedText style={styles.instagramSavingsIcon}>💎</ThemedText>
+          <ThemedText style={styles.instagramSavingsLabel}>You Saved</ThemedText>
+          <AnimatedCounter 
+            value={savings} 
+            style={styles.instagramSavingsValue}
+            duration={2500}
+          />
+          <ThemedText style={styles.instagramSavingsRate}>{savingsRate.toFixed(1)}% of your income</ThemedText>
+        </View>
+
+        {/* Top Achievement */}
+        <View style={styles.instagramTopAchievement}>
+          <ThemedText style={styles.instagramAchievementIcon}>🏆</ThemedText>
+          <ThemedText style={styles.instagramAchievementText}>
+            Your top spending category was <ThemedText style={styles.instagramAchievementHighlight}>{data.topCategory}</ThemedText>
+          </ThemedText>
+          <AnimatedCounter 
+            value={topCategoryAmount} 
+            style={styles.instagramAchievementAmount}
+            duration={2500}
+          />
+        </View>
+
+        {/* Brand Message */}
+        <View style={styles.instagramBrandMessage}>
+          <ThemedText style={styles.instagramBrandText}>
+            Powered by Finora 
+          </ThemedText>
+        </View>
       </View>
     </View>
   )
@@ -343,11 +788,81 @@ const AIInsightsPage = ({ data }: any) => {
 
 // Final Summary Page Component
 const FinalSummaryPage = ({ data, onShare }: any) => {
+  const totalIncome = data.monthlyBalances.reduce((sum: number, month: any) => sum + month.income, 0)
+  const totalExpenses = data.totalExpenses
+  const savings = totalIncome - totalExpenses
+  const savingsRate = totalIncome > 0 ? (savings / totalIncome) * 100 : 0
+  
+  // Find top category amount
+  const topCategoryAmount = data.categoryBreakdown?.find((cat: any) => cat.name === data.topCategory)?.amount || 0
+
+  const viewShotRef = useRef<ViewShot | null>(null)
+  const [isSharing, setIsSharing] = useState(false)
+
+  const handleInstagramShare = async () => {
+    try {
+      setIsSharing(true)
+      
+      if (!viewShotRef.current) return
+
+      // Capture the view as an image
+      const captureMethod = viewShotRef.current.capture
+      if (!captureMethod) {
+        Alert.alert('Error', 'Capture method not available')
+        return
+      }
+      const uri = await captureMethod()
+      if (!uri) {
+        Alert.alert('Error', 'Failed to capture image')
+        return
+      }
+      
+      // Check if sharing is available
+      const isAvailable = await Sharing.isAvailableAsync()
+      if (!isAvailable) {
+        Alert.alert('Error', 'Sharing is not available on this device')
+        return
+      }
+
+      // Share the image
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/png',
+        dialogTitle: 'Share your Finora Wrapped on Instagram',
+        UTI: 'public.png'
+      })
+
+    } catch (error) {
+      console.error('Error sharing image:', error)
+      Alert.alert('Error', 'Failed to generate and share image. Please try again.')
+    } finally {
+      setIsSharing(false)
+    }
+  }
+
+  const handleDownload = async () => {
+    try {
+      await onShare()
+      alert('Summary downloaded successfully! 📄')
+    } catch (error) {
+      console.error('Download error:', error)
+      alert('Failed to download summary. Please try again.')
+    }
+  }
+
   return (
+    <>
+      {/* Hidden Instagram Share View for capturing */}
+      <View style={styles.hiddenView}>
+        <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.9 }}>
+          <InstagramShareView data={data} />
+        </ViewShot>
+      </View>
+
+      {/* Main visible page */}
     <View style={styles.pageContainer}>
       <View style={styles.pageHeader}>
         <ThemedText style={styles.pageTitle}>
-          Your 2025 Financial Journey
+            🎉 Your 2025 Financial Journey
         </ThemedText>
         <ThemedText style={styles.pageSubtitle}>
           Smart moves. Strong progress. Brighter future.
@@ -355,35 +870,88 @@ const FinalSummaryPage = ({ data, onShare }: any) => {
       </View>
 
       <View style={styles.summaryContent}>
-        <View style={styles.summaryStats}>
-          <View style={styles.summaryStat}>
-            <ThemedText style={styles.summaryLabel}>Total Income</ThemedText>
-            <ThemedText style={styles.summaryValue}>€{data.totalIncome.toLocaleString()}</ThemedText>
+          {/* Main Stats - Instagram Ready */}
+          <View style={styles.mainStatsContainer}>
+            <View style={styles.mainStatCard}>
+              <ThemedText style={styles.mainStatIcon}>💰</ThemedText>
+              <ThemedText style={styles.mainStatLabel}>Total Income</ThemedText>
+              <AnimatedCounter 
+                value={totalIncome} 
+                style={styles.mainStatValue}
+                duration={2500}
+              />
           </View>
           
-          <View style={styles.summaryStat}>
-            <ThemedText style={styles.summaryLabel}>Total Spent</ThemedText>
-            <ThemedText style={styles.summaryValue}>€{data.totalExpenses.toLocaleString()}</ThemedText>
+            <View style={styles.mainStatCard}>
+              <ThemedText style={styles.mainStatIcon}>💳</ThemedText>
+              <ThemedText style={styles.mainStatLabel}>Total Spent</ThemedText>
+              <AnimatedCounter 
+                value={totalExpenses} 
+                style={styles.mainStatValue}
+                duration={2500}
+              />
+            </View>
           </View>
           
-          <View style={styles.summaryStat}>
-            <ThemedText style={styles.summaryLabel}>Saved</ThemedText>
-            <ThemedText style={styles.summaryValue}>€{data.savings.toLocaleString()}</ThemedText>
-            <ThemedText style={styles.summaryPercentage}>(≈{data.savingsRate}%)</ThemedText>
+          {/* Savings Highlight */}
+          <View style={styles.savingsHighlight}>
+            <ThemedText style={styles.savingsIcon}>💎</ThemedText>
+            <ThemedText style={styles.savingsLabel}>You Saved</ThemedText>
+            <AnimatedCounter 
+              value={savings} 
+              style={styles.savingsValue}
+              duration={2500}
+            />
+            <ThemedText style={styles.savingsRate}>{savingsRate.toFixed(1)}% of your income</ThemedText>
           </View>
+
+          {/* Top Achievement */}
+          <View style={styles.topAchievement}>
+            <ThemedText style={styles.achievementIcon}>🏆</ThemedText>
+            <ThemedText style={styles.achievementText}>
+              Your top spending category was <ThemedText style={styles.achievementHighlight}>{data.topCategory}</ThemedText>
+            </ThemedText>
+            <AnimatedCounter 
+              value={topCategoryAmount} 
+              style={styles.achievementAmount}
+              duration={2500}
+            />
         </View>
 
-        <View style={styles.actionButtons}>
-          <Pressable style={styles.shareButton} onPress={onShare}>
-            <ThemedText style={styles.shareButtonText}>📤 Share Your Wrapped</ThemedText>
+          {/* Action Buttons */}
+          <View style={styles.actionButtonsContainer}>
+            <Pressable style={styles.shareButton} onPress={handleInstagramShare} disabled={isSharing}>
+              {isSharing ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#FFFFFF" />
+                  <ThemedText style={styles.shareButtonText} numberOfLines={1}>Generating...</ThemedText>
+                </View>
+              ) : (
+                 <View>
+                <ThemedText style={styles.shareButtonText} numberOfLines={1}>📤 </ThemedText>
+                <ThemedText style={styles.shareButtonText} numberOfLines={1}>Share on Instagram</ThemedText>
+                </View>
+              )}
           </Pressable>
           
-          <Pressable style={styles.downloadButton}>
-            <ThemedText style={styles.downloadButtonText}>💾 Download Summary</ThemedText>
+            <Pressable style={styles.downloadButton} onPress={handleDownload}>
+            
+            <View>
+            <ThemedText style={styles.downloadButtonText} numberOfLines={1}>💾 </ThemedText>
+            <ThemedText style={styles.downloadButtonText} numberOfLines={1}>Download Summary</ThemedText>
+            </View>
           </Pressable>
-        </View>
+        </View> 
+
+          {/* Brand Message */}
+          <View style={styles.brandMessage}>
+            <ThemedText style={styles.brandText}>
+              Powered by Finora 
+            </ThemedText>
       </View>
     </View>
+      </View>
+    </>
   )
 }
 
@@ -392,18 +960,28 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0a0a0f',
   },
-  backgroundDark: {
+  backgroundGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#0a0a0f',
+  },
+  gradientBackground: {
+    flex: 1,
+  },
+  floatingParticle: {
+    position: 'absolute',
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    top: Math.random() * screenHeight,
+    left: Math.random() * screenWidth,
   },
   content: {
     flex: 1,
     paddingTop: 60,
-    paddingBottom: 100,
+    paddingBottom: 10,
   },
   scrollView: {
     flex: 1,
@@ -411,19 +989,18 @@ const styles = StyleSheet.create({
   pageContainer: {
     width: screenWidth,
     flex: 1,
-    paddingHorizontal: 20,
+    marginTop: 50,
     justifyContent: 'center',
   },
   pageHeader: {
     alignItems: 'center',
-    marginBottom: 40,
   },
   pageTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 16,
+    marginTop: 16,
   },
   pageSubtitle: {
     fontSize: 16,
@@ -453,7 +1030,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   scrollHint: {
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    backgroundColor: 'rgba(6, 181, 212, 0)',
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
@@ -478,12 +1055,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 16,
   },
-  ctaText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
   largeNumberContainer: {
     alignItems: 'center',
     marginBottom: 40,
@@ -503,9 +1074,46 @@ const styles = StyleSheet.create({
   categoryList: {
     marginBottom: 30,
   },
-  categoryItem: {
+  noDataContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  noDataText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noDataSubtext: {
+    fontSize: 14,
+    color: '#A0A0A0',
+    textAlign: 'center',
+    opacity: 0.8,
+  },
+  categoryCardHorizontal: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  categoryCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  categoryCardLeft: {
+    flex: 1,
+  },
+  categoryCardRight: {
+    alignItems: 'flex-end',
+    minWidth: 80,
+  },
+  categoryItem: {
     paddingVertical: 16,
     paddingHorizontal: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -514,27 +1122,61 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  categoryColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 12,
+  categoryItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  categoryName: {
+  categoryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '500',
-    marginLeft: 4,
+  },
+  categoryColor: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     marginRight: 8,
   },
+  categoryName: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '500',
+    flex: 1,
+    marginLeft: 4,
+  },
   categoryAmount: {
-    fontSize: 16,
+    fontSize: 12,
     color: '#FFFFFF',
     fontWeight: '600',
+    minWidth: 60,
+    textAlign: 'right',
+  },
+  progressBarContainer: {
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    width: 40,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 2,
   },
   monthlyList: {
     marginBottom: 30,
+  },
+  monthlyScrollView: {
+    marginBottom: 30,
+  },
+  monthlyScrollContent: {
+    paddingHorizontal: 20,
+    gap: 12,
   },
   monthlyItem: {
     flexDirection: 'row',
@@ -544,9 +1186,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 12,
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    minWidth: 120,
   },
   monthlyName: {
     fontSize: 16,
@@ -592,6 +1234,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
+  insightCardWithGap: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
   insightText: {
     fontSize: 16,
     color: '#FFFFFF',
@@ -599,14 +1250,11 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginTop: 4,
   },
-  insightsContent: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  insightCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
+  ctaText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4ade80',
+    textAlign: 'center',
   },
   insightIcon: {
     fontSize: 24,
@@ -642,66 +1290,320 @@ const styles = StyleSheet.create({
   },
   summaryContent: {
     flex: 1,
+    paddingHorizontal: 20,
     justifyContent: 'center',
+    paddingVertical: 10,
   },
-  summaryStats: {
-    marginBottom: 40,
+  mainStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 12,
   },
-  summaryStat: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.7,
-    marginBottom: 12,
-    lineHeight: 18,
-  },
-  summaryValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    lineHeight: 38,
-  },
-  summaryPercentage: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    opacity: 0.8,
-    marginTop: 6,
-    lineHeight: 20,
-  },
-  actionButtons: {
-    marginTop: 40,
-    gap: 16,
-  },
-  shareButton: {
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+  mainStatCard: {
+    flex: 1,
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
     borderRadius: 16,
-    padding: 16,
+    padding: 24,
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: 'rgba(6, 182, 212, 0.3)',
   },
-  shareButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    lineHeight: 20,
+  mainStatIcon: {
+    fontSize: 24,
   },
-  downloadButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
+  mainStatLabel: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    marginBottom: 6,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  mainStatValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  savingsHighlight: {
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(6, 182, 212, 0.5)',
+  },
+  savingsIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  savingsLabel: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  savingsValue: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#06b6d4',
+    marginBottom: 4,
+  },
+  savingsRate: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    fontWeight: '600',
+  },
+  topAchievement: {
+    backgroundColor: 'rgba(6, 182, 212, 0.06)',
+    borderRadius: 12,
     padding: 16,
     alignItems: 'center',
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(6, 182, 212, 0.25)',
+  },
+  achievementIcon: {
+    fontSize: 20,
+    marginBottom: 8,
+  },
+  achievementText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  achievementHighlight: {
+    fontWeight: '700',
+    color: '#06b6d4',
+  },
+  achievementAmount: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#06b6d4',
+    marginTop: 8,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 12,
+  },
+  shareButton: {
+    flex: 1,
+    backgroundColor: 'rgba(6, 181, 212, 0.14)',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  shareButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  downloadButton: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   downloadButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#FFFFFF',
-    lineHeight: 20,
+    textAlign: 'center',
+  },
+  brandMessage: {
+    alignItems: 'center',
+  },
+  brandText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    opacity: 0.7,
+    fontStyle: 'italic',
+  },
+  // Instagram Share Styles
+  hiddenView: {
+    position: 'absolute',
+    left: -9999,
+    top: -9999,
+    opacity: 0,
+  },
+  instagramContainer: {
+    width: 1080,
+    height: 1920,
+    backgroundColor: '#0a0a0f',
+    paddingHorizontal: 30, // Increased padding for better spacing
+    paddingTop: 40, // Reduced top padding even more to move title higher
+    paddingBottom: 30, // Increased bottom padding
+  },
+  instagramPageHeader: {
+    alignItems: 'center',
+//    marginBottom: 200, // Increased margin for better separation
+    marginTop: 180, // Increased margin for better separation
+    lineHeight: 40,
+
+  },
+  instagramPageTitle: {
+    fontSize: 72, // Increased from 72 for much better visibility
+    fontWeight: '800', // Increased weight for better impact
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 80,
+
+    marginBottom: 24, // Increased margin
+  },
+  instagramPageSubtitle: {
+    fontSize: 44, // Increased from 36
+    color: '#FFFFFF',
+    lineHeight: 50,
+    textAlign: 'center',
+    opacity: 0.8,
+    fontWeight: '600', // Added weight for better visibility
+  },
+  instagramSummaryContent: {
+    flex: 1,
+    paddingHorizontal: 50, // Increased horizontal padding for more space from edges
+    justifyContent: 'space-between', // Changed from 'center' to distribute space evenly
+    paddingVertical: 30, // Increased vertical padding
+  },
+  instagramMainStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flex: 1, // Added flex to use available space
+    gap: 24, // Increased gap between cards for better separation
+    marginBottom: 20, // Reduced margin since we're using flex
+  },
+  instagramMainStatCard: {
+    flex: 1,
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+    borderRadius: 24, // Increased border radius for more modern look
+    padding: 48, // Increased uniform padding from 32 (now 48px all around)
+    alignItems: 'center',
+    justifyContent: 'center', // Center content vertically
+    borderWidth: 2,
+    borderColor: 'rgba(6, 182, 212, 0.3)',
+  },
+  instagramMainStatIcon: {
+    fontSize: 80, // Increased from 64 for much better visibility
+    marginBottom: 12, // Optimized margin
+    lineHeight: 80,
+  },
+  instagramMainStatLabel: {
+    fontSize: 28, // Increased from 24
+    color: '#FFFFFF',
+    opacity: 0.9, // Increased opacity for better visibility
+    marginBottom: 8, // Reduced margin to bring value closer
+    lineHeight: 34, // Optimized line height for single line
+    textAlign: 'center',
+    fontWeight: '600', // Increased weight for better readability
+  },
+  instagramMainStatValue: {
+    fontSize: 44, // Increased from 36 for much better readability
+    fontWeight: '900', // Increased weight for better impact
+    color: '#FFFFFF',
+    marginTop: 2, // Small margin to separate from label
+    marginBottom: 6, // Small margin to separate from label
+    padding: 4,
+  },
+  instagramSavingsHighlight: {
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    borderRadius: 28, // Increased border radius for more modern look
+    padding: 40, // Increased padding for more space
+    alignItems: 'center',
+    justifyContent: 'center', // Center content vertically
+    flex: 2, // Added flex to use more space (2x the main stats)
+    borderWidth: 3,
+    borderColor: 'rgba(6, 182, 212, 0.5)',
+    marginVertical: 20, // Added vertical margin for spacing
+  },
+  instagramSavingsIcon: {
+    fontSize: 96, // Increased from 72 for much better visibility
+    marginBottom: 20, // Increased margin
+    lineHeight: 80,
+
+  },
+  instagramSavingsLabel: {
+    fontSize: 36, // Increased from 28
+    color: '#FFFFFF',
+    opacity: 0.95, // Increased opacity for better visibility
+    marginBottom: 16, // Increased margin
+    fontWeight: '700', // Increased weight for better readability
+    lineHeight: 80,
+
+  },
+  instagramSavingsValue: {
+    fontSize: 72, // Increased from 56 for much better readability
+    fontWeight: '900',
+    color: '#06b6d4',
+    marginBottom: 12, // Increased margin
+  },
+  instagramSavingsRate: {
+    fontSize: 32, // Increased from 24
+    color: '#FFFFFF',
+    opacity: 0.85, // Increased opacity for better visibility
+    fontWeight: '700', // Increased weight for better readability
+  },
+  instagramTopAchievement: {
+    backgroundColor: 'rgba(6, 182, 212, 0.06)',
+    borderRadius: 20, // Increased border radius for more modern look
+    padding: 32, // Increased padding for more space
+    alignItems: 'center',
+    justifyContent: 'center', // Center content vertically
+    flex: 1.5, // Added flex to use space (1.5x the main stats)
+    borderWidth: 2,
+    borderColor: 'rgba(6, 182, 212, 0.25)',
+    marginVertical: 20, // Added vertical margin for spacing
+  },
+  instagramAchievementIcon: {
+    fontSize: 64, // Increased from 48 for much better visibility
+    marginBottom: 20, // Increased margin
+    lineHeight: 80,
+
+  },
+  instagramAchievementText: {
+    fontSize: 32, // Increased from 24
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 38, // Increased line height for better readability
+    fontWeight: '600', // Added weight for better readability
+  },
+  instagramAchievementHighlight: {
+    fontWeight: '700',
+    fontSize: 32, // Increased from 24
+    color: '#06b6d4',
+  },
+  instagramAchievementAmount: {
+    fontSize: 48, // Increased from 36 for much better readability
+    fontWeight: '900', // Increased weight for better impact
+    color: '#06b6d4',
+    marginTop: 20, // Increased margin
+  },
+  instagramBrandMessage: {
+    alignItems: 'center',
+    justifyContent: 'center', // Center content vertically
+    flex: 0.5, // Added flex to use remaining space
+    paddingVertical: 20, // Added padding for better spacing
+  },
+  instagramBrandText: {
+    fontSize: 28, // Increased from 22 for much better visibility
+    color: '#FFFFFF',
+    opacity: 0.75, // Increased opacity for better visibility
+    fontStyle: 'italic',
+    fontWeight: '600', // Added weight for better readability
   },
   pageIndicators: {
     flexDirection: 'row',
@@ -719,14 +1621,463 @@ const styles = StyleSheet.create({
   },
   spendingContent: {
     flex: 1,
-    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  categoryScrollView: {
+    marginVertical: 20,
+  },
+  categoryScrollContent: {
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  categoryCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    minWidth: 140,
+    alignItems: 'center',
+  },
+  categoryCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  categoryPercentage: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    minWidth: 35,
+    textAlign: 'right',
   },
   earningsContent: {
     flex: 1,
+    paddingHorizontal: 20,
     justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  earningsOverviewGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 30,
+    gap: 8,
+  },
+  earningsOverviewCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  earningsOverviewLabel: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    opacity: 0.7,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  earningsOverviewValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  earningsOverviewGrowth: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  earningsStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 30,
+  },
+  earningsStat: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  earningsLabel: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.7,
+    marginBottom: 8,
+  },
+  earningsValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  growthValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#4ade80',
+  },
+  growthSubtext: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    opacity: 0.6,
+    marginTop: 4,
+  },
+  monthlyEarningsContainer: {
+    marginBottom: 20,
+  },
+  monthlyEarningsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  monthlyEarningsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  monthlyEarningsCardCompact: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    width: '22%',
+    alignItems: 'center',
+  },
+  monthlyEarningsMonthCompact: {
+    fontSize: 10,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    marginBottom: 4,
+  },
+  monthlyEarningsAmountCompact: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  monthlyEarningsBarCompact: {
+    width: '100%',
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  monthlyEarningsBarFillCompact: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  monthlyEarningsScroll: {
+    marginBottom: 20,
+  },
+  monthlyEarningsContent: {
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  monthlyEarningsCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  monthlyEarningsMonth: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    marginBottom: 8,
+  },
+  monthlyEarningsAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  monthlyEarningsBar: {
+    width: '100%',
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  monthlyEarningsBarFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  earningsInsight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 22,
+    marginHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  earningsInsightText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 24,
   },
   balanceContent: {
     flex: 1,
+    paddingHorizontal: 20,
     justifyContent: 'center',
+    paddingVertical: 20,
+    marginTop: -20,
+  },
+  balanceSummaryGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 30,
+    gap: 8,
+  },
+  balanceSummaryCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  balanceSummaryLabel: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.7,
+    marginBottom: 6,
+  },
+  balanceSummaryValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  balanceSummaryGrowth: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  balanceStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 30,
+    gap: 8,
+  },
+  balanceStatCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  balanceStatLabel: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    opacity: 0.7,
+    textAlign: 'center',
+  },
+  balanceStatValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  balanceStatAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4ade80',
+  },
+  balanceChartContainer: {
+    marginBottom: 30,
+  },
+  balanceChartTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  balanceChartCompact: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    height: 120,
+    paddingHorizontal: 4,
+  },
+  balanceChartItemCompact: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 2,
+  },
+  balanceChartBarCompact: {
+    width: 8,
+    height: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6,
+    justifyContent: 'flex-end',
+  },
+  balanceChartBarFillCompact: {
+    width: '100%',
+    borderRadius: 4,
+  },
+  balanceChartMonthCompact: {
+    fontSize: 8,
+    color: '#FFFFFF',
+    opacity: 0.8,
+  },
+  balanceOverview: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 30,
+  },
+  balanceOverviewCard: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  balanceOverviewLabel: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    opacity: 0.7,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  balanceOverviewValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  balanceGrowthValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  balanceChartScroll: {
+    marginBottom: 20,
+  },
+  balanceChartContent: {
+    paddingHorizontal: 20,
+    gap: 12,
+    alignItems: 'flex-end',
+  },
+  balanceChartItem: {
+    alignItems: 'center',
+    minWidth: 60,
+  },
+  balanceChartBar: {
+    width: 20,
+    height: 80,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 8,
+    justifyContent: 'flex-end',
+  },
+  balanceChartBarFill: {
+    width: '100%',
+    borderRadius: 10,
+  },
+  balanceChartMonth: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    marginBottom: 4,
+  },
+  balanceChartAmount: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  balanceInsight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  balanceInsightText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: '#0a0a0f',
+  },
+  loadingGradientBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  loadingContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    width: '100%',
+  },
+  loadingIconContainer: {
+    marginBottom: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 120,
+    height: 120,
+    paddingVertical: 20,
+  },
+  loadingIcon: {
+    fontSize: 80,
+    textAlign: 'center',
+    lineHeight: 90,
+  },
+  loadingTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 40,
+    marginBottom: 16,
+    letterSpacing: 1,
+  },
+  loadingText: {
+    fontSize: 20,
+    color: '#FFFFFF',
+    opacity: 0.7,
+    textAlign: 'center',
+    marginBottom: 50,
+    fontWeight: '500',
+  },
+  loadingDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#06b6d4',
   },
 })
