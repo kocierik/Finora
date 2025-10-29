@@ -9,8 +9,9 @@ type PendingExpense = {
   currency: string
   merchant: string
   date: string
-  description: string
-  category: string
+  description?: string // Legacy field
+  raw_notification?: string // Actual field used by headless task
+  category?: string // Optional, not always set by headless task
   category_id?: string
   timestamp: number
   synced: boolean
@@ -139,7 +140,7 @@ export async function syncPendingExpenses(userId: string): Promise<{ synced: num
           currency: expense.currency,
           merchant: expense.merchant,
           date: expense.date,
-          raw_notification: expense.description || '',
+          raw_notification: expense.raw_notification || expense.description || '',
           category_id: categoryId,
         }
         
@@ -174,13 +175,16 @@ export async function syncPendingExpenses(userId: string): Promise<{ synced: num
           .insert(expenseData)
         
         if (error) {
+          console.error('[ExpenseSync] ❌ Error inserting expense:', error.message, expenseData)
           errorCount++
         } else {
+          console.log(`[ExpenseSync] ✅ Expense synced: ${expense.merchant} - ${expense.amount}${expense.currency}`)
           // Marca come sincronizzata
           expense.synced = true
           syncedCount++
         }
-      } catch (error) {
+      } catch (error: any) {
+        console.error('[ExpenseSync] ❌ Exception while syncing expense:', error.message || error, expense)
         errorCount++
       }
     }

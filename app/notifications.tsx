@@ -6,16 +6,16 @@ import { useSettings } from '@/context/SettingsContext'
 import { sendBulkCategoryReminder, sendCategoryReminder, sendInteractiveCategoryReminder, sendWeeklyBulkCategoryReminder } from '@/services/category-reminder'
 import { sendDeepLinkCategoryNotification } from '@/services/deep-link-notifications'
 import {
-  checkNotificationPermission,
-  requestNotificationPermission,
-  type NotificationPermissionStatus
+    checkNotificationPermission,
+    requestNotificationPermission,
+    type NotificationPermissionStatus
 } from '@/services/notification-service'
 import {
-  clearNotifications,
-  getWalletNotifications,
-  loadNotifications,
-  sortNotificationsByDate,
-  type StoredNotification
+    clearNotifications,
+    getWalletNotifications,
+    loadNotifications,
+    sortNotificationsByDate,
+    type StoredNotification
 } from '@/services/notification-storage'
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
 import * as Notifications from 'expo-notifications'
@@ -67,7 +67,8 @@ export default function NotificationsScreen() {
   const [permission, setPermission] = useState<NotificationPermissionStatus>('unknown')
   const [logs, setLogs] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
-  // Mostra solo le 5 più recenti in questa schermata
+  const [showAll, setShowAll] = useState(false) // Stato per mostrare tutte o solo le prime 10
+  const INITIAL_NOTIFICATIONS_LIMIT = 10 // Limite iniziale di notifiche da mostrare
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -365,6 +366,7 @@ export default function NotificationsScreen() {
 
   const handleFilterChange = (newFilter: FilterType) => {
     setFilter(newFilter)
+    setShowAll(false) // Reset al cambiare filtro per mostrare di nuovo solo le prime 10
     applyFilter(notifications, newFilter)
   }
 
@@ -464,10 +466,18 @@ export default function NotificationsScreen() {
 
   const renderInfoCard = () => null
 
-  const displayedNotifications = useMemo(() => 
-    filteredNotifications.slice(0, 500), 
-    [filteredNotifications]
-  )
+  // Mostra solo le prime 10 notifiche inizialmente, tutte se showAll è true
+  const displayedNotifications = useMemo(() => {
+    if (showAll) {
+      return filteredNotifications
+    }
+    return filteredNotifications.slice(0, INITIAL_NOTIFICATIONS_LIMIT)
+  }, [filteredNotifications, showAll])
+  
+  // Calcola quante notifiche rimangono da mostrare
+  const remainingCount = useMemo(() => {
+    return Math.max(0, filteredNotifications.length - INITIAL_NOTIFICATIONS_LIMIT)
+  }, [filteredNotifications.length])
 
   // Funzione memoizzata per il renderItem
   const renderItem = useCallback(({ item }: { item: StoredNotification }) => (
@@ -569,7 +579,20 @@ export default function NotificationsScreen() {
           <ThemedText style={{ opacity: 0.7, textAlign: 'center', fontSize: 12, marginTop: 4 }}>{t('try_send_test')}</ThemedText>
         </Card>
       }
-      ListFooterComponent={null}
+      ListFooterComponent={
+        !showAll && remainingCount > 0 ? (
+          <View style={{ marginTop: 8, marginBottom: 16 }}>
+            <Pressable 
+              style={styles.showMoreButton}
+              onPress={() => setShowAll(true)}
+            >
+              <ThemedText style={styles.showMoreButtonText}>
+                Mostra altri {remainingCount} {remainingCount === 1 ? 'messaggio' : 'messaggi'}
+              </ThemedText>
+            </Pressable>
+          </View>
+        ) : null
+      }
     />
   )
 }
@@ -684,5 +707,20 @@ const styles = StyleSheet.create({
   },
   filterButtonTextActive: {
     color: '#10b981',
+  },
+  showMoreButton: {
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
+    borderWidth: 1,
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
+  },
+  showMoreButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#06b6d4', // Brand.colors.primary.cyan
+    textAlign: 'center',
   },
 })

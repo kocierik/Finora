@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
@@ -82,7 +83,16 @@ function RootNavigator() {
       // Also sync every 30 seconds while app is active
       const interval = setInterval(syncExpenses, 30000)
       
-      return () => clearInterval(interval)
+      // Sync immediately when a new expense is saved (from headless task)
+      const expenseSavedSubscription = DeviceEventEmitter.addListener('expense:saved', () => {
+        console.log('[RootNavigator] 🎯 New expense saved, syncing immediately...')
+        syncExpenses()
+      })
+      
+      return () => {
+        clearInterval(interval)
+        expenseSavedSubscription.remove()
+      }
     }
   }, [user])
   
