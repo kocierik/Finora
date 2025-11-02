@@ -212,7 +212,25 @@ export default function HomeScreen() {
       const series = (inv || []).filter((_, i) => i % step === 0).slice(0, 5).map((it, i) => ({ x: `${i+1}`, y: (it.quantity || 0) * (it.average_price || 0) }))
       setPortfolioPoints(series.length ? series : [{ x: '1', y: totalInvested }])
       const now = new Date()
-      const monthExpenses = (exp || []).filter(e => sameMonth(e.date, now.getFullYear(), now.getMonth())).reduce((s, e) => s + (e.amount || 0), 0)
+      const monthExpenses = (exp || []).filter(e => sameMonth(e.date, now.getFullYear(), now.getMonth())).reduce((s, e) => {
+        let expenseAmount = e.amount || 0
+        // Se amount è già negativo, è una spesa → usa valore assoluto
+        if (expenseAmount < 0) {
+          return s + Math.abs(expenseAmount)
+        }
+        // Se amount è positivo, verifica se è una spesa o un'entrata
+        if (expenseAmount > 0) {
+          const notificationText = (e.raw_notification || '').toLowerCase()
+          const merchantText = (e.merchant || '').toLowerCase()
+          const isManual = notificationText === 'manual' || notificationText === ''
+          const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText + ' ' + merchantText)
+          // Se è manuale o non ha parole chiave di accredito, è una spesa
+          if (isManual || !hasIncomeKeywords) {
+            return s + Math.abs(expenseAmount)
+          }
+        }
+        return s
+      }, 0)
       setKpis({ totalInvested, monthExpenses })
   }, [user?.id])
 
@@ -347,8 +365,44 @@ export default function HomeScreen() {
   const prevMonth = curMonth === 0 ? 11 : curMonth - 1
   const prevYear = curMonth === 0 ? curYear - 1 : curYear
 
-  const currentMonthExpenses = expenses.filter(e => sameMonth(e.date, curYear, curMonth)).reduce((s, e) => s + (e.amount || 0), 0)
-  const previousMonthExpenses = expenses.filter(e => sameMonth(e.date, prevYear, prevMonth)).reduce((s, e) => s + (e.amount || 0), 0)
+  const currentMonthExpenses = expenses.filter(e => sameMonth(e.date, curYear, curMonth)).reduce((s, e) => {
+    let expenseAmount = e.amount || 0
+    // Se amount è già negativo, è una spesa → usa valore assoluto
+    if (expenseAmount < 0) {
+      return s + Math.abs(expenseAmount)
+    }
+    // Se amount è positivo, verifica se è una spesa o un'entrata
+    if (expenseAmount > 0) {
+      const notificationText = (e.raw_notification || '').toLowerCase()
+      const merchantText = (e.merchant || '').toLowerCase()
+      const isManual = notificationText === 'manual' || notificationText === ''
+      const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText + ' ' + merchantText)
+      // Se è manuale o non ha parole chiave di accredito, è una spesa
+      if (isManual || !hasIncomeKeywords) {
+        return s + Math.abs(expenseAmount)
+      }
+    }
+    return s
+  }, 0)
+  const previousMonthExpenses = expenses.filter(e => sameMonth(e.date, prevYear, prevMonth)).reduce((s, e) => {
+    let expenseAmount = e.amount || 0
+    // Se amount è già negativo, è una spesa → usa valore assoluto
+    if (expenseAmount < 0) {
+      return s + Math.abs(expenseAmount)
+    }
+    // Se amount è positivo, verifica se è una spesa o un'entrata
+    if (expenseAmount > 0) {
+      const notificationText = (e.raw_notification || '').toLowerCase()
+      const merchantText = (e.merchant || '').toLowerCase()
+      const isManual = notificationText === 'manual' || notificationText === ''
+      const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText + ' ' + merchantText)
+      // Se è manuale o non ha parole chiave di accredito, è una spesa
+      if (isManual || !hasIncomeKeywords) {
+        return s + Math.abs(expenseAmount)
+      }
+    }
+    return s
+  }, 0)
   const expenseDelta = currentMonthExpenses - previousMonthExpenses
   const expenseDeltaPct = previousMonthExpenses > 0 ? (expenseDelta / previousMonthExpenses) * 100 : 0
 
@@ -494,20 +548,58 @@ export default function HomeScreen() {
 
   // Combine expenses and incomes for recent transactions
   const allTransactions = useMemo(() => {
-    const expenseTransactions = expenses.map(expense => ({
-      id: expense.id,
-      type: 'expense' as const,
-      amount: -expense.amount, // Negative for expenses
-      description: expense.merchant || 'Expense',
-      category: expense.categories?.name || expense.category || 'Other',
-      categoryIcon: expense.categories?.icon || '💳',
-      categoryColor: expense.categories?.color || '#06b6d4',
-      date: expense.date,
-      created_at: expense.created_at,
-      isRecurring: expense.is_recurring,
-      raw_notification: expense.raw_notification,
-      originalData: expense
-    }))
+    // Process expenses: amount < 0 = spesa, amount > 0 con parole chiave accredito = entrata
+    const expenseTransactions = expenses.map(expense => {
+      // Se amount è già negativo, è sicuramente una spesa (nuovo formato)
+      if (expense.amount < 0) {
+        return {
+          id: expense.id,
+          type: 'expense' as const,
+          amount: expense.amount, // Già negativo
+          description: expense.merchant || 'Expense',
+          category: expense.categories?.name || expense.category || 'Other',
+          categoryIcon: expense.categories?.icon || '💳',
+          categoryColor: expense.categories?.color || '#06b6d4',
+          date: expense.date,
+          created_at: expense.created_at,
+          isRecurring: expense.is_recurring,
+          raw_notification: expense.raw_notification,
+          originalData: expense
+        }
+      }
+      
+      // Se amount è positivo, determina se è un accredito
+      const notificationText = (expense.raw_notification || '').toLowerCase()
+      const merchantText = (expense.merchant || '').toLowerCase()
+      
+      // Le transazioni manuali sono sempre spese
+      const isManual = notificationText === 'manual' || notificationText === ''
+      
+      // Controlla parole chiave di accredito solo se non è manuale
+      const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText + ' ' + merchantText)
+      
+      // Se amount è positivo E ha parole chiave di accredito, è un'entrata
+      // Altrimenti (manual o senza parole chiave), è una spesa → converti in negativo
+      const isIncome = expense.amount > 0 && hasIncomeKeywords && !isManual
+      
+      // Normalizza l'amount: se è una spesa ma è positivo, convertilo in negativo
+      const normalizedAmount = isIncome ? expense.amount : -Math.abs(expense.amount)
+      
+      return {
+        id: expense.id,
+        type: isIncome ? 'income' as const : 'expense' as const,
+        amount: normalizedAmount, // Negativo per spese, positivo per entrate
+        description: expense.merchant || (isIncome ? 'Accredito' : 'Expense'),
+        category: expense.categories?.name || expense.category || 'Other',
+        categoryIcon: expense.categories?.icon || '💳',
+        categoryColor: expense.categories?.color || '#06b6d4',
+        date: expense.date,
+        created_at: expense.created_at,
+        isRecurring: expense.is_recurring,
+        raw_notification: expense.raw_notification,
+        originalData: expense
+      }
+    })
 
     const incomeTransactions = incomes.map(income => ({
       id: income.id,
@@ -777,7 +869,7 @@ export default function HomeScreen() {
                 {language === 'it' ? 'Transazioni recenti' : 'Recent transactions'}
               </ThemedText>
               <ThemedText style={styles.recentCount}>
-                {allTransactions.length} {language === 'it' ? 'transazioni' : 'transactions'}
+             {/*   {allTransactions.length} {language === 'it' ? 'transazioni' : 'transactions'} */}
               </ThemedText>
             </View>
             <View style={styles.recentList}>
@@ -1150,6 +1242,27 @@ export default function HomeScreen() {
                     setFormError('Data obbligatoria')
                     return
                   }
+                  // Auto-assign category if merchant already has one
+                  let finalCategoryId = newCategoryId
+                  if (!finalCategoryId && newTitle) {
+                    // Try to find existing category for this merchant
+                    const { data: existingExpense } = await supabase
+                      .from('expenses')
+                      .select('category_id')
+                      .eq('user_id', user.id)
+                      .eq('merchant', newTitle.trim())
+                      .not('category_id', 'is', null)
+                      .order('created_at', { ascending: false })
+                      .limit(1)
+                      .single()
+                    
+                    if (existingExpense?.category_id) {
+                      finalCategoryId = existingExpense.category_id
+                      // Update UI state to show the auto-selected category
+                      setNewCategoryId(finalCategoryId)
+                    }
+                  }
+                  
                   const items: any[] = []
                   if (isRecurring) {
                     const count = recurringInfinite ? 1 : Math.min(36, Math.max(1, parseInt(recurringOccurrences || '1', 10) || 1))
@@ -1157,22 +1270,8 @@ export default function HomeScreen() {
                     const today = new Date()
                     today.setHours(0, 0, 0, 0) // Reset time to start of day
                     
-                    // Per le transazioni ricorrenti:
-                    // - Se la data selezionata è nel futuro: inizia da quella data
-                    // - Se la data selezionata è nel passato: inizia dal mese successivo a oggi
-                    let start: Date
-                    if (selectedDate >= today) {
-                      // Data futura: inizia dalla data selezionata
-                      start = new Date(selectedDate)
-                    } else {
-                      // Data passata: inizia dal mese successivo a oggi
-                      start = new Date(today)
-                      if (recurringFrequency === 'monthly') {
-                        start.setMonth(start.getMonth() + 1)
-                      } else {
-                        start.setDate(start.getDate() + 7)
-                      }
-                    }
+                    // Usa sempre la data selezionata come data di partenza
+                    let start: Date = new Date(selectedDate)
                     
                     const groupId = `rec-${user.id}-${Date.now()}`
                     for (let i = 0; i < count; i++) {
@@ -1188,7 +1287,7 @@ export default function HomeScreen() {
                       items.push({
                         user_id: user.id,
                         amount: amountNum,
-                        category_id: newCategoryId,
+                        category_id: finalCategoryId,
                         date: `${yyyy}-${mm}-${dd}`,
                         raw_notification: 'manual',
                         merchant: newTitle || 'Manual',
@@ -1204,7 +1303,7 @@ export default function HomeScreen() {
                     items.push({
                       user_id: user.id,
                       amount: amountNum,
-                      category_id: newCategoryId,
+                      category_id: finalCategoryId,
                       date: newDate,
                       raw_notification: 'manual',
                       merchant: newTitle || 'Manual',
@@ -1218,6 +1317,18 @@ export default function HomeScreen() {
                     }
                     setFormError(error.message || 'Errore durante il salvataggio')
                     return
+                  }
+                  
+                  // For infinite recurring transactions, generate future occurrences immediately
+                  if (isRecurring && recurringInfinite) {
+                    try {
+                      await supabase.rpc('generate_recurring_expenses_rpc', { horizon_days: 60 })
+                    } catch (rpcError: any) {
+                      // Log but don't fail the transaction if RPC fails
+                      if (logger && logger.error) {
+                        logger.error('Failed to generate recurring expenses', { error: rpcError?.message }, 'Home')
+                      }
+                    }
                   }
                   
                   // Pulizia automatica dei duplicati dopo il salvataggio
@@ -1565,27 +1676,9 @@ export default function HomeScreen() {
                   if (isIncomeRecurring) {
                     const count = incomeRecurringInfinite ? 1 : Math.min(36, Math.max(1, parseInt(incomeRecurringOccurrences || '1', 10) || 1))
                     const selectedDate = new Date(newIncomeDate)
-                    const today = new Date()
-                    today.setHours(0, 0, 0, 0) // Reset time to start of day
                     
-                    // Per le entrate ricorrenti:
-                    // - Se la data selezionata è nel futuro: inizia da quella data
-                    // - Se la data selezionata è nel passato: inizia dal periodo successivo a oggi
-                    let start: Date
-                    if (selectedDate >= today) {
-                      // Data futura: inizia dalla data selezionata
-                      start = new Date(selectedDate)
-                    } else {
-                      // Data passata: inizia dal periodo successivo a oggi
-                      start = new Date(today)
-                      if (incomeRecurringFrequency === 'monthly') {
-                        start.setMonth(start.getMonth() + 1)
-                      } else if (incomeRecurringFrequency === 'weekly') {
-                        start.setDate(start.getDate() + 7)
-                      } else if (incomeRecurringFrequency === 'yearly') {
-                        start.setFullYear(start.getFullYear() + 1)
-                      }
-                    }
+                    // Usa sempre la data selezionata come data di partenza
+                    let start: Date = new Date(selectedDate)
                     
                     const groupId = `rec-income-${user.id}-${Date.now()}`
                     for (let i = 0; i < count; i++) {
@@ -1637,6 +1730,18 @@ export default function HomeScreen() {
                     }
                     setIncomeFormError(error.message || (language === 'it' ? 'Errore durante il salvataggio' : 'Error saving income'))
                     return
+                  }
+                  
+                  // For infinite recurring incomes, generate future occurrences immediately
+                  if (isIncomeRecurring && incomeRecurringInfinite) {
+                    try {
+                      await supabase.rpc('generate_recurring_incomes_rpc', { horizon_days: 60 })
+                    } catch (rpcError: any) {
+                      // Log but don't fail the transaction if RPC fails
+                      if (logger && logger.error) {
+                        logger.error('Failed to generate recurring incomes', { error: rpcError?.message }, 'Home')
+                      }
+                    }
                   }
                   
                   if (logger && logger.info) {

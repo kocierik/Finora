@@ -7,6 +7,7 @@ import { DeviceEventEmitter, Platform } from 'react-native'
 import { sendInteractiveCategoryReminder } from './category-reminder'
 import { logger } from './logger'
 import { checkNotificationPermission, requestNotificationPermission } from './notification-service'
+import { isMonitoredBank } from './bank-preferences'
 
 const CACHE_FILE = (FileSystem as any).documentDirectory 
   ? `${(FileSystem as any).documentDirectory}offline-expenses.json` 
@@ -80,13 +81,15 @@ export function useWalletListener() {
         // console.log('[WalletListener] 📱 Incoming notification (non-serializable)')
       }
       
-      // Controlla se è una notifica di Google Wallet
-      const isWalletNotification = payload.isWalletNotification || 
-        payload.app?.toLowerCase().includes('wallet') ||
-        payload.packageName?.toLowerCase().includes('wallet')
+      // Controlla se è una notifica di una banca monitorata
+      const appPackage = payload.app || payload.packageName || ''
+      const isMonitored = await isMonitoredBank(appPackage)
+      
+      // Mantieni retrocompatibilità con il flag isWalletNotification
+      const isWalletNotification = payload.isWalletNotification || isMonitored
       
       if (isWalletNotification) {
-        // console.log('[WalletListener] 🎯 Google Wallet notification detected (app is open)')
+        // console.log('[WalletListener] 🎯 Monitored bank notification detected (app is open)')
         
         // Estrai i dati della spesa dalla notifica
         const title = payload.title || ''

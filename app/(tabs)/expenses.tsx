@@ -202,6 +202,9 @@ export default function ExpensesScreen() {
       
       setItems(updatedItems)
       
+      // Trigger category update
+      setCategoryUpdateTrigger(prev => prev + 1)
+      
       // Animate balance change
       Animated.sequence([
         Animated.timing(balanceAnim, {
@@ -359,9 +362,79 @@ export default function ExpensesScreen() {
       setCategoryUpdateTrigger(prev => prev + 1)
     }, [fetchExpenses, loadExpenseThresholdsData, loadAllMonthItems, curYear, curMonth])
   )
-  const monthTotal = items.filter((e) => sameMonth(e.date, curYear, curMonth)).reduce((s, e) => s + (e.amount || 0), 0)
-  const prevTotal = items.filter((e) => sameMonth(e.date, prevYear, prevMonth)).reduce((s, e) => s + (e.amount || 0), 0)
-  const delta = monthTotal - prevTotal
+  // Calculate month expenses and income separately
+  const selectedMonthItems = items.filter((e) => sameMonth(e.date, curYear, curMonth))
+  const monthExpenses = selectedMonthItems.reduce((sum, e) => {
+    // Considera solo le spese (negative amounts)
+    let expenseAmount = e.amount
+    
+    // Se amount è già negativo, è sicuramente una spesa (nuovo formato)
+    if (expenseAmount < 0) {
+      return sum + Math.abs(expenseAmount)
+    }
+    
+    // Se amount è positivo, verifica se è una spesa o un'entrata
+    if (expenseAmount > 0) {
+      const notificationText = (e.raw_notification || '').toLowerCase()
+      const merchantText = (e.merchant || '').toLowerCase()
+      const isManual = notificationText === 'manual' || notificationText === ''
+      const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText + ' ' + merchantText)
+      
+      // Se è manuale o non ha parole chiave di accredito, è una spesa → converti in negativo e aggiungi
+      if (isManual || !hasIncomeKeywords) {
+        return sum + Math.abs(expenseAmount)
+      }
+      // Altrimenti è un'entrata → non contarla nelle spese
+    }
+    
+    return sum
+  }, 0)
+  
+  const monthIncome = selectedMonthItems.reduce((sum, e) => {
+    // Considera solo le entrate (positive amounts con parole chiave accredito)
+    let incomeAmount = e.amount
+    if (incomeAmount > 0) {
+      const notificationText = (e.raw_notification || '').toLowerCase()
+      const isManual = notificationText === 'manual' || notificationText === ''
+      const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText)
+      if (!isManual && hasIncomeKeywords) {
+        return sum + incomeAmount
+      }
+    }
+    return sum
+  }, 0)
+  
+  // Month total = income - expenses (positive = profit, negative = loss)
+  const monthTotal = monthIncome - monthExpenses
+  
+  // Previous month totals for comparison
+  const prevMonthItems = items.filter((e) => sameMonth(e.date, prevYear, prevMonth))
+  const prevMonthExpenses = prevMonthItems.reduce((sum, e) => {
+    let expenseAmount = e.amount
+    
+    // Se amount è già negativo, è sicuramente una spesa (nuovo formato)
+    if (expenseAmount < 0) {
+      return sum + Math.abs(expenseAmount)
+    }
+    
+    // Se amount è positivo, verifica se è una spesa o un'entrata
+    if (expenseAmount > 0) {
+      const notificationText = (e.raw_notification || '').toLowerCase()
+      const merchantText = (e.merchant || '').toLowerCase()
+      const isManual = notificationText === 'manual' || notificationText === ''
+      const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText + ' ' + merchantText)
+      
+      // Se è manuale o non ha parole chiave di accredito, è una spesa → aggiungi
+      if (isManual || !hasIncomeKeywords) {
+        return sum + Math.abs(expenseAmount)
+      }
+      // Altrimenti è un'entrata → non contarla nelle spese
+    }
+    
+    return sum
+  }, 0)
+  const prevTotal = prevMonthExpenses
+  const delta = monthExpenses - prevTotal // Delta spese (quanto sono aumentate/diminuite)
   const deltaPct = prevTotal > 0 ? (delta / prevTotal) * 100 : 0
 
   const monthName = currentDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
@@ -373,8 +446,7 @@ export default function ExpensesScreen() {
     setVisibleTransactionsCount(10)
   }, [curYear, curMonth, loadAllMonthItems])
 
-  // Filter items for selected month
-  const selectedMonthItems = items.filter((e) => sameMonth(e.date, curYear, curMonth))
+  // Filter incomes for selected month (selectedMonthItems already defined above)
   const selectedMonthIncomes = incomes.filter((i) => sameMonth(i.date, curYear, curMonth))
 
   // Calculate month income total
@@ -382,21 +454,59 @@ export default function ExpensesScreen() {
 
   // Combine expenses and incomes for the selected month
   const allMonthTransactions = useMemo(() => {
-    const expenseTransactions = selectedMonthItems.map(expense => ({
-      id: expense.id,
-      type: 'expense' as const,
-      amount: -expense.amount, // Negative for expenses
-      description: expense.merchant || 'Expense',
-      category: expense.categories?.name || expense.category || 'Other',
-      categoryIcon: expense.categories?.icon || '💳',
-      categoryColor: expense.categories?.color || '#06b6d4',
-      date: expense.date,
-      created_at: expense.created_at,
-      isRecurring: expense.is_recurring,
-      raw_notification: expense.raw_notification,
-      // Keep original expense data for compatibility
-      originalData: expense
-    }))
+    // Process expenses: amount < 0 = spesa, amount > 0 con parole chiave accredito = entrata
+    const expenseTransactions = selectedMonthItems.map(expense => {
+      // Se amount è già negativo, è sicuramente una spesa (nuovo formato)
+      if (expense.amount < 0) {
+        return {
+          id: expense.id,
+          type: 'expense' as const,
+          amount: expense.amount, // Già negativo
+          description: expense.merchant || 'Expense',
+          category: expense.categories?.name || expense.category || 'Other',
+          categoryIcon: expense.categories?.icon || '💳',
+          categoryColor: expense.categories?.color || '#06b6d4',
+          date: expense.date,
+          created_at: expense.created_at,
+          isRecurring: expense.is_recurring,
+          raw_notification: expense.raw_notification,
+          originalData: expense
+        }
+      }
+      
+      // Se amount è positivo, determina se è un accredito
+      const notificationText = (expense.raw_notification || '').toLowerCase()
+      const merchantText = (expense.merchant || '').toLowerCase()
+      
+      // Le transazioni manuali sono sempre spese
+      const isManual = notificationText === 'manual' || notificationText === ''
+      
+      // Controlla parole chiave di accredito solo se non è manuale
+      const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText + ' ' + merchantText)
+      
+      // Se amount è positivo E ha parole chiave di accredito, è un'entrata
+      // Altrimenti (manual o senza parole chiave), è una spesa → converti in negativo
+      const isIncome = expense.amount > 0 && hasIncomeKeywords && !isManual
+      
+      // Normalizza l'amount: se è una spesa ma è positivo, convertilo in negativo
+      const normalizedAmount = isIncome ? expense.amount : -Math.abs(expense.amount)
+      
+      return {
+        id: expense.id,
+        type: isIncome ? 'income' as const : 'expense' as const,
+        amount: normalizedAmount, // Negativo per spese, positivo per entrate
+        description: expense.merchant || (isIncome ? 'Accredito' : 'Expense'),
+        category: expense.categories?.name || expense.category || 'Other',
+        categoryIcon: expense.categories?.icon || '💳',
+        categoryColor: expense.categories?.color || '#06b6d4',
+        date: expense.date,
+        created_at: expense.created_at,
+        isRecurring: expense.is_recurring,
+        raw_notification: expense.raw_notification,
+        // Keep original expense data for compatibility
+        originalData: expense
+      }
+    })
 
     const incomeTransactions = selectedMonthIncomes.map(income => ({
       id: income.id,
@@ -490,20 +600,71 @@ export default function ExpensesScreen() {
 
   // Calculate category spending from real data - use useMemo to make it reactive
   const categoryTotals = useMemo(() => {
-    // Use allMonthItems which already contains all items for the selected month
+    // Use allMonthItems which is already filtered for the selected month and includes category joins
     const currentMonthItems = allMonthItems
     
+    // Debug: log to see what we're working with
+    if (__DEV__) {
+      console.log('[CategoryTotals] allMonthItems count:', currentMonthItems.length)
+      console.log('[CategoryTotals] categories to match:', categories.map(c => c.name))
+      if (currentMonthItems.length > 0) {
+        const sampleItems = currentMonthItems.slice(0, 3).map(e => ({
+          merchant: e.merchant,
+          amount: e.amount,
+          category: e.category,
+          categoriesName: e.categories?.name
+        }))
+        console.log('[CategoryTotals] Sample items:', sampleItems)
+      }
+    }
+    
     return categories.map(cat => {
-      const categoryItems = allMonthItems.filter(e => 
-        e.categories && 
-        e.categories.name.toLowerCase() === cat.name.toLowerCase()
-      )
-      const amount = categoryItems.reduce((sum, e) => sum + (e.amount || 0), 0)
-      const percentage = monthTotal > 0 ? (amount / monthTotal) * 100 : 0
+      // Match by categories.name (new structure) or by category (legacy)
+      const categoryItems = currentMonthItems.filter(e => {
+        const categoryName = e.categories?.name || e.category || ''
+        const matches = categoryName.toLowerCase() === cat.name.toLowerCase()
+        
+        
+        return matches
+      })
+      
+      // Sum only expenses (negative amounts), ignore income (positive amounts) for category totals
+      const amount = categoryItems.reduce((sum, e) => {
+        // Considera solo le spese (negative), ignora gli accrediti (positivi)
+        // Se amount è positivo ma è una spesa vecchia, convertilo
+        let expenseAmount = e.amount
+        if (expenseAmount > 0) {
+          // Check if it's actually an expense (manual transaction or no income keywords)
+          const notificationText = (e.raw_notification || '').toLowerCase()
+          const isManual = notificationText === 'manual' || notificationText === ''
+          const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText)
+          if (isManual || !hasIncomeKeywords) {
+            expenseAmount = -Math.abs(expenseAmount)
+          }
+        }
+        return sum + (expenseAmount < 0 ? expenseAmount : 0)
+      }, 0)
+      
+      // Calcola percentuale basata solo sulle spese totali (solo negative)
+      const totalExpenses = currentMonthItems.reduce((sum, e) => {
+        let expenseAmount = e.amount
+        if (expenseAmount > 0) {
+          const notificationText = (e.raw_notification || '').toLowerCase()
+          const isManual = notificationText === 'manual' || notificationText === ''
+          const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText)
+          if (isManual || !hasIncomeKeywords) {
+            expenseAmount = -Math.abs(expenseAmount)
+          }
+        }
+        return sum + (expenseAmount < 0 ? Math.abs(expenseAmount) : 0)
+      }, 0)
+      
+      const percentage = totalExpenses > 0 ? (Math.abs(amount) / totalExpenses) * 100 : 0
+      
       
       return { ...cat, amount, percentage }
-    }).sort((a, b) => b.amount - a.amount)
-  }, [allMonthItems, monthTotal, categoryUpdateTrigger, categories])
+    }).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+  }, [allMonthItems, curYear, curMonth, categoryUpdateTrigger, categories])
 
   const onRefresh = useCallback(() => {
     fetchExpenses()
@@ -610,7 +771,8 @@ export default function ExpensesScreen() {
       const startDateStr = startDate.toISOString().split('T')[0]
       const endDateStr = endDate.toISOString().split('T')[0]
 
-      const { data, error } = await supabase
+      // Load expenses for this category
+      const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
         .select(`
           *,
@@ -626,8 +788,62 @@ export default function ExpensesScreen() {
         .gte('date', startDateStr)
         .lte('date', endDateStr)
         .order('date', { ascending: false })
-      if (error) throw error
-      setCategoryHistory((data as any) ?? [])
+      
+      if (expensesError) throw expensesError
+      
+      // Also load incomes that match this category (if category exists in incomes)
+      // Note: incomes use category field as string, not category_id
+      const categoryName = dbCategories.find(c => c.id === categoryId)?.name || category.name
+      const { data: incomesData, error: incomesError } = await supabase
+        .from('incomes')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('category', categoryName.toLowerCase())
+        .gte('date', startDateStr)
+        .lte('date', endDateStr)
+        .order('date', { ascending: false })
+      
+      if (incomesError) throw incomesError
+      
+      // Combine expenses and incomes, and normalize to show correct type
+      const combinedData = [
+        ...(expensesData || []).map(exp => {
+          // Determine if expense is actually an income (positive amount with income keywords)
+          const notificationText = (exp.raw_notification || '').toLowerCase()
+          const merchantText = (exp.merchant || '').toLowerCase()
+          const isManual = notificationText === 'manual' || notificationText === ''
+          const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText + ' ' + merchantText)
+          const isIncome = exp.amount > 0 && hasIncomeKeywords && !isManual
+          
+          return {
+            ...exp,
+            amount: isIncome ? exp.amount : (exp.amount < 0 ? exp.amount : -Math.abs(exp.amount)),
+            type: isIncome ? 'income' : 'expense'
+          }
+        }),
+        ...(incomesData || []).map(inc => ({
+          ...inc,
+          amount: Math.abs(inc.amount), // Incomes are always positive
+          type: 'income',
+          categories: {
+            name: inc.category || 'work',
+            color: inc.category === 'work' ? '#10b981' :
+                   inc.category === 'passive' ? '#8B5CF6' :
+                   inc.category === 'investment' ? '#F59E0B' : '#6366F1',
+            icon: inc.source === 'salary' ? '💼' : 
+                  inc.source === 'freelance' ? '💻' :
+                  inc.source === 'investment' ? '📈' :
+                  inc.source === 'bonus' ? '🎁' : '💰'
+          },
+          merchant: inc.description || inc.source || 'Income'
+        }))
+      ].sort((a, b) => {
+        const dateA = new Date(a.date)
+        const dateB = new Date(b.date)
+        return dateB.getTime() - dateA.getTime()
+      })
+      
+      setCategoryHistory(combinedData as any)
     } catch (e) {
       console.error('[Expenses] ❌ Error fetching category history', e)
     } finally {
@@ -1148,6 +1364,12 @@ export default function ExpensesScreen() {
                 }
               ]}
             >
+                          <LinearGradient
+                colors={['rgba(185, 16, 16, 0.51)', 'rgba(197, 34, 34, 0.07)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.incomeGradient}
+              />
               <Pressable
                 onPressIn={() => Animated.spring(scaleAnim1, { toValue: 0.99, useNativeDriver: true }).start()}
                 onPressOut={() => Animated.spring(scaleAnim1, { toValue: 1, useNativeDriver: true }).start()}
@@ -1229,9 +1451,9 @@ export default function ExpensesScreen() {
                     <View style={styles.summaryAmountContainer}>
                       <ThemedText style={[
                         styles.summaryAmount,
-                        monthTotal > 0 ? { color: '#ef4444' } : { color: '#22c55e' }
+                        { color: '#ef4444' } // Rosso per le spese totali
                       ]}>
-                        {hideBalances ? '••••• €' : Math.abs(monthTotal).toLocaleString(locale, { style: 'currency', currency })}
+                        {hideBalances ? '••••• €' : monthExpenses.toLocaleString(locale, { style: 'currency', currency })}
                         {typeof monthlyBudget === 'number' && monthlyBudget > 0 && (
                           <ThemedText style={{ fontSize: 12, color: Brand.colors.text.tertiary }}> / {monthlyBudget.toLocaleString(locale, { style: 'currency', currency })}</ThemedText>
                         )}
@@ -1288,6 +1510,48 @@ export default function ExpensesScreen() {
             </Animated.View>
           </PanGestureHandler>
         </Animated.View>
+
+
+        {/* Income Section */}
+          <Animated.View 
+            style={[
+              styles.incomeSection,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <ThemedText style={styles.sectionTitle}>{language === 'it' ? 'Guadagni del mese' : 'Monthly income'}</ThemedText>
+              <ThemedText style={styles.sectionSubtitle}>{language === 'it' ? 'Entrate registrate' : 'Recorded income'}</ThemedText>
+            </View>
+            
+            <Card variant="default" style={styles.incomeCard}>
+              <LinearGradient
+                colors={['rgba(16, 185, 129, 0.1)', 'rgba(24, 146, 69, 0)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.incomeGradient}
+              />
+              <View style={styles.incomeContent}>
+                <View style={styles.incomeIcon}>
+                  <ThemedText style={styles.incomeIconText}>💰</ThemedText>
+                </View>
+                <View style={styles.incomeDetails}>
+                  <ThemedText style={styles.incomeLabel}>
+                    {language === 'it' ? 'Totale guadagni' : 'Total income'}
+                  </ThemedText>
+                  <ThemedText style={styles.incomeAmount}>
+                    {hideBalances ? '••••• €' : monthIncomeTotal.toLocaleString(locale, { style: 'currency', currency })}
+                  </ThemedText>
+                  <ThemedText style={styles.incomeCount}>
+                    {selectedMonthIncomes.length} {language === 'it' ? 'entrate' : 'incomes'}
+                  </ThemedText>
+                </View>
+              </View>
+            </Card>
+          </Animated.View>
 
 
         {/* Spending Categories */}
@@ -1365,10 +1629,10 @@ export default function ExpensesScreen() {
                     <ThemedText style={styles.categoryName}>{category.name}</ThemedText>
                       <ThemedText style={[
                         styles.categoryAmount,
-                        // Positive totals are outgoing costs → red; zero/negative → green
-                        category.amount > 0 ? { color: '#ef4444' } : { color: '#22c55e' }
+                        // Negative amounts are expenses (spese) → red; positive/zero → green
+                        category.amount < 0 ? { color: '#ef4444' } : { color: '#22c55e' }
                       ]}>
-                        € {category.amount.toFixed(0)}
+                        € {Math.abs(category.amount).toFixed(2)}
                 </ThemedText>
                       <View style={styles.progressContainer}>
                         <View style={[styles.progressBar, { backgroundColor: `${category.color}20` }]}>
@@ -1394,49 +1658,6 @@ export default function ExpensesScreen() {
             ))}
           </View>
         </Animated.View>
-
-        {/* Income Section */}
-        {monthIncomeTotal > 0 && (
-          <Animated.View 
-            style={[
-              styles.incomeSection,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }]
-              }
-            ]}
-          >
-            <View style={styles.sectionHeader}>
-              <ThemedText style={styles.sectionTitle}>{language === 'it' ? 'Guadagni del mese' : 'Monthly income'}</ThemedText>
-              <ThemedText style={styles.sectionSubtitle}>{language === 'it' ? 'Entrate registrate' : 'Recorded income'}</ThemedText>
-            </View>
-            
-            <Card variant="default" style={styles.incomeCard}>
-              <LinearGradient
-                colors={['rgba(16, 185, 129, 0.08)', 'rgba(34, 197, 94, 0.04)', 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.incomeGradient}
-              />
-              <View style={styles.incomeContent}>
-                <View style={styles.incomeIcon}>
-                  <ThemedText style={styles.incomeIconText}>💰</ThemedText>
-                </View>
-                <View style={styles.incomeDetails}>
-                  <ThemedText style={styles.incomeLabel}>
-                    {language === 'it' ? 'Totale guadagni' : 'Total income'}
-                  </ThemedText>
-                  <ThemedText style={styles.incomeAmount}>
-                    {hideBalances ? '••••• €' : monthIncomeTotal.toLocaleString(locale, { style: 'currency', currency })}
-                  </ThemedText>
-                  <ThemedText style={styles.incomeCount}>
-                    {selectedMonthIncomes.length} {language === 'it' ? 'entrate' : 'incomes'}
-                  </ThemedText>
-                </View>
-              </View>
-            </Card>
-          </Animated.View>
-        )}
 
         {/* Chart Section */}
         <Animated.View 
@@ -1697,8 +1918,8 @@ export default function ExpensesScreen() {
                   {selectedTransaction?.merchant ?? '—'}
                 </ThemedText>
                 <View style={styles.transactionAmountRow}>
-                  <ThemedText style={[styles.transactionInfoAmount, (selectedTransaction?.amount ?? 0) > 0 ? { color: '#ef4444' } : { color: '#22c55e' }]}>
-                    {Math.abs(selectedTransaction?.amount ?? 0).toLocaleString(locale, { style: 'currency', currency })}
+                  <ThemedText style={[styles.transactionInfoAmount, (selectedTransaction?.amount ?? 0) >= 0 ? { color: '#10b981' } : { color: '#ef4444' }]}>
+                    {(selectedTransaction?.amount ?? 0) >= 0 ? '+' : ''}{Math.abs(selectedTransaction?.amount ?? 0).toLocaleString(locale, { style: 'currency', currency })}
                   </ThemedText>
                   {(selectedTransaction as any)?.is_recurring && (
                     <Pressable 
@@ -1840,8 +2061,8 @@ export default function ExpensesScreen() {
                               {new Date(tx.date).toLocaleDateString(locale)}
                             </ThemedText>
                           </View>
-                          <ThemedText style={[styles.listItemAmount, { color: tx.amount > 0 ? '#ef4444' : UI_CONSTANTS.SUCCESS_TEXT }]}> 
-                            {Math.abs(tx.amount).toLocaleString(locale, { style: 'currency', currency })}
+                          <ThemedText style={[styles.listItemAmount, { color: tx.amount >= 0 ? '#10b981' : '#ef4444' }]}> 
+                            {tx.amount >= 0 ? '+' : ''}{Math.abs(tx.amount).toLocaleString(locale, { style: 'currency', currency })}
                           </ThemedText>
                         </View>
                       </View>

@@ -113,6 +113,7 @@ function RootNavigator() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="finora-wrapped" />
+      <Stack.Screen name="monitored-banks" />
     </Stack>
   )
 }

@@ -89,7 +89,30 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
   const byCat = currentMonthItems.reduce<Record<string, number>>((acc, e) => {
     // Use the new category structure: prefer categories.name, fallback to category
     const key = e.categories?.name ?? e.category ?? 'Other';
-    acc[key] = (acc[key] ?? 0) + e.amount;
+    
+    // Handle amounts: if negative, it's an expense, use absolute value
+    // If positive, check if it's an expense or income
+    let expenseAmount = e.amount
+    if (expenseAmount < 0) {
+      // Negative amount = expense, use absolute value
+      expenseAmount = Math.abs(expenseAmount)
+    } else if (expenseAmount > 0) {
+      // Positive amount: check if it's an expense or income
+      const notificationText = (e.raw_notification || '').toLowerCase()
+      const merchantText = (e.merchant || '').toLowerCase()
+      const isManual = notificationText === 'manual' || notificationText === ''
+      const hasIncomeKeywords = !isManual && /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund/i.test(notificationText + ' ' + merchantText)
+      
+      // If it's manual or doesn't have income keywords, it's an expense
+      if (isManual || !hasIncomeKeywords) {
+        expenseAmount = Math.abs(expenseAmount)
+      } else {
+        // It's an income, don't count it in expenses
+        return acc
+      }
+    }
+    
+    acc[key] = (acc[key] ?? 0) + expenseAmount;
     return acc;
   }, {});
 

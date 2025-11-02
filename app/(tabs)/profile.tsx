@@ -56,6 +56,7 @@ export default function ProfileScreen() {
     }
   }
 
+
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(30)).current
@@ -682,7 +683,7 @@ export default function ProfileScreen() {
                         >
                           {(cat.name || 'Other').length > UI_CONSTANTS.CATEGORY_MAX_LENGTH ? (cat.name || 'Other').slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH) + '…' : (cat.name || 'Other')}
                         </ThemedText>
-                        <ThemedText style={styles.categorySubtitle}>{count} {language === 'it' ? 'Spese' : 'Expenses'}</ThemedText>
+                       {/* <ThemedText style={styles.categorySubtitle}>{count} {language === 'it' ? 'Spese' : 'Expenses'}</ThemedText> */}
                       </View>
                     </View>
                     <View style={styles.categoryRight}>
@@ -805,6 +806,19 @@ export default function ProfileScreen() {
                 <ThemedText style={styles.actionLabel}>{t('notifications')}</ThemedText>
                 <ThemedText style={styles.actionDescription}>{t('notifications_desc')}</ThemedText>
              {/*  <ThemedText style={styles.actionMeta}>{t('last_update')}: {new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</ThemedText> */}
+              </View>
+              <ThemedText style={styles.actionArrow}>→</ThemedText>
+            </Pressable>
+            <Pressable 
+              style={styles.actionItem}
+              onPress={() => router.push('/monitored-banks')}
+            >
+              <View style={styles.actionIcon}>
+                <ThemedText style={styles.actionIconText}>🏦</ThemedText>
+              </View>
+              <View style={styles.actionContent}>
+                <ThemedText style={styles.actionLabel}>{language === 'it' ? 'Banche Monitorate' : 'Monitored Banks'}</ThemedText>
+                <ThemedText style={styles.actionDescription}>{language === 'it' ? 'Scegli quali notifiche bancarie monitorare' : 'Choose which bank notifications to monitor'}</ThemedText>
               </View>
               <ThemedText style={styles.actionArrow}>→</ThemedText>
             </Pressable>
