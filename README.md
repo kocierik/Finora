@@ -22,6 +22,15 @@ Finora is a modern, intuitive personal finance app built with React Native and E
 - **🔐 Secure** - End-to-end encryption and secure authentication
 - **🌍 Multi-language** - Support for English and Italian
 - **📊 Monthly Reports** - Detailed spending analysis and insights
+## App Screenshots
+
+| Home Screen | Expense List | Monthly Details |
+| :---: | :---: | :---: |
+| ![Home](https://github.com/user-attachments/assets/a73fc64a-4d91-4dba-9250-befbddbe6f77) | ![Expenses 1](https://github.com/user-attachments/assets/1d3f856f-525f-4e3e-affe-78c4b36b178b) | ![Expenses 2](https://github.com/user-attachments/assets/c88dae44-2729-4b8c-895c-214769bc328d) |
+| **Categories** | **Profile Overview** | **Account Settings** |
+| ![Expenses 3](https://github.com/user-attachments/assets/e61b74aa-6d16-44cb-8161-8223966a0f7c) | ![Profile 1](https://github.com/user-attachments/assets/b4e21b63-bf83-4b3a-841c-548d31ad2d06) | ![Profile 2](https://github.com/user-attachments/assets/892d6e02-ce0d-4a92-9707-a1a936456f7b) |
+
+
 
 ## 🚀 Installation
 
