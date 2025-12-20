@@ -17,8 +17,21 @@ type PendingExpense = {
   synced: boolean
 }
 
+type PendingIncome = {
+  amount: number
+  currency: string
+  source: string
+  category: string
+  date: string
+  description?: string
+  raw_notification?: string
+  timestamp: number
+  synced: boolean
+}
+
 // Flag per prevenire sincronizzazioni multiple simultanee
 let isSyncing = false
+let isSyncingIncomes = false
 
 /**
  * Esegue la pulizia automatica dei duplicati (non blocca se fallisce)
@@ -83,9 +96,29 @@ export async function syncPendingExpenses(userId: string): Promise<{ synced: num
     // Sincronizza ogni spesa
     for (const expense of unsyncedExpenses) {
       try {
-        // Se abbiamo un category_id, usalo; altrimenti cerca la categoria "Miscellaneous" per l'utente
+        // Se abbiamo un category_id, usalo; altrimenti cerca la categoria memorizzata per lo stesso merchant
         let categoryId = expense.category_id
         
+        if (!categoryId && expense.merchant) {
+          // Prima cerca se esiste una categoria memorizzata per lo stesso merchant
+          const { data: existingExpense } = await supabase
+            .from('expenses')
+            .select('category_id')
+            .eq('user_id', userId)
+            .eq('merchant', expense.merchant.trim())
+            .not('category_id', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          
+          if (existingExpense?.category_id) {
+            // Usa la categoria memorizzata per questo merchant
+            categoryId = existingExpense.category_id
+            console.log(`[ExpenseSync] ✅ Found remembered category for merchant "${expense.merchant}": ${categoryId}`)
+          }
+        }
+        
+        // Se ancora non abbiamo una categoria, usa "Miscellaneous" come fallback
         if (!categoryId) {
           // Cerca la categoria "Miscellaneous" per l'utente
           let { data: miscellaneousCategory } = await supabase
@@ -197,6 +230,12 @@ export async function syncPendingExpenses(userId: string): Promise<{ synced: num
       await autoCleanupDuplicates(userId)
     }
     
+    // Pulizia automatica delle spese pendenti più vecchie di 15 giorni
+    await cleanOldPendingExpenses()
+    
+    // Sincronizza anche le entrate pendenti
+    await syncPendingIncomes(userId)
+    
     return { synced: syncedCount, errors: errorCount }
   } catch (error) {
     return { synced: 0, errors: 1 }
@@ -222,6 +261,50 @@ export async function cleanSyncedExpenses(): Promise<void> {
     
   } catch (error) {
     // Ignore cleanup errors
+  }
+}
+
+/**
+ * Pulisce le spese pendenti più vecchie di 15 giorni dalla cache
+ */
+export async function cleanOldPendingExpenses(): Promise<{ removed: number }> {
+  try {
+    const expensesFile = `${cacheDirectory}pending_expenses.json`
+    
+    let pendingExpenses: PendingExpense[] = []
+    try {
+      const data = await readAsStringAsync(expensesFile)
+      pendingExpenses = JSON.parse(data)
+    } catch (error) {
+      return { removed: 0 }
+    }
+    
+    if (pendingExpenses.length === 0) {
+      return { removed: 0 }
+    }
+    
+    // Calcola la data di 15 giorni fa
+    const fifteenDaysAgo = Date.now() - (15 * 24 * 60 * 60 * 1000)
+    
+    // Filtra solo le spese più recenti di 15 giorni
+    const initialCount = pendingExpenses.length
+    const filteredExpenses = pendingExpenses.filter(expense => {
+      // Mantieni le spese più recenti di 15 giorni
+      return expense.timestamp > fifteenDaysAgo
+    })
+    
+    const removedCount = initialCount - filteredExpenses.length
+    
+    if (removedCount > 0) {
+      // Salva le spese filtrate
+      await writeAsStringAsync(expensesFile, JSON.stringify(filteredExpenses))
+      console.log(`[ExpenseSync] 🧹 Cleaned ${removedCount} old pending expenses (older than 15 days)`)
+    }
+    
+    return { removed: removedCount }
+  } catch (error) {
+    console.error('[ExpenseSync] ❌ Error cleaning old pending expenses:', error)
+    return { removed: 0 }
   }
 }
 
@@ -405,6 +488,173 @@ export async function removeDuplicateExpenses(userId: string): Promise<{ removed
     const totalRemoved = temporalResult.removed + removedCount
     return { removed: totalRemoved }
   } catch (error) {
+    return { removed: 0 }
+  }
+}
+
+/**
+ * Sincronizza le entrate pendenti dalla cache al database Supabase
+ */
+export async function syncPendingIncomes(userId: string): Promise<{ synced: number; errors: number }> {
+  // Prevenire sincronizzazioni multiple simultanee
+  if (isSyncingIncomes) {
+    return { synced: 0, errors: 0 }
+  }
+  
+  isSyncingIncomes = true
+  
+  try {
+    const incomesFile = `${cacheDirectory}pending_incomes.json`
+    
+    // Leggi le entrate pendenti
+    let pendingIncomes: PendingIncome[] = []
+    try {
+      const data = await readAsStringAsync(incomesFile)
+      pendingIncomes = JSON.parse(data)
+    } catch (error) {
+      return { synced: 0, errors: 0 }
+    }
+    
+    // Filtra solo le entrate non sincronizzate
+    const unsyncedIncomes = pendingIncomes.filter(i => !i.synced)
+    
+    if (unsyncedIncomes.length === 0) {
+      return { synced: 0, errors: 0 }
+    }
+    
+    let syncedCount = 0
+    let errorCount = 0
+    
+    // Sincronizza ogni entrata
+    for (const income of unsyncedIncomes) {
+      try {
+        const incomeData = {
+          user_id: userId,
+          amount: income.amount,
+          source: income.source || 'other',
+          category: income.category || 'work',
+          currency: income.currency || 'EUR',
+          date: income.date,
+          description: income.description || income.raw_notification || 'Accredito',
+          is_recurring: false,
+        }
+        
+        // Controlla se esiste già un'entrata identica (stesso amount, description, date)
+        const { data: existingIncomes } = await supabase
+          .from('incomes')
+          .select('id, created_at')
+          .eq('user_id', userId)
+          .eq('amount', income.amount)
+          .eq('description', incomeData.description)
+          .eq('date', income.date)
+          .order('created_at', { ascending: false })
+        
+        if (existingIncomes && existingIncomes.length > 0) {
+          // Duplicati: consenti SOLO la regola dei 2 secondi
+          const now = new Date()
+          const isDuplicate = existingIncomes.some(existing => {
+            const existingTime = new Date(existing.created_at)
+            const timeDiff = Math.abs(now.getTime() - existingTime.getTime())
+            return timeDiff <= 2000 // 2 secondi in millisecondi
+          })
+          
+          if (isDuplicate) {
+            // Marca come sincronizzata anche se è un duplicato
+            income.synced = true
+            continue
+          }
+        }
+        
+        const { error } = await supabase
+          .from('incomes')
+          .insert(incomeData)
+        
+        if (error) {
+          console.error('[IncomeSync] ❌ Error inserting income:', error.message, incomeData)
+          errorCount++
+        } else {
+          console.log(`[IncomeSync] ✅ Income synced: ${income.description} - ${income.amount}${income.currency}`)
+          // Marca come sincronizzata
+          income.synced = true
+          syncedCount++
+        }
+      } catch (error: any) {
+        console.error('[IncomeSync] ❌ Exception while syncing income:', error.message || error, income)
+        errorCount++
+      }
+    }
+    
+    // Salva le entrate aggiornate (con flag synced=true)
+    await writeAsStringAsync(incomesFile, JSON.stringify(pendingIncomes))
+    
+    return { synced: syncedCount, errors: errorCount }
+  } catch (error) {
+    return { synced: 0, errors: 1 }
+  } finally {
+    isSyncingIncomes = false
+  }
+}
+
+/**
+ * Pulisce le entrate sincronizzate dalla cache
+ */
+export async function cleanSyncedIncomes(): Promise<void> {
+  try {
+    const incomesFile = `${cacheDirectory}pending_incomes.json`
+    
+    const data = await readAsStringAsync(incomesFile)
+    const pendingIncomes: PendingIncome[] = JSON.parse(data)
+    
+    // Mantieni solo le entrate non sincronizzate
+    const unsyncedIncomes = pendingIncomes.filter(i => !i.synced)
+    
+    await writeAsStringAsync(incomesFile, JSON.stringify(unsyncedIncomes))
+    
+  } catch (error) {
+    // Ignore cleanup errors
+  }
+}
+
+/**
+ * Pulisce le entrate pendenti più vecchie di 15 giorni dalla cache
+ */
+export async function cleanOldPendingIncomes(): Promise<{ removed: number }> {
+  try {
+    const incomesFile = `${cacheDirectory}pending_incomes.json`
+    
+    let pendingIncomes: PendingIncome[] = []
+    try {
+      const data = await readAsStringAsync(incomesFile)
+      pendingIncomes = JSON.parse(data)
+    } catch (error) {
+      return { removed: 0 }
+    }
+    
+    if (pendingIncomes.length === 0) {
+      return { removed: 0 }
+    }
+    
+    // Calcola la data di 15 giorni fa
+    const fifteenDaysAgo = Date.now() - (15 * 24 * 60 * 60 * 1000)
+    
+    // Filtra solo le entrate più recenti di 15 giorni
+    const initialCount = pendingIncomes.length
+    const filteredIncomes = pendingIncomes.filter(income => {
+      // Mantieni le entrate più recenti di 15 giorni
+      return income.timestamp > fifteenDaysAgo
+    })
+    
+    const removedCount = initialCount - filteredIncomes.length
+    
+    if (removedCount > 0) {
+      // Salva le entrate filtrate
+      await writeAsStringAsync(incomesFile, JSON.stringify(filteredIncomes))
+      console.log(`[IncomeSync] 🧹 Cleaned ${removedCount} old pending incomes (older than 15 days)`)
+    }
+    
+    return { removed: removedCount }
+  } catch (error) {
+    console.error('[IncomeSync] ❌ Error cleaning old pending incomes:', error)
     return { removed: 0 }
   }
 }

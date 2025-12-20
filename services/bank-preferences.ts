@@ -159,16 +159,28 @@ export async function saveMonitoredBanks(bankIds: string[]): Promise<void> {
  */
 export async function isMonitoredBank(notificationPackage: string): Promise<boolean> {
   try {
-    const monitoredBanks = await loadMonitoredBanks()
     const appPackageLower = notificationPackage.toLowerCase()
+    
+    // First, always check for Google Wallet explicitly (fallback)
+    const isGoogleWallet = appPackageLower.includes('com.google.android.apps.wallet') ||
+                          appPackageLower.includes('com.google.android.apps.walletnfcrel') ||
+                          appPackageLower === 'wallet' ||
+                          (appPackageLower.includes('wallet') && appPackageLower.includes('google'))
+    
+    if (isGoogleWallet) {
+      return true
+    }
+    
+    const monitoredBanks = await loadMonitoredBanks()
     
     for (const bankId of monitoredBanks) {
       const bank = AVAILABLE_BANKS.find(b => b.id === bankId)
       if (!bank) continue
       
-      // Controlla package names esatti
+      // Controlla package names esatti (exact match or contains)
       for (const packageName of bank.packageNames) {
-        if (appPackageLower.includes(packageName.toLowerCase())) {
+        const packageLower = packageName.toLowerCase()
+        if (appPackageLower === packageLower || appPackageLower.includes(packageLower)) {
           return true
         }
       }
@@ -179,6 +191,11 @@ export async function isMonitoredBank(notificationPackage: string): Promise<bool
           return true
         }
       }
+    }
+    
+    // Fallback: se contiene "wallet", assume Google Wallet
+    if (appPackageLower.includes('wallet')) {
+      return true
     }
     
     return false

@@ -133,35 +133,75 @@ const headlessNotificationListener = async ({ notification }) => {
       }
     }
     
+    // Log package name for debugging
+    console.log(`[HEADLESS] 🔍 Checking package: "${appPackage}" (lowercase: "${appPackageLower}")`)
+    console.log(`[HEADLESS] 🔍 Monitored banks: ${JSON.stringify(monitoredBanks)}`)
+    
     // Check if notification matches any monitored bank
     let isMonitoredBank = false
     let matchedBank = null
     
-    for (const bankId of monitoredBanks) {
-      const config = bankConfigs[bankId]
-      if (!config) continue
-      
-      // Check package names
-      for (const packageName of config.packageNames) {
-        if (appPackageLower.includes(packageName.toLowerCase())) {
-          isMonitoredBank = true
-          matchedBank = bankId
-          break
+    // First, check for Google Wallet explicitly (always monitor it as fallback)
+    const isGoogleWallet = appPackageLower.includes('com.google.android.apps.wallet') ||
+                          appPackageLower.includes('com.google.android.apps.walletnfcrel') ||
+                          appPackageLower === 'wallet' ||
+                          (appPackageLower.includes('wallet') && appPackageLower.includes('google'))
+    
+    if (isGoogleWallet) {
+      isMonitoredBank = true
+      matchedBank = 'google_wallet'
+      console.log(`[HEADLESS] 🎯 Google Wallet detected via explicit check: ${appPackage}`)
+    } else {
+      // Check other monitored banks
+      for (const bankId of monitoredBanks) {
+        const config = bankConfigs[bankId]
+        if (!config) continue
+        
+        // Check package names (exact match or contains)
+        for (const packageName of config.packageNames) {
+          const packageLower = packageName.toLowerCase()
+          // Try exact match first
+          if (appPackageLower === packageLower || appPackageLower.includes(packageLower)) {
+            isMonitoredBank = true
+            matchedBank = bankId
+            break
+          }
         }
-      }
-      
-      if (isMonitoredBank) break
-      
-      // Check keywords
-      for (const keyword of config.keywords) {
-        if (appPackageLower.includes(keyword.toLowerCase())) {
-          isMonitoredBank = true
-          matchedBank = bankId
-          break
+        
+        if (isMonitoredBank) break
+        
+        // Check keywords
+        for (const keyword of config.keywords) {
+          if (appPackageLower.includes(keyword.toLowerCase())) {
+            isMonitoredBank = true
+            matchedBank = bankId
+            break
+          }
         }
+        
+        if (isMonitoredBank) break
       }
+    }
+    
+    // Fallback: if no match but package contains "wallet", assume it's Google Wallet
+    if (!isMonitoredBank && appPackageLower.includes('wallet')) {
+      isMonitoredBank = true
+      matchedBank = 'google_wallet'
+      console.log(`[HEADLESS] 🎯 Google Wallet detected via fallback (package contains "wallet"): ${appPackage}`)
+    }
+    
+    if (!isMonitoredBank) {
+      console.log(`[HEADLESS] ⚠️  Notification NOT from monitored bank. Package: ${appPackage}`)
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
       
-      if (isMonitoredBank) break
+      DeviceEventEmitter.emit('headless_log', {
+        level: 'WARN',
+        message: 'Notification not from monitored bank',
+        source: 'HeadlessTask',
+        timestamp: Date.now(),
+        data: { app: appPackage, title: notifData.title }
+      })
+      return
     }
     
     if (isMonitoredBank) {
@@ -247,109 +287,288 @@ const headlessNotificationListener = async ({ notification }) => {
             merchant = isIncome ? 'Accredito' : 'Pagamento'
           }
           
-                 const expenseData = {
-                   amount, // Negativo per spese, positivo per entrate
-                   currency,
-                   merchant,
-                   date: new Date().toISOString().split('T')[0],
-                   raw_notification: text,
-                   // category_id will be resolved during sync
-                 }
+          // Filtra offerte promozionali: controlla se la notifica contiene parole chiave tipiche delle promozioni
+          // ma solo se NON contiene anche parole chiave di transazioni reali
+          const promotionalKeywords = [
+            /invita\s+(un\s+)?amico/i,
+            /invite\s+(a\s+)?friend/i,
+            /ricevi\s+\d+.*(?:invitando|invitando|se\s+inviti)/i,
+            /ricevi\s+\d+.*(?:per\s+ogni|per\s+ciascun)/i,
+            /offerta\s+promozionale/i,
+            /promozione\s+special/i,
+            /bonus\s+benvenuto/i,
+            /welcome\s+bonus/i,
+            /vinci\s+\d+/i,
+            /win\s+\d+/i,
+            /premio\s+di\s+\d+/i,
+            /prize\s+of\s+\d+/i,
+            /iscriviti\s+e\s+ricevi/i,
+            /subscribe\s+and\s+receive/i,
+            /nuovo\s+cliente/i,
+            /new\s+customer/i,
+            /codice\s+promozionale/i,
+            /promotional\s+code/i,
+            /cashback.*(?:se\s+inviti|invitando)/i,
+            /referral\s+program/i,
+            /programma\s+referral/i,
+            /condividi\s+e\s+ricevi/i,
+            /share\s+and\s+receive/i,
+            /ottieni\s+\d+.*(?:invitando|se\s+inviti)/i,
+            /get\s+\d+.*(?:inviting|if\s+you\s+invite)/i
+          ]
           
-          const transactionType = isIncome ? 'income' : 'expense'
-          console.log(`[HEADLESS] 💰 Parsed ${transactionType}:`, JSON.stringify(expenseData))
+          // Parole chiave che indicano una transazione reale (se presenti, probabilmente non è una promozione)
+          const realTransactionKeywords = [
+            /pagamento\s+effettuato/i,
+            /payment\s+made/i,
+            /accredito\s+ricevuto/i,
+            /credit\s+received/i,
+            /bonifico/i,
+            /transfer/i,
+            /addebito/i,
+            /debit/i,
+            /prelievo/i,
+            /withdrawal/i,
+            /storno/i,
+            /refund/i,
+            /rimborso/i,
+            /ricevuto\s+da/i,
+            /received\s+from/i,
+            /pagato\s+a/i,
+            /paid\s+to/i,
+            /transazione/i,
+            /transaction/i
+          ]
           
-          DeviceEventEmitter.emit('headless_log', {
-            level: 'INFO',
-            message: `${isIncome ? 'Income' : 'Expense'} parsed successfully`,
-            source: 'HeadlessTask',
-            timestamp: Date.now(),
-            data: { ...expenseData, transaction_type: transactionType }
-          })
+          // Controlla se contiene parole chiave promozionali
+          const hasPromotionalKeywords = promotionalKeywords.some(pattern => pattern.test(fullText))
           
-          // Salva la spesa in un file cache per sincronizzarla quando l'app si apre
-          const expensesFile = `${cacheDirectory}pending_expenses.json`
-          let pendingExpenses = []
+          // Controlla se contiene parole chiave di transazioni reali
+          const hasRealTransactionKeywords = realTransactionKeywords.some(pattern => pattern.test(fullText))
           
-          try {
-            const existingData = await readAsStringAsync(expensesFile)
-            pendingExpenses = JSON.parse(existingData)
-          } catch (readError) {
-            console.log('[HEADLESS] No pending expenses file, creating new one')
-          }
-          
-          // Controlla duplicati: stessa transazione negli ultimi 30 secondi
-          const thirtySecondsAgo = Date.now() - 30 * 1000
-          const isDuplicate = pendingExpenses.some(exp => 
-            Math.abs(exp.amount) === Math.abs(amount) && 
-            exp.merchant === merchant && 
-            exp.date === expenseData.date &&
-            exp.timestamp > thirtySecondsAgo
-          )
-          
-          if (isDuplicate) {
-            console.log('[HEADLESS] ⚠️  Duplicate expense detected, skipping save')
+          // Se ha parole chiave promozionali MA NON ha parole chiave di transazioni reali, è probabilmente una promozione
+          if (hasPromotionalKeywords && !hasRealTransactionKeywords) {
+            console.log('[HEADLESS] 🚫 Promotional offer detected, skipping save')
+            console.log('[HEADLESS]    Title: ' + title)
+            console.log('[HEADLESS]    Text: ' + text)
             console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
             
             DeviceEventEmitter.emit('headless_log', {
-              level: 'WARN',
-              message: 'Duplicate expense detected, skipping save',
+              level: 'INFO',
+              message: 'Promotional offer detected, skipping save',
               source: 'HeadlessTask',
               timestamp: Date.now(),
-              data: expenseData
+              data: { title, text, merchant, amount }
             })
             return
           }
           
-          console.log(`[HEADLESS] 💾 Saving ${transactionType} to cache for later sync...`)
+          const transactionType = isIncome ? 'income' : 'expense'
+          const transactionDate = new Date().toISOString().split('T')[0]
           
-          pendingExpenses.push({
-            ...expenseData,
-            timestamp: Date.now(),
-            synced: false,
-          })
-          
-          await writeAsStringAsync(expensesFile, JSON.stringify(pendingExpenses))
-          console.log('[HEADLESS] ✅ Expense saved to pending queue')
-          
-          // Emetti evento per sincronizzazione immediata (se l'app è aperta)
-          DeviceEventEmitter.emit('expense:saved', {
-            amount: expenseData.amount,
-            merchant: expenseData.merchant,
-            timestamp: Date.now()
-          })
-          
-          DeviceEventEmitter.emit('headless_log', {
-            level: 'INFO',
-            message: 'Expense saved to pending queue',
-            source: 'HeadlessTask',
-            timestamp: Date.now(),
-            data: { amount: expenseData.amount, merchant: expenseData.merchant }
-          })
-          
-          // Invia notifica di promemoria per impostare la categoria
-          try {
-            console.log('[HEADLESS] 🔔 Sending category reminder notification...')
+          // Se è un accredito (entrata), salva come income
+          if (isIncome) {
+            // Determina source e category basandosi sul testo della notifica
+            let source = 'other'
+            let category = 'work'
             
-            // Configura il canale Android per notifiche di promemoria
-            await Notifications.setNotificationChannelAsync('category_reminder', {
-              name: 'Promemoria Categoria',
-              importance: Notifications.AndroidImportance.HIGH,
-              vibrationPattern: [0, 250, 250, 250],
-              lightColor: '#06b6d4',
-              enableVibrate: true,
-              lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-              sound: 'default',
+            const lowerText = fullText
+            if (/stipendio|salary|paga|payroll/i.test(lowerText)) {
+              source = 'salary'
+              category = 'work'
+            } else if (/bonus|premio|prize/i.test(lowerText)) {
+              source = 'bonus'
+              category = 'work'
+            } else if (/investimento|investment|dividendo|dividend/i.test(lowerText)) {
+              source = 'investment'
+              category = 'investment'
+            } else if (/freelance|consulenza|consulting/i.test(lowerText)) {
+              source = 'freelance'
+              category = 'work'
+            } else {
+              source = 'other'
+              category = 'work'
+            }
+            
+            const incomeData = {
+              amount: Math.abs(amount), // Sempre positivo per incomes
+              currency,
+              source,
+              category,
+              date: transactionDate,
+              description: merchant || 'Accredito',
+              raw_notification: text,
+              timestamp: Date.now(),
+              synced: false,
+            }
+            
+            console.log(`[HEADLESS] 💰 Parsed ${transactionType}:`, JSON.stringify(incomeData))
+            
+            DeviceEventEmitter.emit('headless_log', {
+              level: 'INFO',
+              message: 'Income parsed successfully',
+              source: 'HeadlessTask',
+              timestamp: Date.now(),
+              data: { ...incomeData, transaction_type: transactionType }
             })
             
-            // Invia la notifica di promemoria (normale, non interattiva nel headless)
-            // Le notifiche interattive verranno gestite quando l'app è aperta
-            const notificationTitle = isIncome 
-              ? '💰 Nuovo Accredito Rilevato'
-              : '💰 Nuovo Pagamento Rilevato'
-            const notificationBody = isIncome
-              ? `Ricevuto ${Math.abs(amount)}${currency} da ${merchant}`
-              : `Ricordati di impostare la categoria per ${merchant} - ${Math.abs(amount)}${currency}`
+            // Salva l'entrata in un file cache separato per sincronizzarla quando l'app si apre
+            const incomesFile = `${cacheDirectory}pending_incomes.json`
+            let pendingIncomes = []
+            
+            try {
+              const existingData = await readAsStringAsync(incomesFile)
+              pendingIncomes = JSON.parse(existingData)
+            } catch (readError) {
+              console.log('[HEADLESS] No pending incomes file, creating new one')
+            }
+            
+            // Controlla duplicati: stessa transazione negli ultimi 30 secondi
+            const thirtySecondsAgo = Date.now() - 30 * 1000
+            const isDuplicate = pendingIncomes.some(inc => 
+              Math.abs(inc.amount) === Math.abs(amount) && 
+              inc.description === incomeData.description && 
+              inc.date === incomeData.date &&
+              inc.timestamp > thirtySecondsAgo
+            )
+            
+            if (isDuplicate) {
+              console.log('[HEADLESS] ⚠️  Duplicate income detected, skipping save')
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+              
+              DeviceEventEmitter.emit('headless_log', {
+                level: 'WARN',
+                message: 'Duplicate income detected, skipping save',
+                source: 'HeadlessTask',
+                timestamp: Date.now(),
+                data: incomeData
+              })
+              return
+            }
+            
+            console.log(`[HEADLESS] 💾 Saving ${transactionType} to cache for later sync...`)
+            
+            pendingIncomes.push(incomeData)
+            
+            await writeAsStringAsync(incomesFile, JSON.stringify(pendingIncomes))
+            console.log('[HEADLESS] ✅ Income saved to pending queue')
+            
+            // Emetti evento per sincronizzazione immediata (se l'app è aperta)
+            DeviceEventEmitter.emit('income:saved', {
+              amount: incomeData.amount,
+              description: incomeData.description,
+              timestamp: Date.now()
+            })
+            
+            DeviceEventEmitter.emit('headless_log', {
+              level: 'INFO',
+              message: 'Income saved to pending queue',
+              source: 'HeadlessTask',
+              timestamp: Date.now(),
+              data: { amount: incomeData.amount, description: incomeData.description }
+            })
+          } else {
+            // Se è una spesa, salva come expense (logica esistente)
+            const expenseData = {
+              amount, // Negativo per spese
+              currency,
+              merchant,
+              date: transactionDate,
+              raw_notification: text,
+              // category_id will be resolved during sync
+            }
+            
+            console.log(`[HEADLESS] 💰 Parsed ${transactionType}:`, JSON.stringify(expenseData))
+            
+            DeviceEventEmitter.emit('headless_log', {
+              level: 'INFO',
+              message: 'Expense parsed successfully',
+              source: 'HeadlessTask',
+              timestamp: Date.now(),
+              data: { ...expenseData, transaction_type: transactionType }
+            })
+            
+            // Salva la spesa in un file cache per sincronizzarla quando l'app si apre
+            const expensesFile = `${cacheDirectory}pending_expenses.json`
+            let pendingExpenses = []
+            
+            try {
+              const existingData = await readAsStringAsync(expensesFile)
+              pendingExpenses = JSON.parse(existingData)
+            } catch (readError) {
+              console.log('[HEADLESS] No pending expenses file, creating new one')
+            }
+            
+            // Controlla duplicati: stessa transazione negli ultimi 30 secondi
+            const thirtySecondsAgo = Date.now() - 30 * 1000
+            const isDuplicate = pendingExpenses.some(exp => 
+              Math.abs(exp.amount) === Math.abs(amount) && 
+              exp.merchant === merchant && 
+              exp.date === expenseData.date &&
+              exp.timestamp > thirtySecondsAgo
+            )
+            
+            if (isDuplicate) {
+              console.log('[HEADLESS] ⚠️  Duplicate expense detected, skipping save')
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+              
+              DeviceEventEmitter.emit('headless_log', {
+                level: 'WARN',
+                message: 'Duplicate expense detected, skipping save',
+                source: 'HeadlessTask',
+                timestamp: Date.now(),
+                data: expenseData
+              })
+              return
+            }
+            
+            console.log(`[HEADLESS] 💾 Saving ${transactionType} to cache for later sync...`)
+            
+            pendingExpenses.push({
+              ...expenseData,
+              timestamp: Date.now(),
+              synced: false,
+            })
+            
+            await writeAsStringAsync(expensesFile, JSON.stringify(pendingExpenses))
+            console.log('[HEADLESS] ✅ Expense saved to pending queue')
+            
+            // Emetti evento per sincronizzazione immediata (se l'app è aperta)
+            DeviceEventEmitter.emit('expense:saved', {
+              amount: expenseData.amount,
+              merchant: expenseData.merchant,
+              timestamp: Date.now()
+            })
+            
+            DeviceEventEmitter.emit('headless_log', {
+              level: 'INFO',
+              message: 'Expense saved to pending queue',
+              source: 'HeadlessTask',
+              timestamp: Date.now(),
+              data: { amount: expenseData.amount, merchant: expenseData.merchant }
+            })
+          }
+          
+          // Invia notifica di promemoria solo per le spese (le entrate sono già categorizzate automaticamente)
+          if (!isIncome) {
+            try {
+              console.log('[HEADLESS] 🔔 Sending category reminder notification...')
+              
+              // Configura il canale Android per notifiche di promemoria
+              await Notifications.setNotificationChannelAsync('category_reminder', {
+                name: 'Promemoria Categoria',
+                importance: Notifications.AndroidImportance.HIGH,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#06b6d4',
+                enableVibrate: true,
+                lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                sound: 'default',
+              })
+              
+              // Invia la notifica di promemoria (normale, non interattiva nel headless)
+              // Le notifiche interattive verranno gestite quando l'app è aperta
+              const notificationTitle = '💰 Nuovo Pagamento Rilevato'
+              const notificationBody = `Ricordati di impostare la categoria per ${merchant} - ${Math.abs(amount)}${currency}`
             
             await Notifications.scheduleNotificationAsync({
               content: {
@@ -379,16 +598,17 @@ const headlessNotificationListener = async ({ notification }) => {
               timestamp: Date.now(),
               data: { merchant: merchant, amount: amount }
             })
-          } catch (notificationError) {
-            console.log('[HEADLESS] ⚠️  Failed to send category reminder notification:', notificationError.message)
-            
-            DeviceEventEmitter.emit('headless_log', {
-              level: 'WARN',
-              message: 'Failed to send category reminder notification',
-              source: 'HeadlessTask',
-              timestamp: Date.now(),
-              data: { error: notificationError.message }
-            })
+            } catch (notificationError) {
+              console.log('[HEADLESS] ⚠️  Failed to send category reminder notification:', notificationError.message)
+              
+              DeviceEventEmitter.emit('headless_log', {
+                level: 'WARN',
+                message: 'Failed to send category reminder notification',
+                source: 'HeadlessTask',
+                timestamp: Date.now(),
+                data: { error: notificationError.message }
+              })
+            }
           }
         } else {
           console.log('[HEADLESS] ⚠️  Could not parse amount from notification text')

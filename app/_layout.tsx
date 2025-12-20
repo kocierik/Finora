@@ -15,8 +15,9 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useDatabaseSync } from '@/hooks/use-database-sync';
 import { setupCategoryReminderChannel } from '@/services/category-reminder';
 import { setupDeepLinkNotificationHandler } from '@/services/deep-link-notifications';
-import { syncPendingExpenses } from '@/services/expense-sync';
+import { syncPendingExpenses, syncPendingIncomes } from '@/services/expense-sync';
 import { setupInteractiveNotificationChannel, setupNotificationResponseHandler } from '@/services/interactive-notifications';
+import { cleanOldNotifications } from '@/services/notification-storage';
 import { useWalletListener } from '@/services/wallet-listener';
 import { startWeeklyReminderScheduler } from '@/services/weekly-reminder-scheduler';
 
@@ -77,11 +78,40 @@ function RootNavigator() {
         }
       }
       
+      const syncIncomes = async () => {
+        try {
+          const result = await syncPendingIncomes(user.id)
+          if (result.synced > 0) {
+            console.log(`[RootNavigator] ✅ Synced ${result.synced} pending incomes`)
+          }
+        } catch (error) {
+          console.warn('[RootNavigator] Failed to sync pending incomes:', error)
+        }
+      }
+      
+      const cleanOldCache = async () => {
+        try {
+          // Clean old notifications (older than 15 days)
+          await cleanOldNotifications()
+        } catch (error) {
+          console.warn('[RootNavigator] Failed to clean old notifications:', error)
+        }
+      }
+      
       // Sync immediately when user is authenticated
       syncExpenses()
+      syncIncomes()
+      cleanOldCache()
       
       // Also sync every 30 seconds while app is active
-      const interval = setInterval(syncExpenses, 30000)
+      const interval = setInterval(() => {
+        syncExpenses()
+        syncIncomes()
+        // Clean old cache every 5 minutes (300000 ms)
+      }, 30000)
+      
+      // Clean old cache every 5 minutes
+      const cacheCleanupInterval = setInterval(cleanOldCache, 300000)
       
       // Sync immediately when a new expense is saved (from headless task)
       const expenseSavedSubscription = DeviceEventEmitter.addListener('expense:saved', () => {
@@ -89,9 +119,17 @@ function RootNavigator() {
         syncExpenses()
       })
       
+      // Sync immediately when a new income is saved (from headless task)
+      const incomeSavedSubscription = DeviceEventEmitter.addListener('income:saved', () => {
+        console.log('[RootNavigator] 🎯 New income saved, syncing immediately...')
+        syncIncomes()
+      })
+      
       return () => {
         clearInterval(interval)
+        clearInterval(cacheCleanupInterval)
         expenseSavedSubscription.remove()
+        incomeSavedSubscription.remove()
       }
     }
   }, [user])

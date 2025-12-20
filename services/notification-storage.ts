@@ -129,3 +129,45 @@ export function sortNotificationsByDate(notifications: StoredNotification[]): St
     return bTime - aTime
   })
 }
+
+/**
+ * Pulisce le notifiche più vecchie di 15 giorni dalla cache
+ */
+export async function cleanOldNotifications(): Promise<{ removed: number }> {
+  try {
+    const notifications = await loadNotifications()
+    
+    if (notifications.length === 0) {
+      return { removed: 0 }
+    }
+    
+    // Calcola la data di 15 giorni fa
+    const fifteenDaysAgo = Date.now() - (15 * 24 * 60 * 60 * 1000)
+    
+    // Filtra solo le notifiche più recenti di 15 giorni
+    const initialCount = notifications.length
+    const filteredNotifications = notifications.filter(notification => {
+      const notificationTime = typeof notification.receivedAt === 'number' 
+        ? notification.receivedAt 
+        : (Number((notification as any).timestamp) || 0)
+      // Mantieni le notifiche più recenti di 15 giorni
+      return notificationTime > fifteenDaysAgo
+    })
+    
+    const removedCount = initialCount - filteredNotifications.length
+    
+    if (removedCount > 0) {
+      // Salva le notifiche filtrate
+      await writeAsStringAsync(
+        NOTIFICATIONS_CACHE_FILE, 
+        JSON.stringify(filteredNotifications, null, 2)
+      )
+      console.log(`[NotificationStorage] 🧹 Cleaned ${removedCount} old notifications (older than 15 days)`)
+    }
+    
+    return { removed: removedCount }
+  } catch (error: any) {
+    console.error('[NotificationStorage] ❌ Error cleaning old notifications:', error.message)
+    return { removed: 0 }
+  }
+}

@@ -65,6 +65,7 @@ export default function HomeScreen() {
   const [newAmount, setNewAmount] = useState('')
   const [newCategory, setNewCategory] = useState('Other')
   const [newCategoryId, setNewCategoryId] = useState<string | null>(null)
+  const [categoryManuallySelected, setCategoryManuallySelected] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newDate, setNewDate] = useState<string>(() => new Date().toISOString().split('T')[0])
   const [showCalendarModal, setShowCalendarModal] = useState(false)
@@ -455,6 +456,55 @@ export default function HomeScreen() {
       }
     }
   }, [dbCategories, newCategoryId])
+
+  // Auto-assign category when merchant name is entered (remember category for same store)
+  useEffect(() => {
+    const loadCategoryForMerchant = async () => {
+      if (!user || !newTitle || newTitle.trim().length === 0 || !dbCategories.length) return
+      
+      // Don't auto-assign if user has manually selected a category
+      if (categoryManuallySelected) return
+      
+      try {
+        // Try to find existing category for this merchant
+        const { data: existingExpense } = await supabase
+          .from('expenses')
+          .select('category_id')
+          .eq('user_id', user.id)
+          .eq('merchant', newTitle.trim())
+          .not('category_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        
+        if (existingExpense?.category_id) {
+          // Find the category details
+          const category = dbCategories.find(c => c.id === existingExpense.category_id)
+          if (category) {
+            setNewCategoryId(category.id)
+            setNewCategory(category.name)
+          }
+        }
+      } catch (error) {
+        // Silently fail - don't interrupt user experience
+        console.error('Error loading category for merchant:', error)
+      }
+    }
+
+    // Debounce the search to avoid too many queries
+    const timeoutId = setTimeout(() => {
+      loadCategoryForMerchant()
+    }, 300) // Wait 300ms after user stops typing
+
+    return () => clearTimeout(timeoutId)
+  }, [newTitle, user, dbCategories, categoryManuallySelected])
+
+  // Reset manual selection flag when modal is closed
+  useEffect(() => {
+    if (!showAddModal) {
+      setCategoryManuallySelected(false)
+    }
+  }, [showAddModal])
 
   const getCategoryInfo = (name?: string | null) => {
     if (!name) return null
@@ -1020,6 +1070,7 @@ export default function HomeScreen() {
                         onPress={() => {
                           setNewCategory(c.name)
                           setNewCategoryId(c.id)
+                          setCategoryManuallySelected(true) // Mark as manually selected
                         }}
                       >
                         <ThemedText 
@@ -1054,6 +1105,7 @@ export default function HomeScreen() {
                         onPress={() => {
                           setNewCategory(c.name)
                           setNewCategoryId(c.id)
+                          setCategoryManuallySelected(true) // Mark as manually selected
                         }}
                       >
                         <ThemedText 
@@ -1357,6 +1409,7 @@ export default function HomeScreen() {
                   setNewAmount('')
                   setNewCategory('Other')
                   setNewCategoryId(null)
+                  setCategoryManuallySelected(false) // Reset manual selection flag
                   setNewTitle('')
                   setNewDate(new Date().toISOString().split('T')[0])
                   setIsRecurring(false)
