@@ -462,7 +462,58 @@ export default function NotificationsScreen() {
 
   const renderLogsCard = () => null
 
-  const renderFilterCard = () => null
+  const renderFilterCard = () => (
+    <View style={{ flexDirection: 'row', justifyContent: 'flex-start', gap: 8, marginTop: 4 }}>
+      <Pressable
+        style={[
+          styles.filterButton,
+          filter === 'all' && styles.filterButtonActive,
+        ]}
+        onPress={() => handleFilterChange('all')}
+      >
+        <ThemedText
+          style={[
+            styles.filterButtonText,
+            filter === 'all' && styles.filterButtonTextActive,
+          ]}
+        >
+          {t('all')}
+        </ThemedText>
+      </Pressable>
+      <Pressable
+        style={[
+          styles.filterButton,
+          filter === 'wallet' && styles.filterButtonActive,
+        ]}
+        onPress={() => handleFilterChange('wallet')}
+      >
+        <ThemedText
+          style={[
+            styles.filterButtonText,
+            filter === 'wallet' && styles.filterButtonTextActive,
+          ]}
+        >
+          {t('wallet_badge')}
+        </ThemedText>
+      </Pressable>
+      <Pressable
+        style={[
+          styles.filterButton,
+          filter === 'other' && styles.filterButtonActive,
+        ]}
+        onPress={() => handleFilterChange('other')}
+      >
+        <ThemedText
+          style={[
+            styles.filterButtonText,
+            filter === 'other' && styles.filterButtonTextActive,
+          ]}
+        >
+          {language === 'it' ? 'Altro' : 'Other'}
+        </ThemedText>
+      </Pressable>
+    </View>
+  )
 
   const renderInfoCard = () => null
 
@@ -517,6 +568,8 @@ export default function NotificationsScreen() {
             <ThemedText type="title" style={styles.headerTitle}>{t('notifications')}</ThemedText>
             <View style={{ width: 36 }} />
           </View>
+          
+          {renderFilterCard()}
           
           {renderInstructionWarning()}
           

@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
 import { loadExpenseThresholds, saveExpenseThresholds, type ExpenseThresholds } from '@/services/expense-thresholds'
+import { loadNotifications, sortNotificationsByDate, type StoredNotification } from '@/services/notification-storage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
@@ -30,6 +31,8 @@ export default function ProfileScreen() {
   const [editName, setEditName] = useState('')
   const [editColor, setEditColor] = useState('')
   const [categoriesLoading, setCategoriesLoading] = useState(false)
+  const [debugNotifications, setDebugNotifications] = useState<StoredNotification[]>([])
+  const [showOnlyWalletDebug, setShowOnlyWalletDebug] = useState(false)
   const colorPalette = ['#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#EC4899', '#8B5CF6']
   const emojiSuggestions = ['📦','🚗','🛒','🛍️','🌃','✈️','🏥','📚','⚡','🎬']
   const firstGrapheme = (text: string) => (Array.from(text || '')[0] || '')
@@ -271,9 +274,27 @@ export default function ProfileScreen() {
     DeviceEventEmitter.addListener('settings:categoriesUpdated', handleCategoriesUpdate)
     DeviceEventEmitter.addListener('expenses:externalUpdate', handleCategoriesUpdate)
 
+      // Debug: subscribe to incoming notifications to keep local debug list in sync
+      const handleWalletNotification = async () => {
+        try {
+          const stored = await loadNotifications()
+          const sorted = sortNotificationsByDate(stored)
+          // Limit for UI so we don't overload the profile screen
+          setDebugNotifications(sorted.slice(0, 20))
+        } catch {
+          // ignore debug errors
+        }
+      }
+
+      // Initial load
+      handleWalletNotification()
+
+      const notifSub = DeviceEventEmitter.addListener('wallet_notification', handleWalletNotification)
+
     return () => {
       DeviceEventEmitter.removeAllListeners('settings:categoriesUpdated')
       DeviceEventEmitter.removeAllListeners('expenses:externalUpdate')
+      notifSub.remove()
     }
   }, [user])
 
@@ -865,6 +886,83 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
         </Card>
+        </Animated.View>
+
+        {/* Debug Notifiche - mostra sempre tutte le notifiche in arrivo per debug */}
+        <Animated.View
+          style={[
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim3 }]
+            }
+          ]}
+        >
+          <Card variant="default" style={styles.premiumCard}>
+            <View style={[styles.cardHeader, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.cardTitle}>
+                  {language === 'it' ? 'Debug Notifiche (ultime 20)' : 'Notification Debug (last 20)'}
+                </ThemedText>
+                {debugNotifications.length > 0 && (
+                  <ThemedText style={styles.debugMetaText}>
+                    {debugNotifications.length} {language === 'it' ? 'notifiche in memoria' : 'notifications in memory'}
+                  </ThemedText>
+                )}
+              </View>
+              <Pressable
+                style={[
+                  styles.filterChip,
+                  showOnlyWalletDebug && styles.filterChipActive,
+                ]}
+                onPress={() => setShowOnlyWalletDebug(prev => !prev)}
+              >
+                <ThemedText
+                  style={[
+                    styles.filterChipText,
+                    showOnlyWalletDebug && styles.filterChipTextActive,
+                  ]}
+                >
+                  {showOnlyWalletDebug
+                    ? (language === 'it' ? 'Solo banche' : 'Banks only')
+                    : (language === 'it' ? 'Tutte' : 'All')}
+                </ThemedText>
+              </Pressable>
+            </View>
+            {debugNotifications.length === 0 ? (
+              <ThemedText style={styles.debugEmptyText}>
+                {language === 'it'
+                  ? 'Nessuna notifica letta ancora. Prova a fare un pagamento o inviare una notifica di test.'
+                  : 'No notifications read yet. Try making a payment or sending a test notification.'}
+              </ThemedText>
+            ) : (
+              <View style={styles.debugList}>
+                {(showOnlyWalletDebug
+                  ? debugNotifications.filter((n) => n.isWalletNotification)
+                  : debugNotifications
+                ).map((n) => (
+                  <View key={n.id} style={styles.debugRow}>
+                    <View style={styles.debugBullet} />
+                    <View style={styles.debugContent}>
+                      <ThemedText style={styles.debugTitle} numberOfLines={1}>
+                        {n.title || (language === 'it' ? 'Senza titolo' : 'No title')}
+                      </ThemedText>
+                      <ThemedText style={styles.debugText} numberOfLines={2}>
+                        {n.text || (language === 'it' ? 'Senza testo' : 'No text')}
+                      </ThemedText>
+                      <ThemedText style={styles.debugMeta} numberOfLines={1}>
+                        📱 {n.app} ·{' '}
+                        {new Date(n.receivedAt).toLocaleTimeString(locale, {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                        })}
+                      </ThemedText>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
         </Animated.View>
 
         {/* Tutorial */}
@@ -1708,6 +1806,70 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '600',
   },
+      debugList: {
+        gap: 8,
+      },
+      debugRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        paddingVertical: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.04)',
+      },
+      debugBullet: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginTop: 8,
+        backgroundColor: '#06b6d4',
+      },
+      debugContent: {
+        flex: 1,
+        gap: 2,
+      },
+      debugTitle: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: Brand.colors.text.primary,
+      },
+      debugText: {
+        fontSize: 12,
+        color: Brand.colors.text.secondary,
+      },
+      debugMeta: {
+        fontSize: 11,
+        color: Brand.colors.text.tertiary,
+      },
+      debugMetaText: {
+        fontSize: 11,
+        color: Brand.colors.text.tertiary,
+        marginTop: 4,
+      },
+      debugEmptyText: {
+        fontSize: 12,
+        color: Brand.colors.text.secondary,
+      },
+      filterChip: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: 'rgba(148, 163, 184, 0.5)',
+        backgroundColor: 'rgba(15, 23, 42, 0.7)',
+      },
+      filterChipActive: {
+        borderColor: 'rgba(56, 189, 248, 0.9)',
+        backgroundColor: 'rgba(8, 47, 73, 0.9)',
+      },
+      filterChipText: {
+        fontSize: 11,
+        color: Brand.colors.text.secondary,
+      },
+      filterChipTextActive: {
+        color: '#0ea5e9',
+        fontWeight: '600',
+      },
 })
 
 

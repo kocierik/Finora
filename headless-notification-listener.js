@@ -3,6 +3,7 @@ import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file
 import * as Notifications from 'expo-notifications'
 import { AppRegistry, DeviceEventEmitter } from 'react-native'
 import { RNAndroidNotificationListenerHeadlessJsName } from 'react-native-android-notification-listener'
+import { extractAmountAndCurrency, extractMerchant, isPromotionalNotification } from './services/notification-parser'
 
 /**
  * Headless task per ricevere notifiche in background
@@ -190,20 +191,6 @@ const headlessNotificationListener = async ({ notification }) => {
       console.log(`[HEADLESS] 🎯 Google Wallet detected via fallback (package contains "wallet"): ${appPackage}`)
     }
     
-    if (!isMonitoredBank) {
-      console.log(`[HEADLESS] ⚠️  Notification NOT from monitored bank. Package: ${appPackage}`)
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-      
-      DeviceEventEmitter.emit('headless_log', {
-        level: 'WARN',
-        message: 'Notification not from monitored bank',
-        source: 'HeadlessTask',
-        timestamp: Date.now(),
-        data: { app: appPackage, title: notifData.title }
-      })
-      return
-    }
-    
     if (isMonitoredBank) {
       console.log(`[HEADLESS] 🎯 MONITORED BANK NOTIFICATION DETECTED! (${matchedBank})`)
       
@@ -219,68 +206,58 @@ const headlessNotificationListener = async ({ notification }) => {
       try {
         const title = notifData.title || ''
         const text = notifData.text || notifData.bigText || ''
-        const fullText = (title + ' ' + text).toLowerCase()
         
         console.log('[HEADLESS] 📝 Parsing transaction from notification...')
         console.log('[HEADLESS]    Title: ' + title)
         console.log('[HEADLESS]    Text: ' + text)
         
         // Rileva se è un accredito (entrata) o un addebito (spesa)
-        const isCredit = /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund|\+[\d.,]+/i.test(fullText)
-        const isDebit = /pagamento|acquisto|spesa|addebito|prelievo|bonifico in uscita|trasferimento inviato|pago|pagato|storno/i.test(fullText)
+        const fullText = (title + ' ' + text).toLowerCase()
+        const isCredit = /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund|\+[\d.,]+/i.test(
+          fullText,
+        )
+        const isDebit = /pagamento|acquisto|spesa|addebito|prelievo|bonifico in uscita|trasferimento inviato|pago|pagato|storno/i.test(
+          fullText,
+        )
         
         // Se non è chiaro, assume che sia una spesa (default)
         const isIncome = isCredit && !isDebit
         
-        // Estrai importo (formato: "7,00 €" o "+7,00 €" o "-7,00 €")
-        // Prima prova a matchare con segno esplicito, poi senza
-        let amountMatch = text.match(/([+-])?\s*([\d.,]+)\s*([€$£])/i)
-        if (!amountMatch) {
-          amountMatch = text.match(/([\d.,]+)\s*([€$£])/i)
+        // Filtra offerte promozionali pure con helper condiviso
+        if (isPromotionalNotification(title, text)) {
+          console.log('[HEADLESS] 🚫 Promotional offer detected, skipping save')
+          console.log('[HEADLESS]    Title: ' + title)
+          console.log('[HEADLESS]    Text: ' + text)
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+          
+          DeviceEventEmitter.emit('headless_log', {
+            level: 'INFO',
+            message: 'Promotional offer detected, skipping save',
+            source: 'HeadlessTask',
+            timestamp: Date.now(),
+            data: { title, text },
+          })
+          return
         }
-        
-        if (amountMatch) {
-          // Gestisce sia "7,00 €" che "+7,00 €" che "-7,00 €"
-          let amountStr
-          let currency
-          
-          let sign = null
-          
-          if (amountMatch.length >= 4) {
-            // Pattern con segno: [+-], importo, valuta
-            sign = amountMatch[1]
-            amountStr = amountMatch[2]
-            currency = amountMatch[3]
-            
-            // Se c'è un segno esplicito, usalo
-            if (sign === '-') {
-              isIncome = false
-            } else if (sign === '+') {
-              isIncome = true
-            }
-          } else {
-            // Pattern senza segno: importo, valuta
-            amountStr = amountMatch[1]
-            currency = amountMatch[2]
-          }
-          
-          let amount = parseFloat(amountStr.replace(',', '.'))
-          
+
+        // Estrai importo con helper condiviso
+        const parsedAmount = extractAmountAndCurrency(text)
+        if (parsedAmount) {
+          let { amount, currency, sign } = parsedAmount
+
           // Applica il segno basandosi sul tipo di transazione
           if (sign === '-') {
+            isIncome = false
             amount = -Math.abs(amount)
           } else if (sign === '+') {
+            isIncome = true
             amount = Math.abs(amount)
           } else {
-            // Se non c'è segno esplicito, usa il rilevamento basato sul testo
             amount = isIncome ? Math.abs(amount) : -Math.abs(amount)
           }
-          
+
           // Estrai merchant dal title (es: "AKATHOR" o "AKATHOR: dettagli")
-          let merchant = title
-          if (title.includes(':')) {
-            merchant = title.split(':')[0].trim()
-          }
+          let merchant = extractMerchant(title)
           
           // Se non c'è merchant e sembra un accredito, usa un valore generico
           if (!merchant || merchant === '') {

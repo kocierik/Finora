@@ -4,10 +4,11 @@ import { Expense } from '@/types'
 import * as FileSystem from 'expo-file-system'
 import { useEffect } from 'react'
 import { DeviceEventEmitter, Platform } from 'react-native'
+import { isMonitoredBank } from './bank-preferences'
 import { sendInteractiveCategoryReminder } from './category-reminder'
 import { logger } from './logger'
+import { extractAmountAndCurrency, extractMerchant, isPromotionalNotification } from './notification-parser'
 import { checkNotificationPermission, requestNotificationPermission } from './notification-service'
-import { isMonitoredBank } from './bank-preferences'
 
 const CACHE_FILE = (FileSystem as any).documentDirectory 
   ? `${(FileSystem as any).documentDirectory}offline-expenses.json` 
@@ -94,84 +95,18 @@ export function useWalletListener() {
         // Estrai i dati della spesa dalla notifica
         const title = payload.title || ''
         const text = payload.text || ''
-        const fullText = (title + ' ' + text).toLowerCase()
-        
-        // Filtra offerte promozionali: controlla se la notifica contiene parole chiave tipiche delle promozioni
-        // ma solo se NON contiene anche parole chiave di transazioni reali
-        const promotionalKeywords = [
-          /invita\s+(un\s+)?amico/i,
-          /invite\s+(a\s+)?friend/i,
-          /ricevi\s+\d+.*(?:invitando|invitando|se\s+inviti)/i,
-          /ricevi\s+\d+.*(?:per\s+ogni|per\s+ciascun)/i,
-          /offerta\s+promozionale/i,
-          /promozione\s+special/i,
-          /bonus\s+benvenuto/i,
-          /welcome\s+bonus/i,
-          /vinci\s+\d+/i,
-          /win\s+\d+/i,
-          /premio\s+di\s+\d+/i,
-          /prize\s+of\s+\d+/i,
-          /iscriviti\s+e\s+ricevi/i,
-          /subscribe\s+and\s+receive/i,
-          /nuovo\s+cliente/i,
-          /new\s+customer/i,
-          /codice\s+promozionale/i,
-          /promotional\s+code/i,
-          /cashback.*(?:se\s+inviti|invitando)/i,
-          /referral\s+program/i,
-          /programma\s+referral/i,
-          /condividi\s+e\s+ricevi/i,
-          /share\s+and\s+receive/i,
-          /ottieni\s+\d+.*(?:invitando|se\s+inviti)/i,
-          /get\s+\d+.*(?:inviting|if\s+you\s+invite)/i
-        ]
-        
-        // Parole chiave che indicano una transazione reale (se presenti, probabilmente non è una promozione)
-        const realTransactionKeywords = [
-          /pagamento\s+effettuato/i,
-          /payment\s+made/i,
-          /accredito\s+ricevuto/i,
-          /credit\s+received/i,
-          /bonifico/i,
-          /transfer/i,
-          /addebito/i,
-          /debit/i,
-          /prelievo/i,
-          /withdrawal/i,
-          /storno/i,
-          /refund/i,
-          /rimborso/i,
-          /ricevuto\s+da/i,
-          /received\s+from/i,
-          /pagato\s+a/i,
-          /paid\s+to/i,
-          /transazione/i,
-          /transaction/i
-        ]
-        
-        // Controlla se contiene parole chiave promozionali
-        const hasPromotionalKeywords = promotionalKeywords.some(pattern => pattern.test(fullText))
-        
-        // Controlla se contiene parole chiave di transazioni reali
-        const hasRealTransactionKeywords = realTransactionKeywords.some(pattern => pattern.test(fullText))
-        
-        // Se ha parole chiave promozionali MA NON ha parole chiave di transazioni reali, è probabilmente una promozione
-        if (hasPromotionalKeywords && !hasRealTransactionKeywords) {
+
+        // Usa la stessa logica del headless per filtrare promozioni pure
+        if (isPromotionalNotification(title, text)) {
           // console.log('[WalletListener] 🚫 Promotional offer detected, skipping interactive notification')
           return
         }
         
         // Parse la spesa (stesso pattern del headless task)
-        const amountMatch = text.match(/([\d.,]+)\s*([€$£])/i)
-        if (amountMatch) {
-          const amount = parseFloat(amountMatch[1].replace(',', '.'))
-          const currency = amountMatch[2]
-          
-          // Estrai merchant dal title
-          let merchant = title
-          if (title.includes(':')) {
-            merchant = title.split(':')[0].trim()
-          }
+        const parsedAmount = extractAmountAndCurrency(text)
+        if (parsedAmount) {
+          const { amount, currency } = parsedAmount
+          const merchant = extractMerchant(title)
           
           // Invia notifica interattiva per categorizzare immediatamente
           try {
