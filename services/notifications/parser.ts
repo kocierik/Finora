@@ -61,14 +61,26 @@ export function isPromotionalNotification(title: string, text: string): boolean 
 export function extractAmountAndCurrency(
   text: string,
 ): { amount: number; currency: string; sign: '+' | '-' | null } | null {
-  // Prima prova con segno esplicito, poi senza
-  let match = text.match(/([+-])?\s*([\d.,]+)\s*([€$£])/i)
+  // Regex per simboli valuta e codici 3-lettere
+  const currencyPattern = '[€$£¥]|USD|EUR|GBP|CHF|AUD|CAD|RON|PLN|CZK|DKK|HUF|SEK|NOK|HRK|BGN|TRY|ILS|HKD|NZD|SGD|ZAR|THB'
+  
+  // 1. Prova con Segno? + Importo + Spazio? + Valuta (es: "+10,00 €" o "0.29 USD")
+  let match = text.match(new RegExp(`([+-])?\\s*([\\d.,]+)\\s*(${currencyPattern})`, 'i'))
+  
+  // 2. Se non va, prova con Valuta + Spazio? + Importo (es: "$10.00" o "EUR 5,50")
   if (!match) {
-    match = text.match(/([\d.,]+)\s*([€$£])/i)
-    if (!match) return null
-    const amount = parseFloat(match[1].replace(',', '.'))
-    const currency = match[2]
-    return { amount, currency, sign: null }
+    match = text.match(new RegExp(`(${currencyPattern})\\s*([\\d.,]+)`, 'i'))
+    if (match) {
+      const currency = match[1]
+      const amountStr = match[2]
+      // In questo caso il segno non è solitamente presente prima della valuta in questo formato, 
+      // ma controlliamo se c'è un segno prima della valuta
+      const signMatch = text.match(new RegExp(`([+-])\\s*${currency.replace('$', '\\$')}`, 'i'))
+      const sign = (signMatch?.[1] as '+' | '-' | undefined) ?? null
+      const amount = parseFloat(amountStr.replace(',', '.'))
+      return { amount, currency, sign }
+    }
+    return null
   }
 
   const sign = (match[1] as ('+' | '-' | undefined)) ?? null

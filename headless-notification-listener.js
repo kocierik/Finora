@@ -214,7 +214,7 @@ const headlessNotificationListener = async ({ notification }) => {
         
         // Rileva se è un accredito (entrata) o un addebito (spesa)
         const fullText = (title + ' ' + text).toLowerCase()
-        const isCredit = /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund|\+[\d.,]+/i.test(
+        const isCredit = /accredito|ricevuto|entrata|bonifico in entrata|trasferimento ricevuto|deposito|versamento|ricarica ricevuta|stipendio|pensione|rimborso|refund|dividendo|dividend|cedola|interessi|interest|\+[\d.,]+/i.test(
           fullText,
         )
         const isDebit = /pagamento|acquisto|spesa|addebito|prelievo|bonifico in uscita|trasferimento inviato|pago|pagato|storno/i.test(
