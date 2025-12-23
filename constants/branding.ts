@@ -1,3 +1,5 @@
+import { Platform } from 'react-native'
+
 /**
  * Finora - Premium Dark Theme Visual Identity
  * Inspired by Apple Wallet, Revolut, and Nubank
@@ -61,9 +63,17 @@ export const Brand = {
   typography: {
     // Font Families
     fonts: {
-      primary: 'SF Pro Display',  // iOS default, clean & modern
-      secondary: 'Inter',         // Fallback
-      mono: 'SF Mono',           // Numbers & code
+      primary: Platform.select({
+        ios: 'Helvetica Neue',
+        android: 'Futura',
+        default: 'System',
+      }),
+      secondary: 'Inter',
+      mono: Platform.select({
+        ios: 'Helvetica Neue',
+        android: 'Futura',
+        default: 'monospace',
+      }),
     },
     
     // Font Sizes
@@ -209,58 +219,6 @@ export type BrandColors = typeof Brand.colors
 export type BrandTypography = typeof Brand.typography
 export type BrandSpacing = typeof Brand.spacing
 
-// ============================================================================
-// 🎨 UI TOKENS - Componenti principali per modificare l'aspetto dell'app
-// ============================================================================
-// 
-// 📝 COME MODIFICARE I COLORI DEI COMPONENTI:
-// 
-// 1. 🪟 MODALI E OVERLAY
-//    - MODAL_OVERLAY_DARK: sfondo scuro delle modali (es. aggiungi transazione)
-//    - MODAL_OVERLAY_MEDIUM: sfondo medio delle modali (es. date picker)
-//
-// 2. 🔮 GLASSMORPHISM (effetto vetro) - PER CARD E COMPONENTI
-//    - GLASS_BG_*: sfondi trasparenti per card e componenti
-//      * XS = più trasparente (0.07) - card sottili, elementi secondari
-//      * SM = poco trasparente (0.07) - card normali, liste
-//      * MD = medio trasparente (0.07) - card elevate, sezioni principali
-//    - GLASS_BORDER_*: bordi trasparenti per card e componenti
-//      * XS = più trasparente (0.07) - bordi sottili
-//      * SM = poco trasparente (0.07) - bordi normali
-//      * MD = medio trasparente (0.07) - bordi spessi
-//
-// 3. 🎯 ACCENT CYAN (colore principale dell'app)
-//    - ACCENT_CYAN_BG: sfondo cyan per bottoni e elementi attivi
-//    - ACCENT_CYAN_BORDER: bordo cyan per bottoni e elementi attivi
-//
-// 4. 📊 GRAFICI E CHART
-//    - CHART_DEFAULT_COLORS: colori delle fette del pie chart
-//    - CHART_DEFAULT_ICONS: emoji per le categorie del pie chart
-//    - CHART_GLOW_COLORS: colori del bagliore intorno ai grafici
-//    - CHART_BG_*: sfondi e bordi del contenitore del grafico
-//
-// 5. 🌈 GRADIENTI
-//    - GRADIENT_CYAN_*: gradienti cyan per bottoni e sfondi
-//    - GRADIENT_PROFIT_POS: gradiente verde per valori positivi
-//    - GRADIENT_PROFIT_NEG: gradiente rosso per valori negativi
-//
-// 6. 🚨 COLORI SEMANTICI (stati dell'app)
-//    - SUCCESS_*: verde per successo, conferme, valori positivi
-//    - DANGER_*: rosso per errori, eliminazioni, valori negativi  
-//    - MAGENTA_*: magenta per elementi speciali e premium
-//
-// 7. 📏 DIMENSIONI E SPACING
-//    - RADIUS_*: bordi arrotondati (MD=12, LG=20, XL=24)
-//    - HIT_SLOP_*: area di tocco per bottoni (SMALL, MEDIUM, LARGE)
-//
-// 🎯 PER COLORARE LE CARD DELLE SPESE MENSILI (Tab Spese):
-//    - Usa GLASS_BG_MD per lo sfondo della card principale
-//    - Usa GLASS_BORDER_MD per il bordo della card principale
-//    - Modifica questi valori per cambiare il colore di tutte le card
-//    - Attualmente usa: rgba(6, 167, 207, 0.07) - colore cyan trasparente
-//
-// ============================================================================
-
 export const UI = {
   // 🪟 MODALI E OVERLAY
   RECENT_TRANSACTIONS_LIMIT: 3,
@@ -268,66 +226,61 @@ export const UI = {
   MODAL_OVERLAY_MEDIUM: 'rgba(0,0,0,0.70)',    // Sfondo modali medio (es. date picker)
   
   // 🔮 GLASSMORPHISM - Sfondi trasparenti per card e componenti
-  // 🎯 PER CARD SPESE MENSILI: modifica GLASS_BG_MD per cambiare il colore delle card principali
-  GLASS_BG_XS: 'rgba(6, 167, 207, 0.05)',       // Sfondo più trasparente (card sottili, elementi secondari)
-  GLASS_BG_SM: 'rgba(6, 167, 207, 0.05)',       // Sfondo poco trasparente (card normali, liste transazioni)
-  GLASS_BG: 'rgba(6, 167, 207, 0.05)',          // Sfondo standard (card principali, sezioni)
-  GLASS_BG_MD: 'rgba(6, 167, 207, 0.05)',       // Sfondo medio trasparente (card elevate, spese mensili)
+  GLASS_BG_XS: 'rgba(6, 167, 207, 0.05)',       
+  GLASS_BG_SM: 'rgba(6, 167, 207, 0.05)',       
+  GLASS_BG: 'rgba(6, 167, 207, 0.05)',          
+  GLASS_BG_MD: 'rgba(6, 167, 207, 0.05)',       
   
   // 🔮 GLASSMORPHISM - Bordi trasparenti per card e componenti
-  // 🎯 PER CARD SPESE MENSILI: modifica GLASS_BORDER_MD per cambiare il bordo delle card principali
-  GLASS_BORDER_XS: 'rgba(6, 167, 207, 0.07)',   // Bordo più trasparente (elementi sottili)
-  GLASS_BORDER_SM: 'rgba(6, 167, 207, 0.07)',   // Bordo poco trasparente (card normali)
-  GLASS_BORDER: 'rgba(6, 167, 207, 0.07)',      // Bordo standard (card principali)
-  GLASS_BORDER_MD: 'rgba(6, 167, 207, 0.07)',   // Bordo medio trasparente (card elevate, spese mensili)
+  GLASS_BORDER_XS: 'rgba(6, 167, 207, 0.07)',   
+  GLASS_BORDER_SM: 'rgba(6, 167, 207, 0.07)',   
+  GLASS_BORDER: 'rgba(6, 167, 207, 0.07)',      
+  GLASS_BORDER_MD: 'rgba(6, 167, 207, 0.07)',   
   
   // 🎯 ACCENT CYAN - Colore principale dell'app
-  ACCENT_CYAN_BG: 'rgba(6, 167, 207, 0.07)',   // Sfondo cyan per bottoni attivi
-  ACCENT_CYAN_BORDER: 'rgba(6, 167, 207, 0.07)', // Bordo cyan per bottoni attivi
+  ACCENT_CYAN_BG: 'rgba(6, 167, 207, 0.07)',   
+  ACCENT_CYAN_BORDER: 'rgba(6, 167, 207, 0.07)', 
   
   // 📏 DIMENSIONI E SPACING
-  RADIUS_MD: 12,                                // Bordi arrotondati medi
-  RADIUS_LG: 20,                                // Bordi arrotondati grandi
-  RADIUS_XL: 24,                                // Bordi arrotondati extra grandi
+  RADIUS_MD: 12,                                
+  RADIUS_LG: 20,                                
+  RADIUS_XL: 24,                                
   
   // 👆 HIT SLOP - Area di tocco per bottoni
-  HIT_SLOP_SMALL: { top: 6, bottom: 6, left: 6, right: 6 } as const,   // Area piccola
-  HIT_SLOP_MEDIUM: { top: 8, bottom: 8, left: 8, right: 8 } as const,  // Area media
-  HIT_SLOP_LARGE: { top: 12, bottom: 12, left: 12, right: 12 } as const, // Area grande
+  HIT_SLOP_SMALL: { top: 6, bottom: 6, left: 6, right: 6 } as const,   
+  HIT_SLOP_MEDIUM: { top: 8, bottom: 8, left: 8, right: 8 } as const,  
+  HIT_SLOP_LARGE: { top: 12, bottom: 12, left: 12, right: 12 } as const, 
   
   // 📊 GRAFICI E CHART - Colori e icone per il pie chart
   CHART_DEFAULT_COLORS: ['#ef4444', '#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#06b6d4', '#ec4899', '#6366f1', '#f97316', '#6b7280'],
   CHART_DEFAULT_ICONS: ['📦', '💳', '🛒', '✈️', '🚗', '🏥', '📚', '⚡', '🎬', '🌃'],
   CHART_GLOW_COLORS: ['rgba(6, 182, 212, 0.15)', 'rgba(139, 92, 246, 0.1)', 'transparent'],
-  CHART_BG_OUTER: 'rgba(10, 10, 15, 0.8)',     // Sfondo esterno del grafico
-  CHART_BG_OUTER_STROKE: 'rgba(6, 182, 212, 0.2)', // Bordo esterno del grafico
-  CHART_BG_INNER: 'rgba(20, 20, 30, 0.9)',     // Sfondo interno del grafico
-  CHART_BG_INNER_STROKE: 'rgba(6, 182, 212, 0.3)', // Bordo interno del grafico
+  CHART_BG_OUTER: 'rgba(10, 10, 15, 0.8)',     
+  CHART_BG_OUTER_STROKE: 'rgba(6, 182, 212, 0.2)', 
+  CHART_BG_INNER: 'rgba(20, 20, 30, 0.9)',     
+  CHART_BG_INNER_STROKE: 'rgba(6, 182, 212, 0.3)', 
   
   // 🌈 GRADIENTI - Sfondi sfumati per bottoni e card
-  // 🎯 PER CARD SPESE MENSILI: usa GRADIENT_CYAN_BG_CARD per sfondi sfumati delle card
-  GRADIENT_CYAN_BUTTON: ['rgba(6,182,212,0.35)', 'rgba(6,182,212,0.22)'], // Gradiente bottoni cyan (FAB, bottoni principali)
-  GRADIENT_CYAN_BG_LIGHT: ['rgba(6,182,212,0.25)', 'rgba(6,182,212,0.08)'], // Gradiente sfondo chiaro (sezioni)
-  GRADIENT_CYAN_BG_CARD: ['rgba(6,182,212,0.10)', 'rgba(139,92,246,0.06)', 'transparent'], // Gradiente card (spese mensili)
-  GRADIENT_CYAN_SUBTLE_BG: ['rgba(6, 182, 212, 0.03)', 'transparent', 'rgba(6, 182, 212, 0.02)'], // Gradiente sottile (sfondi)
-  GRADIENT_PROFIT_POS: ['rgba(16, 185, 129, 0.1)', 'rgba(20, 184, 166, 0.05)'], // Gradiente verde (profitti, valori positivi)
-  GRADIENT_PROFIT_NEG: ['rgba(239, 68, 68, 0.1)', 'rgba(220, 38, 38, 0.05)'], // Gradiente rosso (perdite, valori negativi)
+  GRADIENT_CYAN_BUTTON: ['rgba(6,182,212,0.35)', 'rgba(6,182,212,0.22)'], 
+  GRADIENT_CYAN_BG_LIGHT: ['rgba(6,182,212,0.25)', 'rgba(6,182,212,0.08)'], 
+  GRADIENT_CYAN_BG_CARD: ['rgba(6,182,212,0.10)', 'rgba(139,92,246,0.06)', 'transparent'], 
+  GRADIENT_CYAN_SUBTLE_BG: ['rgba(6, 182, 212, 0.03)', 'transparent', 'rgba(6, 182, 212, 0.02)'], 
+  GRADIENT_PROFIT_POS: ['rgba(16, 185, 129, 0.1)', 'rgba(20, 184, 166, 0.05)'], 
+  GRADIENT_PROFIT_NEG: ['rgba(239, 68, 68, 0.1)', 'rgba(220, 38, 38, 0.05)'], 
   
   // 🚨 COLORI SEMANTICI - Stati dell'applicazione
-  // 🎯 PER CARD SPESE MENSILI: usa questi colori per evidenziare stati specifici nelle card
-  MAGENTA_BG: 'rgba(217, 70, 239, 0.1)',       // Sfondo magenta (elementi premium, card speciali)
-  MAGENTA_BORDER: 'rgba(217, 70, 239, 0.2)',   // Bordo magenta (elementi premium, card speciali)
-  DANGER_BG: 'rgba(239, 68, 68, 0.1)',         // Sfondo rosso (errori, eliminazioni, card di errore)
-  DANGER_BORDER: 'rgba(239, 68, 68, 0.3)',     // Bordo rosso (errori, eliminazioni, card di errore)
-  SUCCESS_BG: 'rgba(16, 185, 129, 0.03)',      // Sfondo verde (successo, conferme, card positive)
-  SUCCESS_BORDER: 'rgba(16, 185, 129, 0.3)',   // Bordo verde (successo, conferme, card positive)
-  SUCCESS_TEXT: '#10b981',                      // Testo verde (valori positivi, importi positivi)
+  MAGENTA_BG: 'rgba(217, 70, 239, 0.1)',       
+  MAGENTA_BORDER: 'rgba(217, 70, 239, 0.2)',   
+  DANGER_BG: 'rgba(239, 68, 68, 0.1)',         
+  DANGER_BORDER: 'rgba(239, 68, 68, 0.3)',     
+  SUCCESS_BG: 'rgba(16, 185, 129, 0.03)',      
+  SUCCESS_BORDER: 'rgba(16, 185, 129, 0.3)',   
+  SUCCESS_TEXT: '#10b981',                      
   
   // 📝 CATEGORIE - Limiti e configurazioni per le categorie
-  CATEGORY_MAX_LENGTH: 15,                      // Lunghezza massima del nome delle categorie
+  CATEGORY_MAX_LENGTH: 15,                      
 } as const
 
-// App theme mappings (merged from theme.ts)
 const tintColorLight = '#0a7ea4'
 const tintColorDark = Brand.colors.primary.cyan
 
@@ -384,30 +337,3 @@ export const DarkTheme = {
     danger: Brand.colors.glow.danger,
   },
 } as const
-
-import { Platform } from 'react-native'
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-  },
-})
-

@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 
 const withAlpha = (hex: string, alpha: number) => {
   const normalized = hex.replace('#', '')
@@ -21,18 +21,9 @@ const withAlpha = (hex: string, alpha: number) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
-const BRAND_COLOR_PALETTE = [
-  Brand.colors.primary.orange,
-  Brand.colors.semantic.success,
-  Brand.colors.semantic.info,
-  Brand.colors.semantic.danger,
-  Brand.colors.primary.magenta,
-  UI_CONSTANTS.CHART_DEFAULT_COLORS[2],
-] as const
-
 export default function ProfileScreen() {
   const { user, signOut, loading: authLoading } = useAuth()
-  const { language, setLanguage, setLocale, t, categories, setCategories } = useSettings()
+  const { language, setLanguage, setLocale, t } = useSettings()
   const [displayName, setDisplayName] = useState('')
   const [currentDisplayName, setCurrentDisplayName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -41,25 +32,7 @@ export default function ProfileScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
   const router = useRouter()
-  const [editableCategories, setEditableCategories] = useState(categories)
-  const [editModalVisible, setEditModalVisible] = useState(false)
-  const [editIndex, setEditIndex] = useState<number | null>(null)
-  const [editEmoji, setEditEmoji] = useState('')
-  const [editName, setEditName] = useState('')
-  const [editColor, setEditColor] = useState('')
-  const [categoriesLoading, setCategoriesLoading] = useState(false)
-  const colorPalette = BRAND_COLOR_PALETTE
-  const firstGrapheme = (text: string) => (Array.from(text || '')[0] || '')
-  const normalizeEmoji = (text: string) => {
-    const base = firstGrapheme(text)
-    const stripped = base
-      .replace(/\uFE0F/g, '')
-      .replace(/[\u{1F3FB}-\u{1F3FF}]/gu, '')
-      .replace(/\u200D/g, '')
-    const one = firstGrapheme(stripped)
-    return one || ''
-  }
-
+  
   // Function to show tutorial again
   const showTutorial = async () => {
     try {
@@ -82,76 +55,6 @@ export default function ProfileScreen() {
   const scaleAnim3 = useRef(new Animated.Value(0.95)).current
 
   // Note: Avoid early returns before hooks; render guards applied just before JSX return
-
-  // Default categories for new users
-  const DEFAULT_CATEGORIES = [
-    { name: 'Food & Drinks', icon: '🍽️', color: colorPalette[0], sort_order: 0 },
-    { name: 'Transport', icon: '🚗', color: colorPalette[1], sort_order: 1 },
-    { name: 'Home & Utilities', icon: '🏠', color: colorPalette[2], sort_order: 2 },
-    { name: 'Entertainment', icon: '🎬', color: colorPalette[3], sort_order: 3 },
-    { name: 'Health & Personal', icon: '🏥', color: colorPalette[4], sort_order: 4 },
-    { name: 'Miscellaneous', icon: '📦', color: colorPalette[5], sort_order: 5 }
-  ]
-
-  // Load categories from database
-  const loadCategoriesFromDb = async () => {
-    if (!user) return
-    
-    setCategoriesLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('sort_order', { ascending: true })
-      
-      if (error) {
-        console.error('Error loading categories:', error)
-        return
-      }
-      
-      // If no categories exist, create default ones
-      if (!data || data.length === 0) {
-        const { data: newCategories, error: createError } = await supabase
-          .from('categories')
-          .insert(DEFAULT_CATEGORIES.map(cat => ({
-            ...cat,
-            user_id: user.id
-          })))
-          .select()
-        
-        if (createError) {
-          console.error('Error creating default categories:', createError)
-          return
-        }
-        
-        // Convert to editable format
-        const editable = (newCategories || []).map(cat => ({
-          key: cat.name.toLowerCase().replace(/\s+/g, '_'),
-          name: cat.name,
-          icon: cat.icon,
-          color: cat.color
-        }))
-        
-        setEditableCategories(editable)
-      } else {
-        // Convert to editable format
-        const editable = data.map(cat => ({
-          key: cat.name.toLowerCase().replace(/\s+/g, '_'),
-          name: cat.name,
-          icon: cat.icon,
-          color: cat.color
-        }))
-        
-        setEditableCategories(editable)
-      }
-      
-    } catch (error) {
-      console.error('Error loading categories:', error)
-    } finally {
-      setCategoriesLoading(false)
-    }
-  }
 
   useEffect(() => {
     ;(async () => {
@@ -184,9 +87,6 @@ export default function ProfileScreen() {
         setExpenseThresholds(thresholds)
       } catch (error) {
       }
-      
-      // Load categories from database (this will also load category counts)
-      await loadCategoriesFromDb()
     })()
 
     // Entrance animations
@@ -224,25 +124,11 @@ export default function ProfileScreen() {
     ]).start()
   }, [user?.id])
 
-  // Keep local editable copy of categories in sync
+  // Listen for external updates
   useEffect(() => {
-    setEditableCategories(categories)
-  }, [categories])
-
-  // Listen for external category updates
-  useEffect(() => {
-    const handleCategoriesUpdate = () => {
-      loadCategoriesFromDb()
-    }
-
-    DeviceEventEmitter.addListener('settings:categoriesUpdated', handleCategoriesUpdate)
-    DeviceEventEmitter.addListener('expenses:externalUpdate', handleCategoriesUpdate)
-
     const notifSub = DeviceEventEmitter.addListener('wallet_notification', () => {})
 
     return () => {
-      DeviceEventEmitter.removeAllListeners('settings:categoriesUpdated')
-      DeviceEventEmitter.removeAllListeners('expenses:externalUpdate')
       notifSub.remove()
     }
   }, [user])
@@ -274,145 +160,6 @@ export default function ProfileScreen() {
     } finally {
       setThresholdsLoading(false)
     }
-  }
-
-  const saveCategories = async (override?: typeof editableCategories) => {
-    if (!user) return
-    
-    setCategoriesLoading(true)
-    try {
-      // Basic validation: limit to 6, ensure name/icon/color present
-      const source = override ?? editableCategories
-      const sanitized = (source || []).slice(0, 6).map((c, index) => ({
-        name: (c.name?.trim() || 'Other').slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH),
-        icon: normalizeEmoji(c.icon?.trim() || ''),
-        color: c.color?.trim() || Brand.colors.semantic.success,
-        sort_order: index
-      }))
-      
-      // Get current categories to preserve IDs
-      const { data: currentCategories } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('sort_order', { ascending: true })
-      
-      const updatedCategories = []
-      
-      // Update existing categories or create new ones
-      for (let i = 0; i < sanitized.length; i++) {
-        const newCategory = sanitized[i]
-        const existingCategory = currentCategories?.[i]
-        
-        if (existingCategory) {
-          // Update existing category (preserve ID)
-          const { error } = await supabase
-            .from('categories')
-            .update({
-              name: newCategory.name,
-              icon: newCategory.icon,
-              color: newCategory.color,
-              sort_order: newCategory.sort_order,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingCategory.id)
-          
-          if (error) {
-            console.error('Error updating category:', error)
-            throw error
-          }
-          
-          updatedCategories.push({
-            id: existingCategory.id,
-            ...newCategory
-          })
-        } else {
-          // Create new category
-          const { data, error } = await supabase
-            .from('categories')
-            .insert({
-              ...newCategory,
-              user_id: user.id
-            })
-            .select()
-            .single()
-          
-          if (error) {
-            console.error('Error creating category:', error)
-            throw error
-          }
-          
-          updatedCategories.push(data)
-        }
-      }
-      
-      // Delete any extra categories that are no longer needed
-      if (currentCategories && currentCategories.length > sanitized.length) {
-        const categoriesToDelete = currentCategories.slice(sanitized.length)
-        for (const category of categoriesToDelete) {
-          await supabase
-            .from('categories')
-            .delete()
-            .eq('id', category.id)
-        }
-      }
-      
-      // Also update the old categories config for backward compatibility
-      const legacyFormat = sanitized.map(c => ({
-        key: c.name.toLowerCase().replace(/\s+/g, '_'),
-        name: c.name,
-        icon: c.icon,
-        color: c.color,
-      }))
-      
-      setCategories(legacyFormat)
-      
-      // Persist to profiles table for backward compatibility
-      await supabase
-        .from('profiles')
-        .upsert({ 
-          id: user.id, 
-          categories_config: legacyFormat, 
-          updated_at: new Date().toISOString() 
-        })
-      
-      // Notify other screens to refresh
-      DeviceEventEmitter.emit('settings:categoriesUpdated')
-      DeviceEventEmitter.emit('expenses:externalUpdate')
-      
-      setSuccessMessage(language === 'it' ? 'Categorie aggiornate!' : 'Categories updated!')
-      setShowSuccessModal(true)
-    } catch (error) {
-      console.error('Error saving categories:', error)
-      setSuccessMessage(language === 'it' ? 'Errore nel salvare le categorie!' : 'Error saving categories!')
-      setShowSuccessModal(true)
-    } finally {
-      setCategoriesLoading(false)
-    }
-  }
-
-  const openEditModal = (index: number) => {
-    const cat = editableCategories[index]
-    setEditIndex(index)
-    setEditEmoji(cat.icon || '📦')
-    setEditName(cat.name || '')
-    setEditColor(cat.color || Brand.colors.semantic.success)
-    setEditModalVisible(true)
-  }
-
-  const applyEdit = async () => {
-    if (editIndex === null) return
-    const next = [...editableCategories]
-    next[editIndex] = {
-      ...next[editIndex],
-      icon: normalizeEmoji(editEmoji || ''),
-      name: (editName || 'Other').trim().slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH),
-      color: (editColor || Brand.colors.semantic.success).trim(),
-    }
-    setEditableCategories(next)
-    // Persist immediately when pressing Save in modal
-    await saveCategories(next)
-    setEditModalVisible(false)
   }
 
   if (authLoading) {
@@ -608,169 +355,6 @@ export default function ProfileScreen() {
           </Pressable>
         </Card>
         </Animated.View>
-
-        {/* Spending Categories */}
-        <Animated.View
-          style={[
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim2 }]
-            }
-          ]}
-        >
-          <Card variant="default" style={[styles.premiumCard, styles.glassCard]}>
-            <LinearGradient
-              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.glassCardGradient}
-              pointerEvents="none"
-            />
-             <View style={styles.cardHeader}>
-               <ThemedText style={styles.cardTitle}>{language === 'it' ? 'Categorie di spesa' : 'Spending Categories'}</ThemedText>
-               {categoriesLoading && (
-                <ActivityIndicator size="small" color={Brand.colors.primary.cyan} style={{ marginLeft: 8 }} />
-               )}
-             </View>
-             <View style={styles.categoryList}>
-              {editableCategories.slice(0, 6).map((cat, idx) => {
-                return (
-                  <View 
-                    key={idx} 
-                    style={[
-                      styles.categoryRow,
-                      {
-                        backgroundColor: cat.color ? `${cat.color}15` : UI_CONSTANTS.GLASS_BG,
-                        borderColor: cat.color ? `${cat.color}30` : UI_CONSTANTS.GLASS_BORDER
-                      }
-                    ]}
-                  >
-                    <View style={styles.categoryLeft}>
-                      <View 
-                        style={[
-                          styles.categoryEmoji,
-                          {
-                            backgroundColor: cat.color ? `${cat.color}20` : UI_CONSTANTS.GLASS_BG_MD,
-                            borderColor: cat.color ? `${cat.color}40` : UI_CONSTANTS.GLASS_BORDER_MD
-                          }
-                        ]}
-                      >
-                        <ThemedText style={{ fontSize: 20 }}>{cat.icon || ''}</ThemedText>
-                      </View>
-                      <View style={{ gap: 2 }}>
-                        <ThemedText 
-                          type="defaultSemiBold" 
-                          style={[
-                            styles.categoryTitle,
-                            cat.color && { color: cat.color }
-                          ]}
-                        >
-                          {(cat.name || 'Other').length > UI_CONSTANTS.CATEGORY_MAX_LENGTH ? (cat.name || 'Other').slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH) + '…' : (cat.name || 'Other')}
-                        </ThemedText>
-                       {/* <ThemedText style={styles.categorySubtitle}>{count} {language === 'it' ? 'Spese' : 'Expenses'}</ThemedText> */}
-                      </View>
-                    </View>
-                    <View style={styles.categoryRight}>
-                      <View style={[styles.colorDotLarge, { backgroundColor: cat.color || Brand.colors.semantic.success }]} />
-                      <TouchableOpacity
-                        style={[
-                          styles.gearButton,
-                          {
-                            backgroundColor: cat.color ? `${cat.color}20` : UI_CONSTANTS.GLASS_BG_MD,
-                            borderColor: cat.color ? `${cat.color}40` : UI_CONSTANTS.GLASS_BORDER_MD
-                          }
-                        ]}
-                        onPress={() => openEditModal(idx)}
-                      >
-                        <ThemedText style={styles.gearIcon}>⚙️</ThemedText>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )
-              })}
-            </View>
-          </Card>
-        </Animated.View>
-
-        {/* Category Edit Modal */}
-        <Modal
-          visible={editModalVisible}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setEditModalVisible(false)}
-        >
-        <View style={[styles.modalOverlay, { backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_DARK }]}> 
-          <Card style={[styles.modalCard, styles.glassCard, { backgroundColor: Brand.colors.background.card, borderColor: Brand.colors.glass.heavy }]}> 
-            <LinearGradient
-              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.glassCardGradient}
-              pointerEvents="none"
-            />
-              <View style={styles.modalHeaderRow}>
-                <View style={[styles.previewBadge, { borderColor: editColor || Brand.colors.semantic.success }]}>
-                  <ThemedText style={styles.previewEmoji}>{editEmoji || ''}</ThemedText>
-                </View>
-                <View style={styles.previewInfo}>
-                  <ThemedText type="heading" style={styles.modalTitleText}>
-                    {language === 'it' ? 'Modifica categoria' : 'Edit category'}
-                  </ThemedText>
-                  <View style={styles.previewColorRow}>
-                    <View style={[styles.previewColorDot, { backgroundColor: editColor || Brand.colors.semantic.success }]} />
-                    <ThemedText style={styles.previewColorLabel}>{editName || (language === 'it' ? 'Senza nome' : 'Untitled')}</ThemedText>
-                  </View>
-                </View>
-              </View>
-
-              <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                  <TextInput
-                    style={[styles.settingInput, { flex: 1 }]}
-                    value={editEmoji}
-                    maxLength={4}
-                    onChangeText={(text) => setEditEmoji(normalizeEmoji(text))}
-                    placeholder={language === 'it' ? 'Emoji' : 'Emoji'}
-                    placeholderTextColor={Brand.colors.text.muted}
-                  />
-                  <TextInput
-                    style={[styles.settingInput, { flex: 3 }]}
-                    value={editName}
-                    maxLength={UI_CONSTANTS.CATEGORY_MAX_LENGTH}
-                    onChangeText={(text) => setEditName((text || '').slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH))}
-                    placeholder={language === 'it' ? 'Nome' : 'Name'}
-                    placeholderTextColor={Brand.colors.text.muted}
-                  />
-                </View>
-                <View style={{ marginTop: 10 }}>
-                  <View style={styles.colorRow}>
-                    {colorPalette.map((hex) => (
-                      <Pressable
-                        key={hex}
-                        style={[styles.colorDot, { backgroundColor: hex }, editColor === hex && styles.colorDotSelected]}
-                        onPress={() => setEditColor(hex)}
-                      />
-                    ))}
-                  </View>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
-                  <Pressable style={[styles.modalButtonSecondary]} onPress={() => setEditModalVisible(false)}>
-                    <ThemedText style={styles.modalButtonSecondaryText}>{language === 'it' ? 'Annulla' : 'Cancel'}</ThemedText>
-                  </Pressable>
-                   <Pressable 
-                     style={[styles.modalButtonPrimary, categoriesLoading && styles.primaryButtonDisabled]} 
-                     onPress={applyEdit}
-                     disabled={categoriesLoading}
-                   >
-                     <ThemedText style={styles.modalButtonPrimaryText}>
-                       {categoriesLoading ? (language === 'it' ? 'Salvando...' : 'Saving...') : (language === 'it' ? 'Salva' : 'Save')}
-                     </ThemedText>
-                   </Pressable>
-                </View>
-              </View>
-            </Card>
-          </View>
-        </Modal>
 
         {/* App Actions */}
         <Animated.View
@@ -1275,68 +859,6 @@ const styles = StyleSheet.create({
     borderColor: Brand.colors.text.primary,
     borderWidth: 2,
   },
-  categoryList: {
-    gap: 12,
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: UI_CONSTANTS.GLASS_BG,
-    borderWidth: 1,
-    borderColor: UI_CONSTANTS.GLASS_BORDER
-  },
-  categoryLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  categoryEmoji: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
-    borderWidth: 1,
-    borderColor: UI_CONSTANTS.GLASS_BORDER_MD
-  },
-  categoryTitle: {
-    color: Brand.colors.text.primary,
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  categorySubtitle: {
-    color: Brand.colors.text.tertiary,
-    fontSize: 12,
-  },
-  categoryRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  colorDotLarge: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: UI_CONSTANTS.GLASS_BORDER_MD
-  },
-  gearButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
-    borderWidth: 1,
-    borderColor: UI_CONSTANTS.GLASS_BORDER_MD
-  },
-  gearIcon: {
-    fontSize: 14,
-  },
   fab: {
     position: 'absolute',
     right: 16,
@@ -1637,72 +1159,6 @@ const styles = StyleSheet.create({
     borderColor: Brand.colors.glass.heavy,
     borderRadius: 16,
     overflow: 'hidden'
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  previewBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: withAlpha(Brand.colors.text.primary, 0.06),
-    borderWidth: 1,
-    
-  },
-  previewEmoji: {
-    fontSize: 24,
-  },
-  previewInfo: {
-    flex: 1,
-  },
-  modalTitleText: {
-    color: Brand.colors.text.primary,
-  },
-  previewColorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
-  },
-  previewColorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: withAlpha(Brand.colors.text.primary, 0.3)
-  },
-  previewColorLabel: {
-    color: Brand.colors.text.secondary,
-    fontSize: 12,
-  },
-  modalButtonPrimary: {
-    backgroundColor: Brand.colors.primary.cyan,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-  },
-  modalButtonPrimaryText: {
-    color: Brand.colors.background.deep,
-    fontWeight: '700',
-  },
-  modalButtonSecondary: {
-    backgroundColor: Brand.colors.glass.medium,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: Brand.colors.glass.heavy
-  },
-  modalButtonSecondaryText: {
-    color: Brand.colors.text.primary,
-    fontWeight: '600',
   },
   modalContent: {
     alignItems: 'center',

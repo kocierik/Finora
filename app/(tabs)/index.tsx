@@ -386,7 +386,7 @@ export default function HomeScreen() {
            today.getDate() === transactionDate.getDate()
   }
 
-  const availableCategories = (dbCategories?.length ? dbCategories : DEFAULT_CATEGORIES.map(c => ({ id: `temp-${c.name}`, name: c.name, color: c.color, icon: c.icon, sort_order: 0 }))).slice(0, 6)
+  const availableCategories = (dbCategories?.length ? dbCategories : DEFAULT_CATEGORIES.map(c => ({ id: `temp-${c.name}`, name: c.name, color: c.color, icon: c.icon, sort_order: 0 })))
 
   // Set default category ID when categories are loaded
   useEffect(() => {
@@ -934,16 +934,21 @@ export default function HomeScreen() {
                 <ThemedText style={styles.errorTitle}>{t('error_prefix')}{formError}</ThemedText>
               </View>
             )}
-            <View style={styles.formRow}>
-              <ThemedText style={styles.formLabel}>{t('title')}</ThemedText>
-              <TextInput
-                style={styles.input}
-                placeholder={t('title') +' '+ t('transaction')}
-                placeholderTextColor={Brand.colors.text.tertiary}
-                value={newTitle}
-                onChangeText={setNewTitle}
-              />
-            </View>
+            <ScrollView 
+              showsVerticalScrollIndicator={false} 
+              style={{ maxHeight: 400 }}
+              contentContainerStyle={{ paddingBottom: 10 }}
+            >
+              <View style={styles.formRow}>
+                <ThemedText style={styles.formLabel}>{t('title')}</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('title') +' '+ t('transaction')}
+                  placeholderTextColor={Brand.colors.text.tertiary}
+                  value={newTitle}
+                  onChangeText={setNewTitle}
+                />
+              </View>
             <View style={styles.formRow}>
               <ThemedText style={styles.formLabel}>{t('amount')}</ThemedText>
               <TextInput
@@ -955,56 +960,22 @@ export default function HomeScreen() {
                 onChangeText={setNewAmount}
               />
             </View>
-            <View style={styles.formRow}>
-              <ThemedText style={styles.formLabel}>{t('category')}</ThemedText>
-              <View style={styles.categoryGrid}>
-                <View style={styles.categoryColumn}>
-                  {availableCategories.slice(0, 3).map((c) => {
+              <View style={styles.formRow}>
+                <ThemedText style={styles.formLabel}>{t('category')}</ThemedText>
+                <View style={styles.categoryGrid}>
+                  {availableCategories.map((c) => {
                     const isSelected = newCategory.toLowerCase() === c.name.toLowerCase()
                     return (
                       <TouchableOpacity
-                        key={c.name}
+                        key={c.id || c.name}
                         style={[
                           styles.categoryChip, 
                           isSelected && styles.categoryChipActive,
                           { 
                             borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
-                            backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
-                          }
-                        ]}
-                        onPress={() => {
-                          setNewCategory(c.name)
-                          setNewCategoryId(c.id)
-                          setCategoryManuallySelected(true) // Mark as manually selected
-                        }}
-                      >
-                        <ThemedText 
-                          style={[
-                            styles.categoryChipText, 
-                            isSelected && styles.categoryChipTextActive,
-                            isSelected && c.color && { color: c.color }
-                          ]}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                        >
-                          {c.icon ? `${c.icon} ` : ''}{shortenCategoryName(c.name)}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    )
-                  })}
-                </View>
-                <View style={styles.categoryColumn}>
-                  {availableCategories.slice(3, 6).map((c) => {
-                    const isSelected = newCategory.toLowerCase() === c.name.toLowerCase()
-                    return (
-                      <TouchableOpacity
-                        key={c.name}
-                        style={[
-                          styles.categoryChip, 
-                          isSelected && styles.categoryChipActive,
-                          { 
-                            borderColor: (c.color || UI_CONSTANTS.GLASS_BORDER_MD),
-                            backgroundColor: isSelected && c.color ? `${c.color}20` : undefined
+                            backgroundColor: isSelected && c.color ? `${c.color}20` : undefined,
+                            width: '31%', // Esattamente 3 per riga con gap
+                            marginBottom: 8,
                           }
                         ]}
                         onPress={() => {
@@ -1029,7 +1000,6 @@ export default function HomeScreen() {
                   })}
                 </View>
               </View>
-            </View>
             <View style={styles.formRow}>
               <ThemedText style={styles.formLabel}>{t('date')}</ThemedText>
               <Pressable style={styles.input} onPress={() => setShowCalendarModal(true)}>
@@ -1101,6 +1071,7 @@ export default function HomeScreen() {
                 )}
               </>
             )}
+            </ScrollView>
 
       {/* Calendar Modal */}
       <Modal
@@ -2538,7 +2509,7 @@ const styles = StyleSheet.create({
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    gap: 8,
   },
   categoryColumn: {
     flex: 1,
@@ -2784,10 +2755,10 @@ const styles = StyleSheet.create({
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
   },
   categoryOption: {
-    width: '47%',
+    width: '31%',
     marginBottom: 12,
   },
   categoryOptionButton: {
@@ -2812,7 +2783,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   categoryOptionName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: Brand.colors.text.primary,
     textAlign: 'center',

@@ -40,51 +40,60 @@ export function ThemedText({
 
 const styles = StyleSheet.create({
   default: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: Brand.typography.sizes.base,
     lineHeight: 24,
     fontWeight: Brand.typography.weights.regular,
   },
   defaultSemiBold: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: Brand.typography.sizes.base,
     lineHeight: 24,
     fontWeight: Brand.typography.weights.semibold,
   },
   title: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: Brand.typography.sizes['4xl'],
     fontWeight: Brand.typography.weights.black,
     lineHeight: 40,
     letterSpacing: Brand.typography.spacing.tighter,
   },
   subtitle: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: Brand.typography.sizes['2xl'],
     fontWeight: Brand.typography.weights.bold,
     lineHeight: 28,
     letterSpacing: Brand.typography.spacing.tight,
   },
   heading: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: Brand.typography.sizes.xl,
     fontWeight: Brand.typography.weights.bold,
     lineHeight: 24,
     letterSpacing: Brand.typography.spacing.tight,
   },
   body: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: Brand.typography.sizes.base,
     fontWeight: Brand.typography.weights.regular,
     lineHeight: 22,
   },
   label: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: Brand.typography.sizes.sm,
     fontWeight: Brand.typography.weights.medium,
     lineHeight: 18,
     letterSpacing: Brand.typography.spacing.wide,
   },
   caption: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: Brand.typography.sizes.xs,
     fontWeight: Brand.typography.weights.regular,
     lineHeight: 16,
     opacity: 0.7,
   },
   link: {
+    fontFamily: Brand.typography.fonts.primary,
     lineHeight: 30,
     fontSize: Brand.typography.sizes.base,
     color: Brand.colors.primary.cyan,

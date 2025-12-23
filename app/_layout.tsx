@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
@@ -11,6 +11,7 @@ import '../headless-notification-listener';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SettingsProvider } from '@/context/SettingsContext';
+import { Brand } from '@/constants/branding';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useDatabaseSync } from '@/hooks/use-database-sync';
 import { setupCategoryReminderChannel } from '@/services/category-reminder';
@@ -25,12 +26,39 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+// Custom Themes based on Brand identity
+const CustomDarkTheme = {
+  ...NavDarkTheme,
+  colors: {
+    ...NavDarkTheme.colors,
+    primary: Brand.colors.primary.cyan,
+    background: Brand.colors.background.deep,
+    card: Brand.colors.background.base,
+    text: Brand.colors.text.primary,
+    border: Brand.colors.glass.medium,
+    notification: Brand.colors.primary.magenta,
+  },
+};
+
+const CustomDefaultTheme = {
+  ...NavDefaultTheme,
+  colors: {
+    ...NavDefaultTheme.colors,
+    primary: Brand.colors.primary.cyan,
+    background: '#ffffff',
+    card: '#f8fafc',
+    text: '#0f172a',
+    border: '#e2e8f0',
+    notification: Brand.colors.primary.magenta,
+  },
+};
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <ThemeProvider value={colorScheme === 'dark' ? CustomDarkTheme : CustomDefaultTheme}>
         <SettingsProvider>
           <AuthProvider>
             <RootNavigator />

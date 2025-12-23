@@ -16,7 +16,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import { cacheDirectory, readAsStringAsync } from 'expo-file-system/legacy'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native'
 import { PanGestureHandler, State } from 'react-native-gesture-handler'
 
 export default function ExpensesScreen() {
@@ -45,6 +45,18 @@ export default function ExpensesScreen() {
   const [selectedHistoryCategory, setSelectedHistoryCategory] = useState<string | null>(null)
   const [categoryHistory, setCategoryHistory] = useState<Expense[]>([])
   const [categoryHistoryLoading, setCategoryHistoryLoading] = useState(false)
+  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryEmoji, setNewCategoryEmoji] = useState('📦')
+  const [newCategoryColor, setNewCategoryColor] = useState<string>(Brand.colors.semantic.success)
+  const [newCategoryLoading, setNewCategoryLoading] = useState(false)
+  const [showEditCategoryModal, setShowEditCategoryModal] = useState(false)
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false)
+  const [editCategoryId, setEditCategoryId] = useState<string | null>(null)
+  const [editCategoryName, setEditCategoryName] = useState('')
+  const [editCategoryEmoji, setEditCategoryEmoji] = useState('📦')
+  const [editCategoryColor, setEditCategoryColor] = useState<string>(Brand.colors.semantic.success)
+  const [editCategoryLoading, setEditCategoryLoading] = useState(false)
   // Categories loaded from DB (categories table)
   const [dbCategories, setDbCategories] = useState<{ id: string; name: string; icon: string; color: string; sort_order: number }[]>([])
   // Pending expenses state
@@ -563,9 +575,9 @@ export default function ExpensesScreen() {
     return effectiveCategories
   }
 
-  // Spending categories for main grid (first 6)
+  // Spending categories for main grid (all categories)
   const categories = useMemo(() => {
-    return (effectiveCategories || []).slice(0, 6).map(c => ({
+    return (effectiveCategories || []).map(c => ({
       id: (c as any).id || `temp-${c.name}`,
       name: c.name,
       icon: c.icon,
@@ -850,6 +862,94 @@ export default function ExpensesScreen() {
       setCategoryHistoryLoading(false)
     }
   }, [user, curYear, curMonth, dbCategories])
+
+  const openEditCategoryFromSpending = useCallback((category: { id: string; name: string; icon: string; color: string }) => {
+    setEditCategoryId(category.id)
+    setEditCategoryName(category.name)
+    setEditCategoryEmoji(category.icon || '📦')
+    setEditCategoryColor(category.color || Brand.colors.semantic.success)
+    setShowEditCategoryModal(true)
+  }, [])
+
+  const handleCreateCategory = useCallback(async () => {
+    if (!user || !newCategoryName.trim()) return
+    try {
+      setNewCategoryLoading(true)
+      const sortOrder = dbCategories.length
+      const { data, error } = await supabase
+        .from('categories')
+        .insert({
+          user_id: user.id,
+          name: newCategoryName.trim(),
+          icon: newCategoryEmoji.trim() || '📦',
+          color: newCategoryColor,
+          sort_order: sortOrder,
+        })
+        .select()
+      if (error) throw error
+
+      await loadCategoriesFromDb()
+      DeviceEventEmitter.emit('settings:categoriesUpdated')
+
+      setNewCategoryName('')
+      setNewCategoryEmoji('📦')
+      setNewCategoryColor(Brand.colors.semantic.success)
+      setShowNewCategoryModal(false)
+    } catch (e) {
+      console.error('[Expenses] ❌ Failed to create category', e)
+    } finally {
+      setNewCategoryLoading(false)
+    }
+  }, [user, newCategoryName, newCategoryEmoji, newCategoryColor, dbCategories.length, loadCategoriesFromDb])
+
+  const handleUpdateCategory = useCallback(async () => {
+    if (!user || !editCategoryId || !editCategoryName.trim()) return
+    try {
+      setEditCategoryLoading(true)
+      const { error } = await supabase
+        .from('categories')
+        .update({
+          name: editCategoryName.trim(),
+          icon: editCategoryEmoji.trim() || '📦',
+          color: editCategoryColor,
+        })
+        .eq('user_id', user.id)
+        .eq('id', editCategoryId)
+      if (error) throw error
+
+      await loadCategoriesFromDb()
+      DeviceEventEmitter.emit('settings:categoriesUpdated')
+      DeviceEventEmitter.emit('expenses:externalUpdate')
+
+      setShowEditCategoryModal(false)
+    } catch (e) {
+      console.error('[Expenses] ❌ Failed to update category', e)
+    } finally {
+      setEditCategoryLoading(false)
+    }
+  }, [user, editCategoryId, editCategoryName, editCategoryEmoji, editCategoryColor, loadCategoriesFromDb])
+
+  const handleDeleteCategory = useCallback(async (categoryId: string) => {
+    if (!user) return
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('id', categoryId)
+      
+      if (error) throw error
+      
+      await loadCategoriesFromDb()
+      DeviceEventEmitter.emit('settings:categoriesUpdated')
+      DeviceEventEmitter.emit('expenses:externalUpdate')
+      setShowDeleteConfirmModal(false)
+      setShowEditCategoryModal(false)
+    } catch (e) {
+      console.error('[Expenses] ❌ Failed to delete category', e)
+      Alert.alert('Error', language === 'it' ? 'Errore durante l\'eliminazione' : 'Error during deletion')
+    }
+  }, [user, language, loadCategoriesFromDb])
 
   const handleCategorySelect = useCallback(async (categoryId: string) => {
     if (!selectedTransaction || !user) return
@@ -1565,12 +1665,21 @@ export default function ExpensesScreen() {
           ]}
         >
           <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionTitle}>{language === 'it' ? 'Categorie di spesa' : 'Spending categories'}</ThemedText>
-            <ThemedText style={styles.sectionSubtitle}>{language === 'it' ? 'Distribuzione mensile' : 'Monthly distribution'}</ThemedText>
-              </View>
+            <ThemedText style={styles.sectionTitle}>
+              {language === 'it' ? 'Categorie di spesa' : 'Spending categories'}
+            </ThemedText>
+            <ThemedText style={styles.sectionSubtitle}>
+              {language === 'it' ? 'Distribuzione mensile' : 'Monthly distribution'}
+            </ThemedText>
+            <ThemedText style={styles.sectionHint}>
+              {language === 'it'
+                ? 'Tocca per vedere lo storico, tieni premuto per modificare.'
+                : 'Tap to view history, long press to edit.'}
+            </ThemedText>
+          </View>
 
           <View style={styles.categoriesGrid}>
-            {categoryTotals.slice(0, 6).map((category, index) => (
+            {categoryTotals.map((category, index) => (
               <Animated.View
                 key={category.name}
                 style={[
@@ -1604,6 +1713,19 @@ export default function ExpensesScreen() {
                   onPress={() => {
                     openCategoryHistory(category.id)
                   }}
+                  onLongPress={() => {
+                    if (category.id && !category.id.startsWith('temp-')) {
+                      openEditCategoryFromSpending(category)
+                    } else {
+                      Alert.alert(
+                        language === 'it' ? 'Categoria di sistema' : 'System Category',
+                        language === 'it' 
+                          ? 'Le categorie predefinite non possono essere modificate o eliminate.'
+                          : 'Default categories cannot be edited or deleted.'
+                      )
+                    }
+                  }}
+                  delayLongPress={500}
                 >
                   <Animated.View
                     style={[
@@ -1631,13 +1753,18 @@ export default function ExpensesScreen() {
                         <ThemedText style={styles.categoryIconText}>{category.icon}</ThemedText>
                       </View>
                     <ThemedText style={styles.categoryName}>{category.name}</ThemedText>
-                      <ThemedText style={[
-                        styles.categoryAmount,
-                        // Negative amounts are expenses (spese) → red; positive/zero → green
-                        category.amount < 0 ? { color: Brand.colors.semantic.danger } : { color: Brand.colors.semantic.success }
-                      ]}>
+                      <ThemedText
+                        style={[
+                          styles.categoryAmount,
+                          category.amount < 0
+                            ? { color: Brand.colors.semantic.danger } // spese (negative)
+                            : category.amount > 0
+                              ? { color: Brand.colors.semantic.success } // entrate (positive)
+                              : { color: Brand.colors.text.secondary } // zero → neutro
+                        ]}
+                      >
                         € {Math.abs(category.amount).toFixed(2)}
-                </ThemedText>
+                      </ThemedText>
                       <View style={styles.progressContainer}>
                         <View style={[styles.progressBar, { backgroundColor: `${category.color}20` }]}>
                           <Animated.View 
@@ -1660,6 +1787,43 @@ export default function ExpensesScreen() {
                 </Pressable>
               </Animated.View>
             ))}
+            <Animated.View
+              style={[
+                styles.categoryCard,
+                {
+                  opacity: fadeAnim,
+                  transform: [{
+                    translateX: slideAnim.interpolate({
+                      inputRange: [0, 30],
+                      outputRange: [0, 30 + (categoryTotals.length * 10)]
+                    })
+                  }]
+                }
+              ]}
+            >
+              <Pressable
+                style={styles.categoryPressable}
+                onPress={() => setShowNewCategoryModal(true)}
+              >
+                <View style={styles.categoryGradient}>
+                  <LinearGradient
+                    colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.categoryGradientOverlay}
+                    pointerEvents="none"
+                  />
+                  <View style={styles.newCategoryCenter}>
+                    <View style={[styles.categoryIcon, { backgroundColor: UI_CONSTANTS.GLASS_BG_MD }]}>
+                      <ThemedText style={styles.categoryIconText}>＋</ThemedText>
+                    </View>
+                    <ThemedText style={[styles.categoryName, { textAlign: 'center', marginBottom: 0 }]}>
+                      {language === 'it' ? 'Nuova categoria' : 'New category'}
+                    </ThemedText>
+                  </View>
+                </View>
+              </Pressable>
+            </Animated.View>
           </View>
         </Animated.View>
 
@@ -2007,6 +2171,311 @@ export default function ExpensesScreen() {
               </ScrollView>
             </Card>
           </Animated.View>
+        </View>
+      </Modal>
+
+      {/* New Category Modal */}
+      <Modal
+        visible={showNewCategoryModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowNewCategoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Card style={styles.modalCard}>
+              <LinearGradient
+                colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalGradient}
+                pointerEvents="none"
+              />
+              <View style={styles.modalHeader}>
+                <ThemedText style={styles.modalTitle}>
+                  {language === 'it' ? 'Nuova categoria' : 'New category'}
+                </ThemedText>
+                <Pressable onPress={() => setShowNewCategoryModal(false)} style={styles.closeButton}>
+                  <ThemedText style={styles.closeButtonText}>✕</ThemedText>
+                </Pressable>
+              </View>
+              <View style={styles.transactionInfo}>
+                <ThemedText style={styles.transactionInfoNote}>
+                  {language === 'it'
+                    ? 'Scegli un\'emoji, un nome e un colore per la nuova categoria.'
+                    : 'Choose an emoji, name and color for the new category.'}
+                </ThemedText>
+              </View>
+              <View style={styles.modalScrollContent}>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1 }]}
+                    value={newCategoryEmoji}
+                    maxLength={2}
+                    onChangeText={(text) => {
+                      const firstGrapheme = Array.from(text)[0] || '';
+                      setNewCategoryEmoji(firstGrapheme);
+                    }}
+                    onBlur={() => {
+                      if (!newCategoryEmoji.trim()) {
+                        setNewCategoryEmoji('📦');
+                      }
+                    }}
+                    placeholder="🛒"
+                    placeholderTextColor={Brand.colors.text.muted}
+                  />
+                  <TextInput
+                    style={[styles.input, { flex: 3 }]}
+                    value={newCategoryName}
+                    onChangeText={setNewCategoryName}
+                    placeholder={language === 'it' ? 'Nome categoria' : 'Category name'}
+                    placeholderTextColor={Brand.colors.text.muted}
+                  />
+                </View>
+                <View style={styles.colorRow}>
+                  {[
+                    Brand.colors.primary.orange,
+                    Brand.colors.semantic.success,
+                    Brand.colors.semantic.info,
+                    Brand.colors.semantic.danger,
+                    Brand.colors.primary.magenta,
+                    Brand.colors.primary.teal,
+                  ].map((hex) => (
+                    <Pressable
+                      key={hex}
+                      style={[
+                        styles.colorDot,
+                        { backgroundColor: hex },
+                        newCategoryColor === hex && styles.colorDotSelected,
+                      ]}
+                      onPress={() => setNewCategoryColor(hex)}
+                    />
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
+                  <Pressable
+                    style={styles.modalButtonSecondary}
+                    onPress={() => setShowNewCategoryModal(false)}
+                    disabled={newCategoryLoading}
+                  >
+                    <ThemedText style={styles.modalButtonSecondaryText}>
+                      {language === 'it' ? 'Annulla' : 'Cancel'}
+                    </ThemedText>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.modalButtonPrimary, newCategoryLoading && styles.primaryButtonDisabled]}
+                    onPress={handleCreateCategory}
+                    disabled={newCategoryLoading || !newCategoryName.trim()}
+                  >
+                    <ThemedText style={styles.modalButtonPrimaryText}>
+                      {newCategoryLoading
+                        ? (language === 'it' ? 'Creando...' : 'Creating...')
+                        : (language === 'it' ? 'Crea' : 'Create')}
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </View>
+            </Card>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Category Modal (Spending section) */}
+      <Modal
+        visible={showEditCategoryModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEditCategoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Card style={styles.modalCard}>
+              <LinearGradient
+                colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalGradient}
+                pointerEvents="none"
+              />
+              <View style={styles.modalHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <ThemedText style={styles.modalTitle}>
+                    {language === 'it' ? 'Modifica categoria' : 'Edit category'}
+                  </ThemedText>
+                  {editCategoryId && !editCategoryId.startsWith('temp-') && (
+                    <Pressable 
+                      onPress={() => setShowDeleteConfirmModal(true)}
+                      style={({ pressed }) => [
+                        {
+                          padding: 6,
+                          borderRadius: 8,
+                          backgroundColor: pressed ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)',
+                          borderColor: 'rgba(239, 68, 68, 0.3)',
+                          borderWidth: 1,
+                        }
+                      ]}
+                    >
+                      <ThemedText style={{ color: Brand.colors.semantic.danger, fontSize: 12, fontWeight: '700' }}>
+                        {language === 'it' ? 'ELIMINA' : 'DELETE'}
+                      </ThemedText>
+                    </Pressable>
+                  )}
+                </View>
+                <Pressable onPress={() => setShowEditCategoryModal(false)} style={styles.closeButton}>
+                  <ThemedText style={styles.closeButtonText}>✕</ThemedText>
+                </Pressable>
+              </View>
+              <View style={styles.transactionInfo}>
+                <ThemedText style={styles.transactionInfoNote}>
+                  {language === 'it'
+                    ? 'Aggiorna emoji, nome e colore della categoria.'
+                    : 'Update emoji, name and color of the category.'}
+                </ThemedText>
+              </View>
+              <View style={styles.modalScrollContent}>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1 }]}
+                    value={editCategoryEmoji}
+                    maxLength={2}
+                    onChangeText={(text) => {
+                      const firstGrapheme = Array.from(text)[0] || '';
+                      setEditCategoryEmoji(firstGrapheme);
+                    }}
+                    onBlur={() => {
+                      if (!editCategoryEmoji.trim()) {
+                        setEditCategoryEmoji('📦');
+                      }
+                    }}
+                    placeholder="🛒"
+                    placeholderTextColor={Brand.colors.text.muted}
+                  />
+                  <TextInput
+                    style={[styles.input, { flex: 3 }]}
+                    value={editCategoryName}
+                    onChangeText={setEditCategoryName}
+                    placeholder={language === 'it' ? 'Nome categoria' : 'Category name'}
+                    placeholderTextColor={Brand.colors.text.muted}
+                  />
+                </View>
+                <View style={styles.colorRow}>
+                  {[
+                    Brand.colors.primary.orange,
+                    Brand.colors.semantic.success,
+                    Brand.colors.semantic.info,
+                    Brand.colors.semantic.danger,
+                    Brand.colors.primary.magenta,
+                    Brand.colors.primary.teal,
+                  ].map((hex) => (
+                    <Pressable
+                      key={hex}
+                      style={[
+                        styles.colorDot,
+                        { backgroundColor: hex },
+                        editCategoryColor === hex && styles.colorDotSelected,
+                      ]}
+                      onPress={() => setEditCategoryColor(hex)}
+                    />
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <Pressable
+                      style={styles.modalButtonSecondary}
+                      onPress={() => setShowEditCategoryModal(false)}
+                      disabled={editCategoryLoading}
+                    >
+                      <ThemedText style={styles.modalButtonSecondaryText}>
+                        {language === 'it' ? 'Annulla' : 'Cancel'}
+                      </ThemedText>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.modalButtonPrimary, editCategoryLoading && styles.primaryButtonDisabled]}
+                      onPress={handleUpdateCategory}
+                      disabled={editCategoryLoading || !editCategoryName.trim()}
+                    >
+                      <ThemedText style={styles.modalButtonPrimaryText}>
+                        {editCategoryLoading
+                          ? (language === 'it' ? 'Salvando...' : 'Saving...')
+                          : (language === 'it' ? 'Salva' : 'Save')}
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            </Card>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteConfirmModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDeleteConfirmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { maxWidth: 320 }]}>
+            <Card style={styles.modalCard}>
+              <LinearGradient
+                colors={[Brand.colors.semantic.danger + '40', Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalGradient}
+                pointerEvents="none"
+              />
+              <View style={[styles.modalHeader, { justifyContent: 'center' }]}>
+                <ThemedText style={[styles.modalTitle, { color: Brand.colors.semantic.danger, textAlign: 'center' }]}>
+                  {language === 'it' ? 'Elimina categoria' : 'Delete category'}
+                </ThemedText>
+                <Pressable 
+                  onPress={() => setShowDeleteConfirmModal(false)} 
+                  style={[styles.closeButton, { position: 'absolute', right: 0 }]}
+                >
+                  <ThemedText style={styles.closeButtonText}>✕</ThemedText>
+                </Pressable>
+              </View>
+              <View style={styles.transactionInfo}>
+                <ThemedText style={[styles.transactionInfoNote, { textAlign: 'center', fontSize: 16 }]}>
+                  {language === 'it' 
+                    ? `Sei sicuro di voler eliminare "${editCategoryName}"?`
+                    : `Are you sure you want to delete "${editCategoryName}"?`}
+                </ThemedText>
+                <ThemedText style={{ color: Brand.colors.text.tertiary, fontSize: 13, textAlign: 'center', marginTop: 12, lineHeight: 18 }}>
+                  {language === 'it'
+                    ? 'Le transazioni associate verranno mantenute ma senza categoria.'
+                    : 'Associated transactions will be kept but without a category.'}
+                </ThemedText>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 28 }}>
+                <Pressable
+                  style={[styles.modalButtonSecondary, { flex: 1 }]}
+                  onPress={() => setShowDeleteConfirmModal(false)}
+                >
+                  <ThemedText style={styles.modalButtonSecondaryText}>
+                    {language === 'it' ? 'Annulla' : 'Cancel'}
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.modalButtonPrimary, 
+                    { 
+                      flex: 1, 
+                      backgroundColor: 'rgba(239, 68, 68, 0.15)', 
+                      borderColor: 'rgba(239, 68, 68, 0.3)',
+                      borderWidth: 1 
+                    }
+                  ]}
+                  onPress={() => editCategoryId && handleDeleteCategory(editCategoryId)}
+                >
+                  <ThemedText style={[styles.modalButtonPrimaryText, { color: Brand.colors.semantic.danger }]}>
+                    {language === 'it' ? 'Elimina' : 'Delete'}
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </Card>
+          </View>
         </View>
       </Modal>
 
@@ -2582,6 +3051,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Brand.colors.text.secondary,
   },
+  sectionHint: {
+    fontSize: 11,
+    color: Brand.colors.text.tertiary,
+    marginTop: 4,
+  },
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2608,6 +3082,7 @@ const styles = StyleSheet.create({
     backgroundColor: UI_CONSTANTS.GLASS_BG,
     overflow: 'hidden',
     position: 'relative',
+    minHeight: 200,
   },
   categoryGradientOverlay: {
     position: 'absolute',
@@ -2657,6 +3132,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Brand.colors.text.tertiary,
     textAlign: 'right',
+  },
+  newCategoryCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+  },
+  colorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+    justifyContent: 'center',
+  },
+  colorDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.heavy,
+  },
+  colorDotSelected: {
+    borderColor: Brand.colors.text.primary,
+    borderWidth: 2,
   },
   emptyCategoriesContainer: {
     flex: 1,
@@ -3000,6 +3499,37 @@ const styles = StyleSheet.create({
   modalScrollContent: {
     paddingBottom: 20,
   },
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
+  modalButtonPrimary: {
+    backgroundColor: Brand.colors.primary.cyan,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonPrimaryText: {
+    color: Brand.colors.background.deep,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  modalButtonSecondary: {
+    backgroundColor: Brand.colors.glass.medium,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.heavy,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonSecondaryText: {
+    color: Brand.colors.text.primary,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -3070,6 +3600,16 @@ const styles = StyleSheet.create({
     color: Brand.colors.text.secondary,
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  input: {
+    backgroundColor: Brand.colors.glass.light,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.medium,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: Brand.colors.text.primary,
   },
   transactionDateRow: {
     flexDirection: 'row',
