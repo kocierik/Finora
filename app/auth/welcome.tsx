@@ -66,7 +66,11 @@ export default function WelcomeScreen() {
     <View style={styles.container}>
       {/* Background Gradients */}
       <LinearGradient
-        colors={['#0a0a0f', '#141419', '#0f0f14']}
+        colors={[
+          Brand.colors.background.deep,
+          Brand.colors.background.elevated,
+          Brand.colors.background.base,
+        ] as any}
         style={styles.backgroundGradient}
       />
       

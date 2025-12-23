@@ -465,7 +465,7 @@ export default function ExpensesScreen() {
           description: expense.merchant || 'Expense',
           category: expense.categories?.name || expense.category || 'Other',
           categoryIcon: expense.categories?.icon || '💳',
-          categoryColor: expense.categories?.color || '#06b6d4',
+      categoryColor: expense.categories?.color || Brand.colors.primary.cyan,
           date: expense.date,
           created_at: expense.created_at,
           isRecurring: expense.is_recurring,
@@ -498,7 +498,7 @@ export default function ExpensesScreen() {
         description: expense.merchant || (isIncome ? 'Accredito' : 'Expense'),
         category: expense.categories?.name || expense.category || 'Other',
         categoryIcon: expense.categories?.icon || '💳',
-        categoryColor: expense.categories?.color || '#06b6d4',
+    categoryColor: expense.categories?.color || Brand.colors.primary.cyan,
         date: expense.date,
         created_at: expense.created_at,
         isRecurring: expense.is_recurring,
@@ -518,9 +518,9 @@ export default function ExpensesScreen() {
                    income.source === 'freelance' ? '💻' :
                    income.source === 'investment' ? '📈' :
                    income.source === 'bonus' ? '🎁' : '💰',
-      categoryColor: income.category === 'work' ? '#10b981' :
-                    income.category === 'passive' ? '#8B5CF6' :
-                    income.category === 'investment' ? '#F59E0B' : '#6366F1',
+      categoryColor: income.category === 'work' ? Brand.colors.semantic.success :
+                    income.category === 'passive' ? Brand.colors.primary.magenta :
+                    income.category === 'investment' ? Brand.colors.primary.orange : Brand.colors.semantic.info,
       date: income.date,
       created_at: income.created_at,
       isRecurring: income.is_recurring,
@@ -549,10 +549,10 @@ export default function ExpensesScreen() {
 
   // Income categories
   const incomeCategories = [
-    { id: 'work', name: 'Work', icon: '💼', color: '#10b981' },
-    { id: 'passive', name: 'Passive', icon: '💰', color: '#8B5CF6' },
-    { id: 'investment', name: 'Investment', icon: '📈', color: '#F59E0B' },
-    { id: 'other', name: 'Other', icon: '🎁', color: '#6366F1' }
+    { id: 'work', name: 'Work', icon: '💼', color: Brand.colors.semantic.success },
+    { id: 'passive', name: 'Passive', icon: '💰', color: Brand.colors.primary.magenta },
+    { id: 'investment', name: 'Investment', icon: '📈', color: Brand.colors.primary.orange },
+    { id: 'other', name: 'Other', icon: '🎁', color: Brand.colors.semantic.info }
   ]
 
   // Get available categories based on transaction type
@@ -827,9 +827,9 @@ export default function ExpensesScreen() {
           type: 'income',
           categories: {
             name: inc.category || 'work',
-            color: inc.category === 'work' ? '#10b981' :
-                   inc.category === 'passive' ? '#8B5CF6' :
-                   inc.category === 'investment' ? '#F59E0B' : '#6366F1',
+            color: inc.category === 'work' ? Brand.colors.semantic.success :
+                   inc.category === 'passive' ? Brand.colors.primary.magenta :
+                   inc.category === 'investment' ? Brand.colors.primary.orange : Brand.colors.semantic.info,
             icon: inc.source === 'salary' ? '💼' : 
                   inc.source === 'freelance' ? '💻' :
                   inc.source === 'investment' ? '📈' :
@@ -1270,7 +1270,7 @@ export default function ExpensesScreen() {
   if (loading) {
   return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#06b6d4" />
+        <ActivityIndicator size="small" color={Brand.colors.primary.cyan} />
       </View>
     )
   }
@@ -1279,7 +1279,7 @@ export default function ExpensesScreen() {
   if (!user) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#06b6d4" />
+        <ActivityIndicator size="small" color={Brand.colors.primary.cyan} />
       </View>
     )
   }
@@ -1288,7 +1288,7 @@ export default function ExpensesScreen() {
     <View style={styles.container}>
       {/* Background Gradient */}
       <LinearGradient
-        colors={['#0a0a0f', '#141419', '#0f0f14']}
+        colors={[Brand.colors.background.deep, Brand.colors.background.base, Brand.colors.background.deep]}
         style={styles.backgroundGradient}
       />
       
@@ -1365,7 +1365,7 @@ export default function ExpensesScreen() {
               ]}
             >
                           <LinearGradient
-                colors={['rgba(185, 16, 16, 0.51)', 'rgba(197, 34, 34, 0.07)', 'transparent']}
+                colors={[Brand.colors.glow.danger, UI_CONSTANTS.DANGER_BG, 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.incomeGradient}
@@ -1393,8 +1393,8 @@ export default function ExpensesScreen() {
                         styles.summaryMonthIndicator,
                         {
                           backgroundColor: pressed
-                            ? 'rgba(6,182,212,0.10)'
-                            : 'rgba(20,184,166,0.06)',
+                            ? UI_CONSTANTS.ACCENT_CYAN_BG
+                            : UI_CONSTANTS.GLASS_BG_SM,
                           borderRadius: 14,
                           borderWidth: 1,
                           borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
@@ -1451,7 +1451,7 @@ export default function ExpensesScreen() {
                     <View style={styles.summaryAmountContainer}>
                       <ThemedText style={[
                         styles.summaryAmount,
-                        { color: '#ef4444' } // Rosso per le spese totali
+                        { color: Brand.colors.semantic.danger } // Rosso per le spese totali
                       ]}>
                         {hideBalances ? '••••• €' : monthExpenses.toLocaleString(locale, { style: 'currency', currency })}
                         {typeof monthlyBudget === 'number' && monthlyBudget > 0 && (
@@ -1464,12 +1464,12 @@ export default function ExpensesScreen() {
                     <View style={styles.summaryStats}>
                       <View style={styles.summaryStatItem}>
                         <View style={[styles.summaryStatBadge, { 
-                borderColor: delta >= 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)',
+                borderColor: delta >= 0 ? UI_CONSTANTS.DANGER_BORDER : UI_CONSTANTS.SUCCESS_BORDER,
               }]}>
-                          <ThemedText style={[styles.summaryStatIcon, { color: delta >= 0 ? '#ef4444' : '#10b981' }]}>
+                          <ThemedText style={[styles.summaryStatIcon, { color: delta >= 0 ? Brand.colors.semantic.danger : Brand.colors.semantic.success }]}>
                             {delta >= 0 ? '↗' : '↘'}
                           </ThemedText>
-                          <ThemedText style={[styles.summaryStatValue, { color: delta >= 0 ? '#ef4444' : '#10b981' }]}>
+                          <ThemedText style={[styles.summaryStatValue, { color: delta >= 0 ? Brand.colors.semantic.danger : Brand.colors.semantic.success }]}>
                             {delta >= 0 ? '+' : ''}{deltaPct.toFixed(1)}%
                 </ThemedText>
               </View>
@@ -1529,7 +1529,7 @@ export default function ExpensesScreen() {
             
             <Card variant="default" style={styles.incomeCard}>
               <LinearGradient
-                colors={['rgba(16, 185, 129, 0.1)', 'rgba(24, 146, 69, 0)', 'transparent']}
+                colors={[UI_CONSTANTS.GRADIENT_PROFIT_POS[0], UI_CONSTANTS.GRADIENT_PROFIT_POS[1], 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.incomeGradient}
@@ -1619,10 +1619,14 @@ export default function ExpensesScreen() {
                         }
                       ]}
                     >
-                      <LinearGradient
-                        colors={[`${category.color}15`, `${category.color}08`]}
-                        style={styles.categoryGradient}
-                      >
+                      <View style={[styles.categoryGradient]}>
+                        <LinearGradient
+                          colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.categoryGradientOverlay}
+                          pointerEvents="none"
+                        />
                       <View style={[styles.categoryIcon, { backgroundColor: `${category.color}20` }]}>
                         <ThemedText style={styles.categoryIconText}>{category.icon}</ThemedText>
                       </View>
@@ -1630,7 +1634,7 @@ export default function ExpensesScreen() {
                       <ThemedText style={[
                         styles.categoryAmount,
                         // Negative amounts are expenses (spese) → red; positive/zero → green
-                        category.amount < 0 ? { color: '#ef4444' } : { color: '#22c55e' }
+                        category.amount < 0 ? { color: Brand.colors.semantic.danger } : { color: Brand.colors.semantic.success }
                       ]}>
                         € {Math.abs(category.amount).toFixed(2)}
                 </ThemedText>
@@ -1650,7 +1654,7 @@ export default function ExpensesScreen() {
                           {category.percentage.toFixed(0)}%
                         </ThemedText>
                       </View>
-                      </LinearGradient>
+                      </View>
                     </Animated.View>
                   </Animated.View>
                 </Pressable>
@@ -1670,6 +1674,13 @@ export default function ExpensesScreen() {
           ]}
         >
           <Card variant="default" style={styles.chartCard}>
+            <LinearGradient
+              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.chartCardGradient}
+              pointerEvents="none"
+            />
             <View style={styles.chartHeader}>
               <View style={styles.chartIcon}>
                 <ThemedText style={styles.chartIconText}>📊</ThemedText>
@@ -1779,18 +1790,14 @@ export default function ExpensesScreen() {
                       const categoryColor = transaction.categoryColor
                       
                       return (
-                        <Card variant="subtle" style={[
-                          styles.transactionCard,
-                          {
-                            backgroundColor: `${categoryColor}08`,
-                            borderColor: `${categoryColor}20`,
-                            shadowColor: 'transparent',
-                            shadowOffset: { width: 0, height: 0 },
-                            shadowOpacity: 0,
-                            shadowRadius: 0,
-                            elevation: 0,
-                          }
-                        ]}>
+                        <Card variant="subtle" style={styles.transactionCard}>
+                          <LinearGradient
+                            colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.transactionCardGradient}
+                            pointerEvents="none"
+                          />
                           <View style={styles.transactionContent}>
                             <View style={styles.transactionLeft}>
                               <View style={[
@@ -1828,7 +1835,7 @@ export default function ExpensesScreen() {
                         <View style={styles.transactionRight}>
                           <ThemedText style={[
                             styles.transactionAmount, 
-                            isIncome ? { color: '#10b981' } : { color: '#ef4444' }
+                            isIncome ? { color: Brand.colors.semantic.success } : { color: Brand.colors.semantic.danger }
                           ]}>
                             {isIncome ? '+' : '-'}{Math.abs(transaction.amount).toLocaleString(locale, { style: 'currency', currency })}
                           </ThemedText>
@@ -1896,7 +1903,7 @@ export default function ExpensesScreen() {
           <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}>
             <Card  style={styles.modalCard}>
               <LinearGradient
-                colors={['rgba(6, 181, 212, 0)', 'rgba(4, 32, 29, 0.06)', 'transparent']}
+                colors={UI_CONSTANTS.GRADIENT_CYAN_BG_CARD}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.modalGradient}
@@ -1918,9 +1925,24 @@ export default function ExpensesScreen() {
                   {selectedTransaction?.merchant ?? '—'}
                 </ThemedText>
                 <View style={styles.transactionAmountRow}>
-                  <ThemedText style={[styles.transactionInfoAmount, (selectedTransaction?.amount ?? 0) >= 0 ? { color: '#10b981' } : { color: '#ef4444' }]}>
-                    {(selectedTransaction?.amount ?? 0) >= 0 ? '+' : ''}{Math.abs(selectedTransaction?.amount ?? 0).toLocaleString(locale, { style: 'currency', currency })}
-                  </ThemedText>
+                  {(() => {
+                    const isIncome = selectedTransaction?.type === 'income'
+                    const amountValue = Math.abs(selectedTransaction?.amount ?? 0)
+                    const amountColor = isIncome ? Brand.colors.semantic.success : Brand.colors.semantic.danger
+                    const amountSign = isIncome ? '+' : '-'
+
+                    return (
+                      <ThemedText
+                        style={[
+                          styles.transactionInfoAmount,
+                          { color: amountColor }
+                        ]}
+                      >
+                        {amountSign}
+                        {amountValue.toLocaleString(locale, { style: 'currency', currency })}
+                      </ThemedText>
+                    )
+                  })()}
                   {(selectedTransaction as any)?.is_recurring && (
                     <Pressable 
                       onPress={() => handleStopRecurring(selectedTransaction!)} 
@@ -1999,14 +2021,15 @@ export default function ExpensesScreen() {
           <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}> 
             <Card style={styles.modalCard}>
               <LinearGradient
-                colors={['rgba(6, 181, 212, 0)', 'rgba(4, 32, 29, 0.06)', 'transparent']}
+                colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.modalGradient}
+                pointerEvents="none"
               />
               <View style={styles.modalHeader}>
                 <ThemedText style={styles.modalTitle}>
-                  {language === 'it' ? 'Storico categoria' : 'Category history'}{selectedHistoryCategory ? `: ${selectedHistoryCategory}` : ''}
+                  {selectedHistoryCategory ? `${selectedHistoryCategory}` : ''}
                 </ThemedText>
                 <Pressable onPress={() => setShowCategoryHistoryModal(false)} style={styles.closeButton}>
                   <ThemedText style={styles.closeButtonText}>✕</ThemedText>
@@ -2020,7 +2043,7 @@ export default function ExpensesScreen() {
               >
                 {categoryHistoryLoading ? (
                   <View style={{ padding: 16, alignItems: 'center' }}>
-                    <ActivityIndicator color="#06b6d4" />
+                    <ActivityIndicator color={Brand.colors.primary.cyan} />
                   </View>
                 ) : categoryHistory.length === 0 ? (
                   <View style={{ padding: 16 }}>
@@ -2061,7 +2084,7 @@ export default function ExpensesScreen() {
                               {new Date(tx.date).toLocaleDateString(locale)}
                             </ThemedText>
                           </View>
-                          <ThemedText style={[styles.listItemAmount, { color: tx.amount >= 0 ? '#10b981' : '#ef4444' }]}> 
+                          <ThemedText style={[styles.listItemAmount, { color: tx.amount >= 0 ? Brand.colors.semantic.success : Brand.colors.semantic.danger }]}> 
                             {tx.amount >= 0 ? '+' : ''}{Math.abs(tx.amount).toLocaleString(locale, { style: 'currency', currency })}
                           </ThemedText>
                         </View>
@@ -2086,10 +2109,11 @@ export default function ExpensesScreen() {
           <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}> 
             <Card style={styles.modalCard}>
               <LinearGradient
-                colors={['rgba(6, 181, 212, 0)', 'rgba(4, 32, 29, 0.06)', 'transparent']}
+                colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.modalGradient}
+                pointerEvents="none"
               />
               <View style={styles.modalHeader}>
                 <ThemedText style={styles.modalTitle}>
@@ -2144,8 +2168,8 @@ export default function ExpensesScreen() {
                   } catch (e) {
                     Alert.alert('Errore', 'Impossibile eliminare la transazione. Riprova.')
                   }
-                }} style={[styles.modalButton, { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}> 
-                  <ThemedText style={[styles.modalButtonText, { color: '#ef4444' }]}>{t('delete')}</ThemedText>
+                }} style={[styles.modalButton, { backgroundColor: UI_CONSTANTS.DANGER_BG, borderColor: UI_CONSTANTS.DANGER_BORDER }]}> 
+                  <ThemedText style={[styles.modalButtonText, { color: Brand.colors.semantic.danger }]}>{t('delete')}</ThemedText>
                 </Pressable>
               </View>
             </Card>
@@ -2164,7 +2188,7 @@ export default function ExpensesScreen() {
           <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}> 
             <Card style={styles.modalCard}>
               <LinearGradient
-                colors={['rgba(239, 68, 68, 0)', 'rgba(4, 32, 29, 0.06)', 'transparent']}
+                colors={[Brand.colors.semantic.danger, UI_CONSTANTS.DANGER_BG, 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.modalGradient}
@@ -2179,7 +2203,7 @@ export default function ExpensesScreen() {
                 <ThemedText style={styles.modalMessage}>
                   Sei sicuro di voler eliminare TUTTE le spese? Questa azione non può essere annullata.
                 </ThemedText>
-                <ThemedText style={[styles.modalMessage, { marginTop: 8, fontSize: 12, color: '#ef4444' }]}>
+                <ThemedText style={[styles.modalMessage, { marginTop: 8, fontSize: 12, color: Brand.colors.semantic.danger }]}>
                   Verranno eliminate {items.length} transazioni
                 </ThemedText>
               </View>
@@ -2187,8 +2211,8 @@ export default function ExpensesScreen() {
                 <Pressable onPress={() => setShowResetModal(false)} style={[styles.modalButton, { backgroundColor: UI_CONSTANTS.GLASS_BG_SM, borderColor: UI_CONSTANTS.GLASS_BORDER_SM }] }>
                   <ThemedText style={styles.modalButtonText}>Annulla</ThemedText>
                 </Pressable>
-                <Pressable onPress={handleResetAllExpenses} style={[styles.modalButton, { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}> 
-                  <ThemedText style={[styles.modalButtonText, { color: '#ef4444' }]}>Elimina Tutto</ThemedText>
+                <Pressable onPress={handleResetAllExpenses} style={[styles.modalButton, { backgroundColor: UI_CONSTANTS.DANGER_BG, borderColor: UI_CONSTANTS.DANGER_BORDER }]}> 
+                  <ThemedText style={[styles.modalButtonText, { color: Brand.colors.semantic.danger }]}>Elimina Tutto</ThemedText>
                 </Pressable>
               </View>
             </Card>
@@ -2349,9 +2373,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderRadius: 28,
-    backgroundColor: 'rgba(6, 167, 207, 0.05)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.1)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD,
   },
   cardGradient: {
     position: 'absolute',
@@ -2370,9 +2394,9 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 20,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: UI_CONSTANTS.DANGER_BG,
     borderWidth: 1.5,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: UI_CONSTANTS.DANGER_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2382,8 +2406,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: '#ef4444',
-    shadowColor: '#ef4444',
+    backgroundColor: Brand.colors.semantic.danger,
+    shadowColor: Brand.colors.semantic.danger,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
     shadowRadius: 14,
@@ -2410,7 +2434,7 @@ const styles = StyleSheet.create({
     letterSpacing: -2,
     marginBottom: 20,
     padding: 2,
-    color: '#ef4444',
+    color: Brand.colors.semantic.danger,
   },
   balanceFooter: {
     flexDirection: 'row',
@@ -2519,9 +2543,9 @@ const styles = StyleSheet.create({
     width: 60,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: UI_CONSTANTS.SUCCESS_BG,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: UI_CONSTANTS.SUCCESS_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
@@ -2529,7 +2553,7 @@ const styles = StyleSheet.create({
   syncButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#10b981',
+    color: UI_CONSTANTS.SUCCESS_TEXT,
   },
   syncButtonTextDisabled: {
     opacity: 0.6,
@@ -2538,9 +2562,9 @@ const styles = StyleSheet.create({
     width: 60,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: UI_CONSTANTS.DANGER_BG,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: UI_CONSTANTS.DANGER_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
@@ -2548,7 +2572,7 @@ const styles = StyleSheet.create({
   resetButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#ef4444',
+    color: Brand.colors.semantic.danger,
   },
   resetButtonTextDisabled: {
     opacity: 0.6,
@@ -2574,12 +2598,24 @@ const styles = StyleSheet.create({
   categoryPressable: {
     borderRadius: 20,
     overflow: 'hidden',
+    position: 'relative',
   },
   categoryGradient: {
     padding: 16,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
+    borderColor: Brand.colors.glass.heavy,
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  categoryGradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.15,
   },
   categoryIcon: {
     width: 48,
@@ -2650,8 +2686,8 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    borderColor: UI_CONSTANTS.SUCCESS_BORDER,
+    backgroundColor: UI_CONSTANTS.SUCCESS_BG,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -2672,11 +2708,11 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: UI_CONSTANTS.SUCCESS_BG,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: UI_CONSTANTS.SUCCESS_BORDER,
   },
   incomeIconText: {
     fontSize: 24,
@@ -2693,7 +2729,7 @@ const styles = StyleSheet.create({
   incomeAmount: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#10b981',
+    color: UI_CONSTANTS.SUCCESS_TEXT,
     marginBottom: 2,
     letterSpacing: 0.5,
   },
@@ -2709,6 +2745,19 @@ const styles = StyleSheet.create({
   chartCard: {
     padding: 24,
     borderRadius: 24,
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.heavy,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  chartCardGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.15,
   },
   chartHeader: {
     flexDirection: 'row',
@@ -2720,9 +2769,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    backgroundColor: UI_CONSTANTS.MAGENTA_BG,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderColor: UI_CONSTANTS.MAGENTA_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2754,14 +2803,24 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
-   // backgroundColor: UI_CONSTANTS.GLASS_BG,
+    borderColor: Brand.colors.glass.heavy,
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     marginBottom: 1,
     shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,
     shadowRadius: 0,
     elevation: 0,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  transactionCardGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.15,
   },
   transactionContent: {
     flexDirection: 'row',
@@ -2776,7 +2835,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: 'rgba(6, 182, 212, 0.25)',
+    backgroundColor: Brand.colors.glow.cyan,
     borderWidth: 1,
     borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
     alignItems: 'center',
@@ -2817,7 +2876,7 @@ const styles = StyleSheet.create({
   },
   transactionDate: {
     fontSize: 14,
-    color: '#06b6d4',
+    color: Brand.colors.primary.cyan,
     fontWeight: '600',
   },
   transactionRight: {
@@ -2828,7 +2887,7 @@ const styles = StyleSheet.create({
   transactionAmount: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#06b6d4',
+    color: Brand.colors.primary.cyan,
   },
   emptyCard: {
     padding: 32,
@@ -2888,7 +2947,7 @@ const styles = StyleSheet.create({
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgb(5, 5, 5)',
+    backgroundColor: Brand.colors.background.deep,
     opacity: 0.95,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2904,6 +2963,9 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     position: 'relative',
     overflow: 'hidden',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.heavy,
   },
   modalMessage: {
     fontSize: 14,
@@ -2930,6 +2992,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 0,
+    opacity: 0.15,
   },
   modalScrollView: {
     maxHeight: 400,
@@ -2986,11 +3049,11 @@ const styles = StyleSheet.create({
   transactionInfoAmount: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#06b6d4',
+    color: Brand.colors.primary.cyan,
   },
   stopRecurringButton: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
-    borderColor: 'rgba(255, 59, 48, 0.3)',
+    backgroundColor: UI_CONSTANTS.DANGER_BG,
+    borderColor: UI_CONSTANTS.DANGER_BORDER,
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
@@ -2999,7 +3062,7 @@ const styles = StyleSheet.create({
   stopRecurringButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#ff3b30',
+    color: Brand.colors.semantic.danger,
   },
   transactionInfoNote: {
     fontSize: 12,
@@ -3066,7 +3129,7 @@ const styles = StyleSheet.create({
     color: Brand.colors.text.secondary,
   },
   summaryNavIconDisabled: {
-    color: 'rgba(255, 255, 255, 0.2)',
+    color: Brand.colors.text.muted,
   },
   summaryMonthIndicator: {
     flexDirection: 'row',
@@ -3085,7 +3148,7 @@ const styles = StyleSheet.create({
   summaryMonthOffset: {
     fontSize: 11,
     fontWeight: '500',
-    color: 'rgba(6, 182, 212, 0.8)',
+    color: Brand.colors.primary.cyan,
   },
   datePickerIcon: {
     position: 'absolute',
@@ -3114,7 +3177,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(15, 15, 20, 0.6)',
+    backgroundColor: Brand.colors.background.card,
     borderRadius: 20,
   },
   summaryHeader: {
@@ -3151,7 +3214,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: 'rgba(6, 182, 212, 0.4)',
+    backgroundColor: Brand.colors.glow.cyan,
     borderRadius: 1,
   },
   summaryHeaderText: {
@@ -3218,7 +3281,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: Brand.colors.glass.medium,
     marginBottom: 6,
   },
   summaryStatIcon: {
@@ -3242,7 +3305,7 @@ const styles = StyleSheet.create({
   summaryActivityBar: {
     width: '100%',
     height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: Brand.colors.glass.medium,
     borderRadius: 2,
     marginBottom: 6,
     overflow: 'hidden',
@@ -3258,7 +3321,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   summaryActivityTextTransitioning: {
-    color: 'rgba(6, 182, 212, 0.8)',
+    color: Brand.colors.primary.cyan,
     fontWeight: '600',
   },
   // Simple list item styles reused in category history modal
@@ -3266,7 +3329,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
     borderWidth: 1,
     borderColor: UI_CONSTANTS.GLASS_BORDER_SM
   },
@@ -3321,9 +3384,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: UI_CONSTANTS.DANGER_BG,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: UI_CONSTANTS.DANGER_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 6,
@@ -3335,9 +3398,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginHorizontal: 16,
     borderRadius: 16,
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
     paddingVertical: 12,
     paddingHorizontal: 20,
     alignItems: 'center',

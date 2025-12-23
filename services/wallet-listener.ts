@@ -7,15 +7,12 @@ import { DeviceEventEmitter, Platform } from 'react-native'
 import { isMonitoredBank } from './bank-preferences'
 import { sendInteractiveCategoryReminder } from './category-reminder'
 import { logger } from './logger'
-import { extractAmountAndCurrency, extractMerchant, isPromotionalNotification } from './notification-parser'
 import { checkNotificationPermission, requestNotificationPermission } from './notification-service'
+import { extractAmountAndCurrency, extractMerchant, isPromotionalNotification } from './notifications/parser'
 
 const CACHE_FILE = (FileSystem as any).documentDirectory 
   ? `${(FileSystem as any).documentDirectory}offline-expenses.json` 
   : ''
-
-// Cache in-memory per deduplication
-const processedExpenses = new Set<string>()
 
 async function readCache(): Promise<Expense[]> {
   try {
@@ -68,12 +65,7 @@ export function useWalletListener() {
         // console.log('[WalletListener] ⚠️  User logged out during notification processing, skipping')
         return
       }
-      
-      const timestamp = new Date().toISOString()
-      
-      // console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      // console.log(`[WalletListener] ${timestamp}`)
-      // console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+     
       
       try {
         // console.log('[WalletListener] 📱 Incoming notification payload from ANY APP:')
@@ -178,16 +170,7 @@ export function useWalletListener() {
     // Listen for headless logs
     const headlessLogSubscription = DeviceEventEmitter.addListener('headless_log', (logData) => {
       if (logger && logger.info) {
-        const { level, message, source, timestamp, data } = logData
-        const logEntry = {
-          id: `${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
-          timestamp,
-          level,
-          message,
-          data,
-          source
-        }
-        
+        const { level, message, source, data } = logData
         // Add directly to logger
         if (level === 'INFO') logger.info(message, data, source)
         else if (level === 'WARN') logger.warn(message, data, source)

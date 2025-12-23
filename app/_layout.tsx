@@ -17,7 +17,7 @@ import { setupCategoryReminderChannel } from '@/services/category-reminder';
 import { setupDeepLinkNotificationHandler } from '@/services/deep-link-notifications';
 import { syncPendingExpenses, syncPendingIncomes } from '@/services/expense-sync';
 import { setupInteractiveNotificationChannel, setupNotificationResponseHandler } from '@/services/interactive-notifications';
-import { cleanOldNotifications } from '@/services/notification-storage';
+import { cleanOldNotifications } from '@/services/notifications/storage';
 import { useWalletListener } from '@/services/wallet-listener';
 import { startWeeklyReminderScheduler } from '@/services/weekly-reminder-scheduler';
 

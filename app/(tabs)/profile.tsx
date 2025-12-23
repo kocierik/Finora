@@ -5,15 +5,34 @@ import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
 import { loadExpenseThresholds, saveExpenseThresholds, type ExpenseThresholds } from '@/services/expense-thresholds'
-import { loadNotifications, sortNotificationsByDate, type StoredNotification } from '@/services/notification-storage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native'
 
+const withAlpha = (hex: string, alpha: number) => {
+  const normalized = hex.replace('#', '')
+  const fullHex = normalized.length === 3 ? normalized.split('').map(c => c + c).join('') : normalized
+  const value = parseInt(fullHex, 16)
+  const r = (value >> 16) & 255
+  const g = (value >> 8) & 255
+  const b = value & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+const BRAND_COLOR_PALETTE = [
+  Brand.colors.primary.orange,
+  Brand.colors.semantic.success,
+  Brand.colors.semantic.info,
+  Brand.colors.semantic.danger,
+  Brand.colors.primary.magenta,
+  UI_CONSTANTS.CHART_DEFAULT_COLORS[2],
+] as const
+
 export default function ProfileScreen() {
   const { user, signOut, loading: authLoading } = useAuth()
-  const { language, locale, currency, enableBiometrics, sessionTimeoutMinutes, setLanguage, setLocale, setCurrency, setEnableBiometrics, setSessionTimeoutMinutes, monthlyBudget, setMonthlyBudget, t, categories, setCategories } = useSettings()
+  const { language, setLanguage, setLocale, t, categories, setCategories } = useSettings()
   const [displayName, setDisplayName] = useState('')
   const [currentDisplayName, setCurrentDisplayName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,18 +42,13 @@ export default function ProfileScreen() {
   const [successMessage, setSuccessMessage] = useState('')
   const router = useRouter()
   const [editableCategories, setEditableCategories] = useState(categories)
-  const [dbCategories, setDbCategories] = useState<Array<{ id: string; name: string; icon: string; color: string; sort_order: number }>>([])
-  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({})
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [editIndex, setEditIndex] = useState<number | null>(null)
   const [editEmoji, setEditEmoji] = useState('')
   const [editName, setEditName] = useState('')
   const [editColor, setEditColor] = useState('')
   const [categoriesLoading, setCategoriesLoading] = useState(false)
-  const [debugNotifications, setDebugNotifications] = useState<StoredNotification[]>([])
-  const [showOnlyWalletDebug, setShowOnlyWalletDebug] = useState(false)
-  const colorPalette = ['#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#EC4899', '#8B5CF6']
-  const emojiSuggestions = ['📦','🚗','🛒','🛍️','🌃','✈️','🏥','📚','⚡','🎬']
+  const colorPalette = BRAND_COLOR_PALETTE
   const firstGrapheme = (text: string) => (Array.from(text || '')[0] || '')
   const normalizeEmoji = (text: string) => {
     const base = firstGrapheme(text)
@@ -71,12 +85,12 @@ export default function ProfileScreen() {
 
   // Default categories for new users
   const DEFAULT_CATEGORIES = [
-    { name: 'Food & Drinks', icon: '🍽️', color: '#F59E0B', sort_order: 0 },
-    { name: 'Transport', icon: '🚗', color: '#10B981', sort_order: 1 },
-    { name: 'Home & Utilities', icon: '🏠', color: '#3B82F6', sort_order: 2 },
-    { name: 'Entertainment', icon: '🎬', color: '#EF4444', sort_order: 3 },
-    { name: 'Health & Personal', icon: '🏥', color: '#EC4899', sort_order: 4 },
-    { name: 'Miscellaneous', icon: '📦', color: '#8B5CF6', sort_order: 5 }
+    { name: 'Food & Drinks', icon: '🍽️', color: colorPalette[0], sort_order: 0 },
+    { name: 'Transport', icon: '🚗', color: colorPalette[1], sort_order: 1 },
+    { name: 'Home & Utilities', icon: '🏠', color: colorPalette[2], sort_order: 2 },
+    { name: 'Entertainment', icon: '🎬', color: colorPalette[3], sort_order: 3 },
+    { name: 'Health & Personal', icon: '🏥', color: colorPalette[4], sort_order: 4 },
+    { name: 'Miscellaneous', icon: '📦', color: colorPalette[5], sort_order: 5 }
   ]
 
   // Load categories from database
@@ -111,8 +125,6 @@ export default function ProfileScreen() {
           return
         }
         
-        setDbCategories(newCategories || [])
-        
         // Convert to editable format
         const editable = (newCategories || []).map(cat => ({
           key: cat.name.toLowerCase().replace(/\s+/g, '_'),
@@ -123,8 +135,6 @@ export default function ProfileScreen() {
         
         setEditableCategories(editable)
       } else {
-        setDbCategories(data)
-        
         // Convert to editable format
         const editable = data.map(cat => ({
           key: cat.name.toLowerCase().replace(/\s+/g, '_'),
@@ -136,56 +146,10 @@ export default function ProfileScreen() {
         setEditableCategories(editable)
       }
       
-      // Reload category counts when categories are updated
-      await loadCategoryCounts()
     } catch (error) {
       console.error('Error loading categories:', error)
     } finally {
       setCategoriesLoading(false)
-    }
-  }
-
-  // Load category counts
-  const loadCategoryCounts = async () => {
-    if (!user) {
-      return
-    }
-    
-    
-    try {
-      // Query expenses with category_id and join with categories table
-      const { data: expensesData, error: expensesError } = await supabase
-        .from('expenses')
-        .select(`
-          id,
-          merchant,
-          category_id,
-          categories (
-            name
-          )
-        `)
-        .eq('user_id', user.id)
-      
-      
-      if (expensesError) {
-        return
-      }
-      
-      if (!expensesData || expensesData.length === 0) {
-        setCategoryCounts({})
-        return
-      }
-      
-      const counts: Record<string, number> = {}
-      
-      expensesData.forEach((expense: any) => {
-        // Use categories.name from the join, fallback to 'Other' if no category
-        const categoryName = expense.categories?.name || 'Other'
-        counts[categoryName] = (counts[categoryName] || 0) + 1
-      })
-      
-      setCategoryCounts(counts)
-    } catch (e) {
     }
   }
 
@@ -274,22 +238,7 @@ export default function ProfileScreen() {
     DeviceEventEmitter.addListener('settings:categoriesUpdated', handleCategoriesUpdate)
     DeviceEventEmitter.addListener('expenses:externalUpdate', handleCategoriesUpdate)
 
-      // Debug: subscribe to incoming notifications to keep local debug list in sync
-      const handleWalletNotification = async () => {
-        try {
-          const stored = await loadNotifications()
-          const sorted = sortNotificationsByDate(stored)
-          // Limit for UI so we don't overload the profile screen
-          setDebugNotifications(sorted.slice(0, 20))
-        } catch {
-          // ignore debug errors
-        }
-      }
-
-      // Initial load
-      handleWalletNotification()
-
-      const notifSub = DeviceEventEmitter.addListener('wallet_notification', handleWalletNotification)
+    const notifSub = DeviceEventEmitter.addListener('wallet_notification', () => {})
 
     return () => {
       DeviceEventEmitter.removeAllListeners('settings:categoriesUpdated')
@@ -337,7 +286,7 @@ export default function ProfileScreen() {
       const sanitized = (source || []).slice(0, 6).map((c, index) => ({
         name: (c.name?.trim() || 'Other').slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH),
         icon: normalizeEmoji(c.icon?.trim() || ''),
-        color: c.color?.trim() || '#10b981',
+        color: c.color?.trim() || Brand.colors.semantic.success,
         sort_order: index
       }))
       
@@ -408,9 +357,6 @@ export default function ProfileScreen() {
         }
       }
       
-      // Update local state
-      setDbCategories(updatedCategories)
-      
       // Also update the old categories config for backward compatibility
       const legacyFormat = sanitized.map(c => ({
         key: c.name.toLowerCase().replace(/\s+/g, '_'),
@@ -429,9 +375,6 @@ export default function ProfileScreen() {
           categories_config: legacyFormat, 
           updated_at: new Date().toISOString() 
         })
-      
-      // Reload category counts after saving
-      await loadCategoryCounts()
       
       // Notify other screens to refresh
       DeviceEventEmitter.emit('settings:categoriesUpdated')
@@ -453,7 +396,7 @@ export default function ProfileScreen() {
     setEditIndex(index)
     setEditEmoji(cat.icon || '📦')
     setEditName(cat.name || '')
-    setEditColor(cat.color || '#10b981')
+    setEditColor(cat.color || Brand.colors.semantic.success)
     setEditModalVisible(true)
   }
 
@@ -464,7 +407,7 @@ export default function ProfileScreen() {
       ...next[editIndex],
       icon: normalizeEmoji(editEmoji || ''),
       name: (editName || 'Other').trim().slice(0, UI_CONSTANTS.CATEGORY_MAX_LENGTH),
-      color: (editColor || '#10b981').trim(),
+      color: (editColor || Brand.colors.semantic.success).trim(),
     }
     setEditableCategories(next)
     // Persist immediately when pressing Save in modal
@@ -475,7 +418,7 @@ export default function ProfileScreen() {
   if (authLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#06b6d4" />
+        <ActivityIndicator size="small" color={Brand.colors.primary.cyan} />
       </View>
     )
   }
@@ -484,7 +427,7 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#06b6d4" />
+        <ActivityIndicator size="small" color={Brand.colors.primary.cyan} />
       </View>
     )
   }
@@ -535,7 +478,14 @@ export default function ProfileScreen() {
             }
           ]}
         >
-          <Card variant="default" style={styles.premiumCard}>
+          <Card variant="default" style={[styles.premiumCard, styles.glassCard]}>
+            <LinearGradient
+              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.glassCardGradient}
+              pointerEvents="none"
+            />
         <View style={styles.cardHeader}>
             <ThemedText type="heading" style={styles.cardTitle}>{t('account_settings')}</ThemedText>
           </View>
@@ -588,7 +538,14 @@ export default function ProfileScreen() {
             }
           ]}
         >
-          <Card variant="default" style={styles.premiumCard}>
+          <Card variant="default" style={[styles.premiumCard, styles.glassCard]}>
+            <LinearGradient
+              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.glassCardGradient}
+              pointerEvents="none"
+            />
         <View style={styles.cardHeader}>
             <ThemedText style={styles.cardTitle}>{t('financial_settings')}</ThemedText>
           </View>
@@ -661,16 +618,22 @@ export default function ProfileScreen() {
             }
           ]}
         >
-          <Card variant="default" style={styles.premiumCard}>
+          <Card variant="default" style={[styles.premiumCard, styles.glassCard]}>
+            <LinearGradient
+              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.glassCardGradient}
+              pointerEvents="none"
+            />
              <View style={styles.cardHeader}>
                <ThemedText style={styles.cardTitle}>{language === 'it' ? 'Categorie di spesa' : 'Spending Categories'}</ThemedText>
                {categoriesLoading && (
-                 <ActivityIndicator size="small" color="#06b6d4" style={{ marginLeft: 8 }} />
+                <ActivityIndicator size="small" color={Brand.colors.primary.cyan} style={{ marginLeft: 8 }} />
                )}
              </View>
              <View style={styles.categoryList}>
               {editableCategories.slice(0, 6).map((cat, idx) => {
-                const count = categoryCounts[cat.name] || 0
                 return (
                   <View 
                     key={idx} 
@@ -708,7 +671,7 @@ export default function ProfileScreen() {
                       </View>
                     </View>
                     <View style={styles.categoryRight}>
-                      <View style={[styles.colorDotLarge, { backgroundColor: cat.color || '#10b981' }]} />
+                      <View style={[styles.colorDotLarge, { backgroundColor: cat.color || Brand.colors.semantic.success }]} />
                       <TouchableOpacity
                         style={[
                           styles.gearButton,
@@ -736,10 +699,17 @@ export default function ProfileScreen() {
           animationType="fade"
           onRequestClose={() => setEditModalVisible(false)}
         >
-          <View style={[styles.modalOverlay, { backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_DARK }]}> 
-            <Card style={[styles.modalCard, styles.modalGlass, { backgroundColor: `${(editColor || '#10b981')}22`, borderColor: `${(editColor || '#10b981')}55`, shadowColor: 'transparent', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0, shadowRadius: 0, elevation: 0 }]}> 
+        <View style={[styles.modalOverlay, { backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_DARK }]}> 
+          <Card style={[styles.modalCard, styles.glassCard, { backgroundColor: Brand.colors.background.card, borderColor: Brand.colors.glass.heavy }]}> 
+            <LinearGradient
+              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.glassCardGradient}
+              pointerEvents="none"
+            />
               <View style={styles.modalHeaderRow}>
-                <View style={[styles.previewBadge, { borderColor: editColor || '#10b981' }]}>
+                <View style={[styles.previewBadge, { borderColor: editColor || Brand.colors.semantic.success }]}>
                   <ThemedText style={styles.previewEmoji}>{editEmoji || ''}</ThemedText>
                 </View>
                 <View style={styles.previewInfo}>
@@ -747,7 +717,7 @@ export default function ProfileScreen() {
                     {language === 'it' ? 'Modifica categoria' : 'Edit category'}
                   </ThemedText>
                   <View style={styles.previewColorRow}>
-                    <View style={[styles.previewColorDot, { backgroundColor: editColor || '#10b981' }]} />
+                    <View style={[styles.previewColorDot, { backgroundColor: editColor || Brand.colors.semantic.success }]} />
                     <ThemedText style={styles.previewColorLabel}>{editName || (language === 'it' ? 'Senza nome' : 'Untitled')}</ThemedText>
                   </View>
                 </View>
@@ -811,7 +781,14 @@ export default function ProfileScreen() {
             }
           ]}
         >
-          <Card variant="default" style={styles.premiumCard}>
+          <Card variant="default" style={[styles.premiumCard, styles.glassCard]}>
+            <LinearGradient
+              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.glassCardGradient}
+              pointerEvents="none"
+            />
           <View style={styles.cardHeader}>
             <ThemedText style={styles.cardTitle}>{t('app_actions')}</ThemedText>
           </View>
@@ -888,82 +865,6 @@ export default function ProfileScreen() {
         </Card>
         </Animated.View>
 
-        {/* Debug Notifiche - mostra sempre tutte le notifiche in arrivo per debug */}
-        <Animated.View
-          style={[
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim3 }]
-            }
-          ]}
-        >
-          <Card variant="default" style={styles.premiumCard}>
-            <View style={[styles.cardHeader, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-              <View style={{ flex: 1 }}>
-                <ThemedText style={styles.cardTitle}>
-                  {language === 'it' ? 'Debug Notifiche (ultime 20)' : 'Notification Debug (last 20)'}
-                </ThemedText>
-                {debugNotifications.length > 0 && (
-                  <ThemedText style={styles.debugMetaText}>
-                    {debugNotifications.length} {language === 'it' ? 'notifiche in memoria' : 'notifications in memory'}
-                  </ThemedText>
-                )}
-              </View>
-              <Pressable
-                style={[
-                  styles.filterChip,
-                  showOnlyWalletDebug && styles.filterChipActive,
-                ]}
-                onPress={() => setShowOnlyWalletDebug(prev => !prev)}
-              >
-                <ThemedText
-                  style={[
-                    styles.filterChipText,
-                    showOnlyWalletDebug && styles.filterChipTextActive,
-                  ]}
-                >
-                  {showOnlyWalletDebug
-                    ? (language === 'it' ? 'Solo banche' : 'Banks only')
-                    : (language === 'it' ? 'Tutte' : 'All')}
-                </ThemedText>
-              </Pressable>
-            </View>
-            {debugNotifications.length === 0 ? (
-              <ThemedText style={styles.debugEmptyText}>
-                {language === 'it'
-                  ? 'Nessuna notifica letta ancora. Prova a fare un pagamento o inviare una notifica di test.'
-                  : 'No notifications read yet. Try making a payment or sending a test notification.'}
-              </ThemedText>
-            ) : (
-              <View style={styles.debugList}>
-                {(showOnlyWalletDebug
-                  ? debugNotifications.filter((n) => n.isWalletNotification)
-                  : debugNotifications
-                ).map((n) => (
-                  <View key={n.id} style={styles.debugRow}>
-                    <View style={styles.debugBullet} />
-                    <View style={styles.debugContent}>
-                      <ThemedText style={styles.debugTitle} numberOfLines={1}>
-                        {n.title || (language === 'it' ? 'Senza titolo' : 'No title')}
-                      </ThemedText>
-                      <ThemedText style={styles.debugText} numberOfLines={2}>
-                        {n.text || (language === 'it' ? 'Senza testo' : 'No text')}
-                      </ThemedText>
-                      <ThemedText style={styles.debugMeta} numberOfLines={1}>
-                        📱 {n.app} ·{' '}
-                        {new Date(n.receivedAt).toLocaleTimeString(locale, {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                        })}
-                      </ThemedText>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </Card>
-        </Animated.View>
 
         {/* Tutorial */}
         <Animated.View
@@ -974,7 +875,14 @@ export default function ProfileScreen() {
             }
           ]}
         >
-          <Card variant="default" style={styles.premiumCard}>
+          <Card variant="default" style={[styles.premiumCard, styles.glassCard]}>
+            <LinearGradient
+              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.glassCardGradient}
+              pointerEvents="none"
+            />
             <View style={styles.cardHeader}>
               <ThemedText style={styles.cardTitle}>{t('tutorial')}</ThemedText>
             </View>
@@ -1005,7 +913,14 @@ export default function ProfileScreen() {
             }
           ]}
         >
-          <Card variant="default" style={styles.premiumCard}>
+          <Card variant="default" style={[styles.premiumCard, styles.glassCard]}>
+            <LinearGradient
+              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.glassCardGradient}
+              pointerEvents="none"
+            />
           <View style={styles.cardHeader}>
             <ThemedText style={styles.cardTitle}>{t('language_formats')}</ThemedText>
           </View>
@@ -1115,13 +1030,13 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
   },
   premiumHeader: {
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 24,
-    backgroundColor: 'rgba(6, 182, 212, 0.02)',
+    backgroundColor: withAlpha(Brand.colors.primary.cyan, 0.02),
   },
   headerContent: {
     flexDirection: 'row',
@@ -1136,9 +1051,9 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: withAlpha(Brand.colors.primary.cyan, 0.15),
     borderWidth: 2,
-    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderColor: withAlpha(Brand.colors.primary.cyan, 0.3),
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -1146,7 +1061,7 @@ const styles = StyleSheet.create({
   userInitial: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#06b6d4',
+    color: Brand.colors.primary.cyan,
   },
   userDetails: {
     flex: 1,
@@ -1210,9 +1125,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: withAlpha(Brand.colors.primary.cyan, 0.15),
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderColor: withAlpha(Brand.colors.primary.cyan, 0.3),
   },
   versionText: {
     fontSize: 11,
@@ -1221,6 +1136,28 @@ const styles = StyleSheet.create({
   },
   premiumCard: {
     marginBottom: 20,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.heavy,
+    borderRadius: 20,
+  },
+  glassCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.heavy,
+    borderRadius: 20,
+  },
+  glassCardGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.15,
   },
   cardHeader: {
     marginBottom: 20,
@@ -1332,10 +1269,10 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)'
+    borderColor: withAlpha(Brand.colors.text.primary, 0.25)
   },
   colorDotSelected: {
-    borderColor: '#ffffff',
+    borderColor: Brand.colors.text.primary,
     borderWidth: 2,
   },
   categoryList: {
@@ -1414,7 +1351,7 @@ const styles = StyleSheet.create({
     borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER
   },
   fabText: {
-    color: '#06b6d4',
+    color: Brand.colors.primary.cyan,
     fontSize: 28,
     fontWeight: '700'
   },
@@ -1445,9 +1382,9 @@ const styles = StyleSheet.create({
   logoutButton: {
     padding: 16,
     borderRadius: 14,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: withAlpha(Brand.colors.semantic.danger, 0.15),
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: withAlpha(Brand.colors.semantic.danger, 0.3),
     alignItems: 'center',
     marginTop: 8,
   },
@@ -1473,31 +1410,31 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
   },
   loadingText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#E8EEF8',
+    color: Brand.colors.text.primary,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
     paddingHorizontal: 32,
   },
   errorText: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#ef4444',
+    color: Brand.colors.semantic.danger,
     textAlign: 'center',
     marginBottom: 12,
   },
   errorSubtext: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#9ca3af',
+    color: Brand.colors.text.muted,
     textAlign: 'center',
   },
   // New premium styles
@@ -1513,7 +1450,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    backgroundColor: withAlpha(Brand.colors.primary.cyan, 0.1),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1530,9 +1467,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   settingInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: Brand.colors.glass.light,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: Brand.colors.glass.medium,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -1566,8 +1503,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   primaryButton: {
-    backgroundColor: 'rgba(6,182,212,0.12)',
-    borderColor: 'rgba(6,182,212,0.35)',
+    backgroundColor: withAlpha(Brand.colors.primary.cyan, 0.12),
+    borderColor: withAlpha(Brand.colors.primary.cyan, 0.35),
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 12,
@@ -1581,7 +1518,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#E8EEF8',
+    color: Brand.colors.text.primary,
   },
   actionList: {
     gap: 4,
@@ -1592,15 +1529,15 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(6,182,212,0.06)',
+    backgroundColor: withAlpha(Brand.colors.primary.cyan, 0.06),
     borderWidth: 1,
-    borderColor: 'rgba(6,182,212,0.15)',
+    borderColor: withAlpha(Brand.colors.primary.cyan, 0.15),
   },
   actionIcon: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    backgroundColor: withAlpha(Brand.colors.primary.cyan, 0.1),
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -1628,7 +1565,7 @@ const styles = StyleSheet.create({
   },
   actionArrow: {
     fontSize: 18,
-    color: '#06b6d4',
+    color: Brand.colors.primary.cyan,
     marginLeft: 8,
   },
   langChipsContainer: {
@@ -1643,13 +1580,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(6,182,212,0.25)',
-    backgroundColor: 'rgba(6,182,212,0.06)',
+    borderColor: withAlpha(Brand.colors.primary.cyan, 0.25),
+    backgroundColor: withAlpha(Brand.colors.primary.cyan, 0.06),
     gap: 8,
   },
   langChipActive: {
-    backgroundColor: 'rgba(6,182,212,0.18)',
-    borderColor: 'rgba(6,182,212,0.45)',
+    backgroundColor: withAlpha(Brand.colors.primary.cyan, 0.18),
+    borderColor: withAlpha(Brand.colors.primary.cyan, 0.45),
     shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,
@@ -1662,17 +1599,17 @@ const styles = StyleSheet.create({
   langChipText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#E8EEF8',
+    color: Brand.colors.text.primary,
   },
   langChipTextActive: {
-    color: '#06b6d4',
+    color: Brand.colors.primary.cyan,
     fontWeight: '700',
   },
   logoutSection: {
     marginTop: 20,
     paddingTop: 20,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: Brand.colors.glass.medium,
   },
   logoutButtonDisabled: {
     opacity: 0.6,
@@ -1680,7 +1617,7 @@ const styles = StyleSheet.create({
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_MEDIUM,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -1695,9 +1632,9 @@ const styles = StyleSheet.create({
     maxWidth: 640,
   },
   modalGlass: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: withAlpha(Brand.colors.text.primary, 0.04),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: Brand.colors.glass.heavy,
     borderRadius: 16,
     overflow: 'hidden'
   },
@@ -1715,7 +1652,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: withAlpha(Brand.colors.text.primary, 0.06),
     borderWidth: 1,
     
   },
@@ -1739,32 +1676,32 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)'
+    borderColor: withAlpha(Brand.colors.text.primary, 0.3)
   },
   previewColorLabel: {
     color: Brand.colors.text.secondary,
     fontSize: 12,
   },
   modalButtonPrimary: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: Brand.colors.primary.cyan,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
   modalButtonPrimaryText: {
-    color: '#0a0a0f',
+    color: Brand.colors.background.deep,
     fontWeight: '700',
   },
   modalButtonSecondary: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: Brand.colors.glass.medium,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)'
+    borderColor: Brand.colors.glass.heavy
   },
   modalButtonSecondaryText: {
-    color: '#E8EEF8',
+    color: Brand.colors.text.primary,
     fontWeight: '600',
   },
   modalContent: {
@@ -1775,9 +1712,9 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    backgroundColor: withAlpha(Brand.colors.primary.cyan, 0.1),
     borderWidth: 2,
-    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderColor: withAlpha(Brand.colors.primary.cyan, 0.3),
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -1795,7 +1732,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   modalButton: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: Brand.colors.primary.cyan,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 32,
@@ -1803,7 +1740,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalButtonText: {
-    color: '#ffffff',
+    color: Brand.colors.text.primary,
     fontWeight: '600',
   },
       debugList: {
@@ -1815,14 +1752,14 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingVertical: 6,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.04)',
+        borderBottomColor: withAlpha(Brand.colors.text.primary, 0.04),
       },
       debugBullet: {
         width: 6,
         height: 6,
         borderRadius: 3,
         marginTop: 8,
-        backgroundColor: '#06b6d4',
+        backgroundColor: Brand.colors.primary.cyan,
       },
       debugContent: {
         flex: 1,
@@ -1855,19 +1792,19 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: 'rgba(148, 163, 184, 0.5)',
-        backgroundColor: 'rgba(15, 23, 42, 0.7)',
+        borderColor: withAlpha(Brand.colors.text.tertiary, 0.5),
+        backgroundColor: withAlpha(Brand.colors.background.base, 0.7),
       },
       filterChipActive: {
-        borderColor: 'rgba(56, 189, 248, 0.9)',
-        backgroundColor: 'rgba(8, 47, 73, 0.9)',
+        borderColor: withAlpha(Brand.colors.semantic.info, 0.9),
+        backgroundColor: withAlpha(Brand.colors.semantic.info, 0.2),
       },
       filterChipText: {
         fontSize: 11,
         color: Brand.colors.text.secondary,
       },
       filterChipTextActive: {
-        color: '#0ea5e9',
+        color: Brand.colors.semantic.info,
         fontWeight: '600',
       },
 })

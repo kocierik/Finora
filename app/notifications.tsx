@@ -1,6 +1,6 @@
 import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
-import { UI as UI_CONSTANTS } from '@/constants/branding'
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { sendBulkCategoryReminder, sendCategoryReminder, sendInteractiveCategoryReminder, sendWeeklyBulkCategoryReminder } from '@/services/category-reminder'
@@ -16,12 +16,13 @@ import {
     loadNotifications,
     sortNotificationsByDate,
     type StoredNotification
-} from '@/services/notification-storage'
+} from '@/services/notifications/storage'
 import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
 import * as Notifications from 'expo-notifications'
 import { router } from 'expo-router'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { DeviceEventEmitter, FlatList, Linking, Platform, Pressable, StyleSheet, View } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
 
 type FilterType = 'all' | 'wallet' | 'other'
 
@@ -37,6 +38,13 @@ const NotificationItem = React.memo(({ item, t, locale }: {
   ]}
   android_ripple={{ color: UI_CONSTANTS.ACCENT_CYAN_BG }}
   >
+    <LinearGradient
+      colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.cardGradient}
+      pointerEvents="none"
+    />
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
         <View style={styles.accentDot} />
@@ -45,7 +53,7 @@ const NotificationItem = React.memo(({ item, t, locale }: {
         </ThemedText>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
-        <ThemedText style={styles.timeText}>
+      <ThemedText style={styles.timeText}>
           {new Date(item.receivedAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
         </ThemedText>
         {item.isWalletNotification && (
@@ -53,8 +61,8 @@ const NotificationItem = React.memo(({ item, t, locale }: {
         )}
       </View>
     </View>
-    <ThemedText style={styles.messageText}>{item.text || t('no_text')}</ThemedText>
-    <ThemedText style={styles.metaText}>📱 {item.app}</ThemedText>
+      <ThemedText style={styles.messageText}>{item.text || t('no_text')}</ThemedText>
+      <ThemedText style={styles.metaText}>📱 {item.app}</ThemedText>
   </Pressable>
 ))
 
@@ -69,6 +77,7 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(false)
   const [showAll, setShowAll] = useState(false) // Stato per mostrare tutte o solo le prime 10
   const INITIAL_NOTIFICATIONS_LIMIT = 10 // Limite iniziale di notifiche da mostrare
+  const notificationsUpdatedEvent = 'notifications:updated'
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -189,7 +198,7 @@ export default function NotificationsScreen() {
             name: 'Default',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#06b6d4'
+            lightColor: Brand.colors.primary.cyan
           })
         } catch {}
       }
@@ -394,7 +403,7 @@ export default function NotificationsScreen() {
             name: 'Default',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#06b6d4',
+            lightColor: Brand.colors.primary.cyan,
             enableVibrate: true,
             lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
           })
@@ -408,12 +417,13 @@ export default function NotificationsScreen() {
     // Carica le notifiche dallo storage
     loadNotificationsFromStorage()
     
-    // Poll ogni 3 secondi per aggiornare la lista dallo storage
-    const interval = setInterval(() => {
+    // Subscribe to storage updates (evento unico, niente polling)
+    const storageListener = DeviceEventEmitter.addListener(notificationsUpdatedEvent, () => {
+      addLog('📂 notifications:updated → reload')
       loadNotificationsFromStorage()
-    }, 3000)
-    
-    // Subscribe to notifications (per notifiche in tempo reale quando app è aperta)
+    })
+
+    // Subscribe to real-time emitter (quando app è aperta)
     addLog('📡 Setting up notification listener...')
     const listener = DeviceEventEmitter.addListener('wallet_notification', (payload: any) => {
       addLog('📬 Notification received via DeviceEventEmitter')
@@ -421,17 +431,16 @@ export default function NotificationsScreen() {
       addLog(`📝 Title: ${payload.title || 'No title'}`)
       addLog(`📄 Text: ${payload.text || 'No text'}`)
       
-      // Ricarica le notifiche dallo storage per mostrare la nuova notifica
       loadNotificationsFromStorage()
     })
     
-    addLog('✅ Notification listener registered')
+    addLog('✅ Notification listeners registered')
     
     return () => {
-      addLog('🛑 Cleaning up notification listener...')
-      clearInterval(interval)
+      addLog('🛑 Cleaning up notification listeners...')
+      storageListener.remove()
       listener.remove()
-      addLog('✅ Notification listener cleaned up')
+      addLog('✅ Notification listeners cleaned up')
     }
   }, [])
 
@@ -580,6 +589,12 @@ export default function NotificationsScreen() {
           >
             <ThemedText style={styles.primaryButtonText}>🔔 {t('try_send_test')}</ThemedText>
           </Pressable>
+          <Pressable 
+            style={[styles.primaryButton, { marginTop: 8 }]}
+            onPress={loadNotificationsFromStorage}
+          >
+            <ThemedText style={styles.primaryButtonText}>🔄 {language === 'it' ? 'Ricarica notifiche' : 'Reload notifications'}</ThemedText>
+          </Pressable>
           
           {/* Bottone di test aggiuntivo per debug */}
           <Pressable 
@@ -654,7 +669,7 @@ const styles = StyleSheet.create({
   container: {
     gap: 12,
     padding: 16,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
     paddingTop: 40,
     paddingBottom: 20,
   },
@@ -663,24 +678,34 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     borderWidth: 1,
-    shadowColor: '#000',
-    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 24,
-    elevation: 4,
+    shadowColor: 'transparent',
+    borderColor: Brand.colors.glass.heavy,
+    shadowOpacity: 0,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 0,
+    elevation: 0,
     marginBottom: 16,
+    position: 'relative',
+    overflow: 'hidden',
   },
   cardPressed: {
     backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG
+  },
+  cardGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.15,
   },
   accentDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#06b6d4'
+    backgroundColor: Brand.colors.primary.cyan
   },
   titleText: {
     flex: 1
@@ -713,7 +738,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     fontWeight: '700',
-    color: '#E8EEF8'
+    color: Brand.colors.text.primary
     
   },
   headerRow: {
@@ -750,16 +775,16 @@ const styles = StyleSheet.create({
     borderColor: UI_CONSTANTS.GLASS_BORDER,
   },
   filterButtonActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-    borderColor: 'rgba(16, 185, 129, 0.4)',
+    backgroundColor: UI_CONSTANTS.SUCCESS_BG,
+    borderColor: UI_CONSTANTS.SUCCESS_BORDER,
   },
   filterButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: Brand.colors.text.secondary,
   },
   filterButtonTextActive: {
-    color: '#10b981',
+    color: Brand.colors.semantic.success,
   },
   showMoreButton: {
     alignSelf: 'center',
@@ -773,7 +798,7 @@ const styles = StyleSheet.create({
   showMoreButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#06b6d4', // Brand.colors.primary.cyan
+    color: Brand.colors.primary.cyan, // Brand.colors.primary.cyan
     textAlign: 'center',
   },
 })

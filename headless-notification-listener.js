@@ -3,7 +3,8 @@ import { cacheDirectory, readAsStringAsync, writeAsStringAsync } from 'expo-file
 import * as Notifications from 'expo-notifications'
 import { AppRegistry, DeviceEventEmitter } from 'react-native'
 import { RNAndroidNotificationListenerHeadlessJsName } from 'react-native-android-notification-listener'
-import { extractAmountAndCurrency, extractMerchant, isPromotionalNotification } from './services/notification-parser'
+import { extractAmountAndCurrency, extractMerchant, isPromotionalNotification } from './services/notifications/parser'
+import { saveNotificationRecord } from './services/notifications/storage'
 
 /**
  * Headless task per ricevere notifiche in background
@@ -622,29 +623,11 @@ const headlessNotificationListener = async ({ notification }) => {
           time: notifData.time || new Date().toISOString(),
           timestamp: Date.now(),
           receivedAt: Date.now(),
-          isWalletNotification: matchedBank === 'google_wallet', // Mantieni retrocompatibilità
+          isWalletNotification: matchedBank === 'google_wallet',
           bankId: matchedBank,
         }
-        
-        const cacheFile = `${cacheDirectory}all_notifications.json`
-        
-        // Leggi le notifiche esistenti
-        let notifications = []
-        try {
-          const existingData = await readAsStringAsync(cacheFile)
-          notifications = JSON.parse(existingData)
-        } catch (readError) {
-          console.log('[HEADLESS] No existing notifications file, creating new one')
-        }
-        
-        // Aggiungi la nuova notifica all'inizio
-        notifications.unshift(notificationData)
-        
-        // Mantieni solo le ultime 500 notifiche
-        notifications = notifications.slice(0, 500)
-        
-        // Salva il file
-        await writeAsStringAsync(cacheFile, JSON.stringify(notifications))
+
+        await saveNotificationRecord(notificationData)
         console.log(`[HEADLESS] ✅ ${matchedBank} notification saved to memory storage:`, notificationData.title)
         
         // Prova anche a inviare via DeviceEventEmitter (potrebbe funzionare se l'app è aperta)
@@ -676,26 +659,8 @@ const headlessNotificationListener = async ({ notification }) => {
           receivedAt: Date.now(),
           isWalletNotification: false,
         }
-        
-        const cacheFile = `${cacheDirectory}all_notifications.json`
-        
-        // Leggi le notifiche esistenti
-        let notifications = []
-        try {
-          const existingData = await readAsStringAsync(cacheFile)
-          notifications = JSON.parse(existingData)
-        } catch (readError) {
-          console.log('[HEADLESS] No existing notifications file, creating new one')
-        }
-        
-        // Aggiungi la nuova notifica all'inizio
-        notifications.unshift(notificationData)
-        
-        // Mantieni solo le ultime 500 notifiche
-        notifications = notifications.slice(0, 500)
-        
-        // Salva il file
-        await writeAsStringAsync(cacheFile, JSON.stringify(notifications))
+
+        await saveNotificationRecord(notificationData)
         console.log('[HEADLESS] ✅ Non-Wallet notification saved to memory storage:', notificationData.title)
         
         // Prova anche a inviare via DeviceEventEmitter (potrebbe funzionare se l'app è aperta)

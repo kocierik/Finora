@@ -1,46 +1,91 @@
 import { cacheDirectory, getInfoAsync, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy'
-import { NotificationData } from './notification-service'
+import { DeviceEventEmitter } from 'react-native'
+import { NotificationData } from '../notification-service'
 
 const NOTIFICATIONS_CACHE_FILE = `${cacheDirectory}all_notifications.json`
 const MAX_NOTIFICATIONS = 100 // Limite per evitare di riempire la memoria
+const DEDUP_WINDOW_MS = 3000 // deduplica notifiche uguali entro 3s
+const DEBOUNCE_MS = 250 // batching delle scritture ravvicinate
+
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+let pendingWrite: StoredNotification[] | null = null
 
 export interface StoredNotification extends NotificationData {
   id: string
   receivedAt: number
   isWalletNotification: boolean
+  bankId?: string
+}
+
+async function persistNotifications(list: StoredNotification[]) {
+  const trimmed = list.slice(0, MAX_NOTIFICATIONS)
+  // Debounce per ridurre I/O se arrivano burst
+  pendingWrite = trimmed
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(async () => {
+    try {
+      if (pendingWrite) {
+        await writeAsStringAsync(
+          NOTIFICATIONS_CACHE_FILE,
+          JSON.stringify(pendingWrite, null, 2)
+        )
+      }
+    } catch (error: any) {
+      console.error('[NotificationStorage] ❌ Error writing notifications:', error.message)
+    } finally {
+      pendingWrite = null
+      debounceTimer = null
+    }
+  }, DEBOUNCE_MS)
+}
+
+/** Notifica l'app che il file notifiche è stato aggiornato */
+export function notifyNotificationsUpdated() {
+  try {
+    DeviceEventEmitter.emit('notifications:updated')
+  } catch {}
 }
 
 /**
- * Salva una notifica nella cache locale
+ * Salva una notifica con metadati completi (StoredNotification)
+ * Usato per condividere la stessa logica tra headless listener e altri punti.
+ */
+export async function saveNotificationRecord(storedNotification: StoredNotification): Promise<void> {
+  try {
+    const existing = await loadNotifications()
+
+    // Dedup: se esiste già una notifica identica entro DEDUP_WINDOW_MS, non aggiungere
+    const now = Date.now()
+    const isDuplicate = existing.some(n =>
+      n.app === storedNotification.app &&
+      (n.title || '') === (storedNotification.title || '') &&
+      (n.text || '') === (storedNotification.text || '') &&
+      Math.abs((n.receivedAt || 0) - (storedNotification.receivedAt || now)) < DEDUP_WINDOW_MS
+    )
+    if (isDuplicate) {
+      return
+    }
+
+    const updated = [storedNotification, ...existing]
+    await persistNotifications(updated)
+    notifyNotificationsUpdated()
+  } catch (error: any) {
+    console.error('[NotificationStorage] ❌ Error saving notification:', error.message)
+  }
+}
+
+/**
+ * Salva una notifica creandone l'ID e i metadati minimi
  */
 export async function saveNotification(notification: NotificationData): Promise<void> {
   try {
-    // console.log('[NotificationStorage] 💾 Saving notification to cache...')
-    
-    // Carica le notifiche esistenti
-    const existingNotifications = await loadNotifications()
-    
-    // Crea la notifica da salvare
     const storedNotification: StoredNotification = {
       ...notification,
       id: `${notification.app}-${notification.timestamp}-${Date.now()}`,
       receivedAt: Date.now(),
       isWalletNotification: notification.app?.toLowerCase().includes('wallet') || false
     }
-    
-    // Aggiungi la nuova notifica all'inizio della lista
-    const updatedNotifications = [storedNotification, ...existingNotifications]
-    
-    // Mantieni solo le ultime MAX_NOTIFICATIONS notifiche
-    const trimmedNotifications = updatedNotifications.slice(0, MAX_NOTIFICATIONS)
-    
-    // Salva nel file
-    await writeAsStringAsync(
-      NOTIFICATIONS_CACHE_FILE, 
-      JSON.stringify(trimmedNotifications, null, 2)
-    )
-    
-    // console.log('[NotificationStorage] ✅ Notification saved:', storedNotification.title)
+    await saveNotificationRecord(storedNotification)
   } catch (error: any) {
     console.error('[NotificationStorage] ❌ Error saving notification:', error.message)
   }
@@ -53,14 +98,11 @@ export async function loadNotifications(): Promise<StoredNotification[]> {
   try {
     const fileInfo = await getInfoAsync(NOTIFICATIONS_CACHE_FILE)
     if (!fileInfo.exists) {
-      // console.log('[NotificationStorage] 📂 No notifications cache found')
       return []
     }
     
     const data = await readAsStringAsync(NOTIFICATIONS_CACHE_FILE)
     const notifications = JSON.parse(data)
-    
-    // console.log('[NotificationStorage] 📂 Loaded', notifications.length, 'notifications from cache')
     return notifications
   } catch (error: any) {
     console.error('[NotificationStorage] ❌ Error loading notifications:', error.message)
@@ -74,7 +116,6 @@ export async function loadNotifications(): Promise<StoredNotification[]> {
 export async function clearNotifications(): Promise<void> {
   try {
     await writeAsStringAsync(NOTIFICATIONS_CACHE_FILE, JSON.stringify([]))
-    // console.log('[NotificationStorage] ✅ All notifications cleared')
   } catch (error: any) {
     console.error('[NotificationStorage] ❌ Error clearing notifications:', error.message)
   }
@@ -157,7 +198,6 @@ export async function cleanOldNotifications(): Promise<{ removed: number }> {
     const removedCount = initialCount - filteredNotifications.length
     
     if (removedCount > 0) {
-      // Salva le notifiche filtrate
       await writeAsStringAsync(
         NOTIFICATIONS_CACHE_FILE, 
         JSON.stringify(filteredNotifications, null, 2)
@@ -171,3 +211,5 @@ export async function cleanOldNotifications(): Promise<{ removed: number }> {
     return { removed: 0 }
   }
 }
+
+

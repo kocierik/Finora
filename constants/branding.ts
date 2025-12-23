@@ -19,10 +19,10 @@ export const Brand = {
     
     // Background Layers
     background: {
-      deep: '#0a0a0f',      // Deepest layer
-      base: '#0f0f14',      // Base background
-      elevated: '#141419',  // Elevated surfaces
-      card: '#1a1a24',      // Card background
+      deep: '#030128',      // Deepest layer (slightly lighter)
+      base: '#131123',      // Base background
+      elevated: '#191e2c',  // Elevated surfaces
+      card: '#131131',      // Card background
     },
     
     // Text Hierarchy
@@ -319,7 +319,7 @@ export const UI = {
   MAGENTA_BORDER: 'rgba(217, 70, 239, 0.2)',   // Bordo magenta (elementi premium, card speciali)
   DANGER_BG: 'rgba(239, 68, 68, 0.1)',         // Sfondo rosso (errori, eliminazioni, card di errore)
   DANGER_BORDER: 'rgba(239, 68, 68, 0.3)',     // Bordo rosso (errori, eliminazioni, card di errore)
-  SUCCESS_BG: 'rgba(16, 185, 129, 0.12)',      // Sfondo verde (successo, conferme, card positive)
+  SUCCESS_BG: 'rgba(16, 185, 129, 0.03)',      // Sfondo verde (successo, conferme, card positive)
   SUCCESS_BORDER: 'rgba(16, 185, 129, 0.3)',   // Bordo verde (successo, conferme, card positive)
   SUCCESS_TEXT: '#10b981',                      // Testo verde (valori positivi, importi positivi)
   

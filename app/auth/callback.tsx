@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser'
 import { useEffect } from 'react'
 import * as RNLinking from 'react-native'
 import { ActivityIndicator, View } from 'react-native'
+import { Brand } from '@/constants/branding'
 import 'react-native-url-polyfill/auto'
 
 // Completes the auth session if a browser was opened for OAuth
@@ -98,8 +99,8 @@ export default function AuthCallback() {
   }, [user, loading])
 
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a0a0f' }}>
-      <ActivityIndicator size="large" color="#06b6d4" />
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Brand.colors.background.deep }}>
+      <ActivityIndicator size="large" color={Brand.colors.primary.cyan} />
     </View>
   )
 }

@@ -4,6 +4,7 @@ import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 import { useSettings } from '@/context/SettingsContext'
 import { AVAILABLE_BANKS, loadMonitoredBanks, saveMonitoredBanks } from '@/services/bank-preferences'
 import { router } from 'expo-router'
+import { LinearGradient } from 'expo-linear-gradient'
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
@@ -70,7 +71,14 @@ export default function MonitoredBanksScreen() {
         </View>
 
         {/* Description Card */}
-        <Card style={styles.descriptionCard}>
+        <Card style={[styles.descriptionCard, styles.glassCard]}>
+          <LinearGradient
+            colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.glassCardGradient}
+            pointerEvents="none"
+          />
           <ThemedText style={styles.descriptionText}>
             {language === 'it' 
               ? 'Seleziona le banche di cui vuoi monitorare le notifiche di pagamento. Finora rileverà automaticamente le spese dalle notifiche selezionate.'
@@ -81,7 +89,7 @@ export default function MonitoredBanksScreen() {
         {/* Banks List */}
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#06b6d4" />
+            <ActivityIndicator size="large" color={Brand.colors.primary.cyan} />
           </View>
         ) : (
           <View style={styles.banksList}>
@@ -96,6 +104,13 @@ export default function MonitoredBanksScreen() {
                   ]}
                   onPress={() => toggleBank(bank.id)}
                 >
+                  <LinearGradient
+                    colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.bankItemGradient}
+                    pointerEvents="none"
+                  />
                   <View style={styles.bankItemContent}>
                     <View style={styles.bankIcon}>
                       <ThemedText style={styles.bankIconText}>{bank.icon}</ThemedText>
@@ -133,7 +148,7 @@ export default function MonitoredBanksScreen() {
           disabled={saving || selectedBanks.length === 0}
         >
           {saving ? (
-            <ActivityIndicator size="small" color="#0a0a0f" />
+            <ActivityIndicator size="small" color={Brand.colors.background.deep} />
           ) : (
             <ThemedText style={styles.saveButtonText}>
               {language === 'it' ? 'Salva' : 'Save'}
@@ -148,7 +163,7 @@ export default function MonitoredBanksScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
   },
   scrollView: {
     flex: 1,
@@ -186,6 +201,28 @@ const styles = StyleSheet.create({
   descriptionCard: {
     marginBottom: 24,
     padding: 16,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.heavy,
+    borderRadius: 16,
+  },
+  glassCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.heavy,
+    borderRadius: 16,
+  },
+  glassCardGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.15,
   },
   descriptionText: {
     opacity: 0.8,
@@ -204,13 +241,22 @@ const styles = StyleSheet.create({
   bankItem: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: Brand.colors.glass.heavy,
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     overflow: 'hidden',
+    position: 'relative',
   },
   bankItemSelected: {
-    borderColor: 'rgba(6,182,212,0.5)',
-    backgroundColor: 'rgba(6,182,212,0.1)',
+    borderColor: Brand.colors.primary.cyan,
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
+  },
+  bankItemGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.15,
   },
   bankItemContent: {
     flexDirection: 'row',
@@ -222,9 +268,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24, // Cerchio perfetto (metà della larghezza)
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -250,19 +296,19 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER,
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxSelected: {
-    borderColor: '#06b6d4',
-    backgroundColor: '#06b6d4',
+    borderColor: Brand.colors.primary.cyan,
+    backgroundColor: Brand.colors.primary.cyan,
   },
   checkboxCheck: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0a0a0f',
+    color: Brand.colors.background.deep,
   },
   fixedButtonContainer: {
     position: 'absolute',
@@ -271,9 +317,9 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 16,
     paddingBottom: 40,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: UI_CONSTANTS.GLASS_BORDER,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.3,
@@ -281,7 +327,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   saveButton: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: Brand.colors.primary.cyan,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 24,
@@ -293,7 +339,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   saveButtonText: {
-    color: '#0a0a0f',
+    color: Brand.colors.background.deep,
     fontWeight: '700',
     fontSize: 16,
   },

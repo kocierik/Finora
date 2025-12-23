@@ -3,6 +3,7 @@ import { ThemedView } from '@/components/themed-view'
 import { useAuth } from '@/context/AuthContext'
 import { useState } from 'react'
 import { Alert, Button, StyleSheet, TextInput, View } from 'react-native'
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth()
@@ -34,9 +35,9 @@ export default function AuthScreen() {
         autoCorrect={false}
         keyboardType="email-address"
         placeholder="Email"
-        placeholderTextColor="#6b7280"
-        selectionColor="#ffffff"
-        cursorColor="#ffffff"
+        placeholderTextColor={Brand.colors.text.muted}
+        selectionColor={Brand.colors.text.primary}
+        cursorColor={Brand.colors.text.primary}
         autoComplete="email"
         value={email}
         onChangeText={setEmail}
@@ -44,9 +45,9 @@ export default function AuthScreen() {
       <TextInput
         style={styles.input}
         placeholder="Password"
-        placeholderTextColor="#6b7280"
-        selectionColor="#ffffff"
-        cursorColor="#ffffff"
+        placeholderTextColor={Brand.colors.text.muted}
+        selectionColor={Brand.colors.text.primary}
+        cursorColor={Brand.colors.text.primary}
         autoComplete="password"
         secureTextEntry
         value={password}
@@ -62,8 +63,8 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, gap: 12, justifyContent: 'center' },
-  input: { borderWidth: 1, borderColor: '#333', padding: 12, borderRadius: 8, color: '#ffffff', backgroundColor: '#0f1216' },
+  container: { flex: 1, padding: 24, gap: 12, justifyContent: 'center', backgroundColor: Brand.colors.background.deep },
+  input: { borderWidth: 1, borderColor: UI_CONSTANTS.GLASS_BORDER, padding: 12, borderRadius: 8, color: Brand.colors.text.primary, backgroundColor: UI_CONSTANTS.GLASS_BG_SM },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
 })
 

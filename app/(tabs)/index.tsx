@@ -12,9 +12,7 @@ import { Expense } from '@/types';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, DeviceEventEmitter, Dimensions, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
-
-const { width: screenWidth } = Dimensions.get('window');
+import { ActivityIndicator, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 function sameMonth(dateStr: string, year: number, monthIndex: number) {
   if (!dateStr) return false
@@ -34,13 +32,13 @@ function sameMonth(dateStr: string, year: number, monthIndex: number) {
 
 export default function HomeScreen() {
   const { t, language } = useSettings()
-  const { user, signOut, loading } = useAuth()
+  const { user, loading } = useAuth()
   
   // Auth guard - redirect if not logged in (MUST be before all hooks)
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#06b6d4" />
+        <ActivityIndicator size="small" color={Brand.colors.primary.cyan} />
       </View>
     )
   }
@@ -49,7 +47,7 @@ export default function HomeScreen() {
   if (!user) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#06b6d4" />
+        <ActivityIndicator size="small" color={Brand.colors.primary.cyan} />
       </View>
     )
   }
@@ -57,8 +55,9 @@ export default function HomeScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [incomes, setIncomes] = useState<any[]>([])
   const [dbCategories, setDbCategories] = useState<{ id: string; name: string; icon: string; color: string; sort_order: number }[]>([])
-  const [portfolioPoints, setPortfolioPoints] = useState<{ x: string; y: number }[]>([])
-  const [kpis, setKpis] = useState<{ totalInvested: number; totalMarket?: number; monthExpenses: number } | null>(null)
+  const [kpisState, setKpis] = useState<{ totalInvested: number; totalMarket?: number; monthExpenses: number } | null>(null)
+  const kpis = kpisState
+  void kpis
   const [hideBalances, setHideBalances] = useState(false)
   const [userDisplayName, setUserDisplayName] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
@@ -78,33 +77,18 @@ export default function HomeScreen() {
   const [formError, setFormError] = useState<string | null>(null)
   // Category edit modal for recent transactions
   const [showCategoryModal, setShowCategoryModal] = useState(false)
-  const [isIncomeCategoryModal, setIsIncomeCategoryModal] = useState(false)
+  const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [incomeToDelete, setIncomeToDelete] = useState<any | null>(null)
   const [transactionToDelete, setTransactionToDelete] = useState<any | null>(null)
-  const [selectedTx, setSelectedTx] = useState<Expense | any | null>(null)
-  
-  // Income categories
-  const incomeCategories = [
-    { id: 'work', name: language === 'it' ? 'Lavoro' : 'Work', icon: '💼', color: '#10b981' },
-    { id: 'passive', name: language === 'it' ? 'Passivo' : 'Passive', icon: '💰', color: '#8B5CF6' },
-    { id: 'investment', name: language === 'it' ? 'Investimento' : 'Investment', icon: '📈', color: '#F59E0B' },
-    { id: 'other', name: language === 'it' ? 'Altro' : 'Other', icon: '💵', color: '#6366F1' }
-  ]
   // Recurring fields
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurringFrequency, setRecurringFrequency] = useState<'weekly' | 'monthly'>('monthly')
   const [recurringOccurrences, setRecurringOccurrences] = useState<string>('6')
   const [recurringInfinite, setRecurringInfinite] = useState<boolean>(false)
-  const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    const d = new Date()
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  })
-  
   // Income states
   const [showAddIncomeModal, setShowAddIncomeModal] = useState(false)
   const [newIncomeAmount, setNewIncomeAmount] = useState('')
-  const [newIncomeSource, setNewIncomeSource] = useState('salary')
   const [newIncomeCategory, setNewIncomeCategory] = useState('work')
   const [newIncomeDescription, setNewIncomeDescription] = useState('')
   const [newIncomeDate, setNewIncomeDate] = useState<string>(() => new Date().toISOString().split('T')[0])
@@ -176,12 +160,12 @@ export default function HomeScreen() {
       // If no categories exist, create default ones
       if (normalizedCats.length === 0) {
         const DEFAULT_CATEGORIES = [
-          { name: 'Food & Drinks', icon: '🍽️', color: '#F59E0B', sort_order: 0 },
-          { name: 'Transport', icon: '🚗', color: '#10B981', sort_order: 1 },
-          { name: 'Home & Utilities', icon: '🏠', color: '#3B82F6', sort_order: 2 },
-          { name: 'Entertainment', icon: '🎬', color: '#EF4444', sort_order: 3 },
-          { name: 'Health & Personal', icon: '🏥', color: '#EC4899', sort_order: 4 },
-          { name: 'Miscellaneous', icon: '📦', color: '#8B5CF6', sort_order: 5 }
+          { name: 'Food & Drinks', icon: '🍽️', color: Brand.colors.primary.orange, sort_order: 0 },
+          { name: 'Transport', icon: '🚗', color: Brand.colors.semantic.success, sort_order: 1 },
+          { name: 'Home & Utilities', icon: '🏠', color: Brand.colors.semantic.info, sort_order: 2 },
+          { name: 'Entertainment', icon: '🎬', color: Brand.colors.semantic.danger, sort_order: 3 },
+          { name: 'Health & Personal', icon: '🏥', color: Brand.colors.primary.magenta, sort_order: 4 },
+          { name: 'Miscellaneous', icon: '📦', color: Brand.colors.primary.teal, sort_order: 5 }
         ]
         
         const { data: newCategories, error: createError } = await supabase
@@ -208,10 +192,6 @@ export default function HomeScreen() {
       setDbCategories(normalizedCats)
       
       const totalInvested = (inv || []).reduce((s, it) => s + (it.quantity || 0) * (it.average_price || 0), 0)
-      // create a simple 5-point series from cumulative invested (placeholder until price feed)
-      const step = Math.max(1, Math.floor((inv || []).length / 5))
-      const series = (inv || []).filter((_, i) => i % step === 0).slice(0, 5).map((it, i) => ({ x: `${i+1}`, y: (it.quantity || 0) * (it.average_price || 0) }))
-      setPortfolioPoints(series.length ? series : [{ x: '1', y: totalInvested }])
       const now = new Date()
       const monthExpenses = (exp || []).filter(e => sameMonth(e.date, now.getFullYear(), now.getMonth())).reduce((s, e) => {
         let expenseAmount = e.amount || 0
@@ -234,37 +214,6 @@ export default function HomeScreen() {
       }, 0)
       setKpis({ totalInvested, monthExpenses })
   }, [user?.id])
-
-  // Animate modal when it opens
-  useEffect(() => {
-    if (showCategoryModal) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start()
-    } else {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 30,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start()
-    }
-  }, [showCategoryModal])
 
   // Carica i dati al mount
   useEffect(() => {
@@ -319,7 +268,7 @@ export default function HomeScreen() {
     const subSettings = DeviceEventEmitter.addListener('settings:categoriesUpdated', () => {
       loadData()
     })
-    const subDuplicates = DeviceEventEmitter.addListener('expenses:duplicatesRemoved', (data) => {
+    const subDuplicates = DeviceEventEmitter.addListener('expenses:duplicatesRemoved', () => {
       loadData()
     })
     const channel = supabase
@@ -439,14 +388,6 @@ export default function HomeScreen() {
 
   const availableCategories = (dbCategories?.length ? dbCategories : DEFAULT_CATEGORIES.map(c => ({ id: `temp-${c.name}`, name: c.name, color: c.color, icon: c.icon, sort_order: 0 }))).slice(0, 6)
 
-  // Get available categories based on transaction type
-  const getAvailableCategories = () => {
-    if (isIncomeCategoryModal) {
-      return incomeCategories
-    }
-    return availableCategories
-  }
-
   // Set default category ID when categories are loaded
   useEffect(() => {
     if (dbCategories.length > 0 && !newCategoryId) {
@@ -506,24 +447,68 @@ export default function HomeScreen() {
     }
   }, [showAddModal])
 
-  const getCategoryInfo = (name?: string | null) => {
-    if (!name) return null
-    const key = name.toLowerCase()
-    const found = availableCategories.find(c => (c.name || '').toLowerCase() === key)
-    return found || null
-  }
-
   const openRecentCategoryModal = (tx: Expense) => {
-    setSelectedTx(tx)
-    setIsIncomeCategoryModal(false)
+    setSelectedTransaction({ ...tx, type: 'expense' })
     setShowCategoryModal(true)
   }
 
   const openRecentIncomeCategoryModal = (income: any) => {
-    setSelectedTx(income)
-    setIsIncomeCategoryModal(true)
+    setSelectedTransaction({ ...income, type: 'income' })
     setShowCategoryModal(true)
   }
+
+  const applyCategoryToMerchant = useCallback(async (categoryId: string, isIncome: boolean) => {
+    if (!selectedTransaction || !user) return
+    const merchant = selectedTransaction.merchant || selectedTransaction.description
+    if (!merchant) return
+
+    const table = isIncome ? 'incomes' : 'expenses'
+    const merchantField = isIncome ? 'description' : 'merchant'
+    const payload = isIncome ? { category: categoryId } : { category_id: categoryId }
+
+    await supabase
+      .from(table)
+      .update(payload)
+      .eq('user_id', user.id)
+      .ilike(merchantField, merchant)
+  }, [selectedTransaction, user])
+
+  const closeCategoryModal = useCallback(() => {
+    setShowCategoryModal(false)
+    setSelectedTransaction(null)
+  }, [])
+
+  const handleCategorySelect = useCallback(async (categoryId: string) => {
+    if (!selectedTransaction || !user) return
+
+    try {
+      if (selectedTransaction.type === 'income') {
+        const { error } = await supabase
+          .from('incomes')
+          .update({ category: categoryId })
+          .eq('user_id', user.id)
+          .eq('id', selectedTransaction.id)
+        if (error) throw error
+
+        await applyCategoryToMerchant(categoryId, true)
+      } else {
+        const { error } = await supabase
+          .from('expenses')
+          .update({ category_id: categoryId })
+          .eq('user_id', user.id)
+          .eq('id', selectedTransaction.id)
+        if (error) throw error
+
+        await applyCategoryToMerchant(categoryId, false)
+      }
+
+      await loadData()
+      DeviceEventEmitter.emit('expenses:externalUpdate')
+      closeCategoryModal()
+    } catch (error) {
+      console.error('[Home] Failed to update category', error)
+    }
+  }, [selectedTransaction, user, loadData, closeCategoryModal])
 
   const handleDeleteIncome = async (income: any) => {
     if (!income.id) {
@@ -545,57 +530,6 @@ export default function HomeScreen() {
     setTransactionToDelete(expense)
   }
 
-  const handleSelectRecentCategory = async (categoryId: string) => {
-    if (!user || !selectedTx) return
-    try {
-      // Check if it's an income category modal
-      if (isIncomeCategoryModal) {
-        // Handle income category update
-        const { error } = await supabase
-          .from('incomes')
-          .update({ category: categoryId })
-          .eq('user_id', user.id)
-          .eq('id', selectedTx.id)
-        if (error) throw error
-
-        // Update local state
-        setIncomes(prev => prev.map(it =>
-          it.id === selectedTx.id ? { ...it, category: categoryId } : it
-        ))
-      } else {
-        // Handle expense category update (existing logic)
-      const merchant = selectedTx.merchant
-      // Find the category details
-      const category = dbCategories.find(c => c.id === categoryId)
-      if (!category) {
-        console.error('Category not found:', categoryId)
-        return
-      }
-
-      // Update DB for all transactions of same merchant
-      const { error } = await supabase
-        .from('expenses')
-        .update({ category_id: categoryId })
-        .eq('user_id', user.id)
-        .eq('merchant', merchant)
-      if (error) throw error
-
-      // Update local state
-      setExpenses(prev => prev.map(it =>
-        it.merchant === merchant ? { ...it, category_id: categoryId, categories: category } : it
-      ))
-      }
-
-      // Notify other screens
-      DeviceEventEmitter.emit('expenses:externalUpdate')
-    } catch (e) {
-    } finally {
-      setShowCategoryModal(false)
-      setIsIncomeCategoryModal(false)
-      setSelectedTx(null)
-    }
-  }
-
   // Combine expenses and incomes for recent transactions
   const allTransactions = useMemo(() => {
     // Process expenses: amount < 0 = spesa, amount > 0 con parole chiave accredito = entrata
@@ -609,7 +543,7 @@ export default function HomeScreen() {
           description: expense.merchant || 'Expense',
           category: expense.categories?.name || expense.category || 'Other',
           categoryIcon: expense.categories?.icon || '💳',
-          categoryColor: expense.categories?.color || '#06b6d4',
+          categoryColor: expense.categories?.color || Brand.colors.primary.cyan,
           date: expense.date,
           created_at: expense.created_at,
           isRecurring: expense.is_recurring,
@@ -642,7 +576,7 @@ export default function HomeScreen() {
         description: expense.merchant || (isIncome ? 'Accredito' : 'Expense'),
         category: expense.categories?.name || expense.category || 'Other',
         categoryIcon: expense.categories?.icon || '💳',
-        categoryColor: expense.categories?.color || '#06b6d4',
+        categoryColor: expense.categories?.color || Brand.colors.primary.cyan,
         date: expense.date,
         created_at: expense.created_at,
         isRecurring: expense.is_recurring,
@@ -661,9 +595,9 @@ export default function HomeScreen() {
                    income.source === 'freelance' ? '💻' :
                    income.source === 'investment' ? '📈' :
                    income.source === 'bonus' ? '🎁' : '💰',
-      categoryColor: income.category === 'work' ? '#10b981' :
-                    income.category === 'passive' ? '#8B5CF6' :
-                    income.category === 'investment' ? '#F59E0B' : '#6366F1',
+      categoryColor: income.category === 'work' ? Brand.colors.semantic.success :
+                    income.category === 'passive' ? Brand.colors.primary.magenta :
+                    income.category === 'investment' ? Brand.colors.primary.orange : Brand.colors.primary.teal,
       date: income.date,
       created_at: income.created_at,
       isRecurring: income.is_recurring,
@@ -724,12 +658,12 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Subtle background gradient */}
+      {/* Background gradient aligned to theme */}
       <LinearGradient
-        colors={UI_CONSTANTS.GRADIENT_CYAN_SUBTLE_BG as any}
-        locations={[0, 0.5, 1]}
+          colors={[Brand.colors.background.elevated, Brand.colors.background.deep, Brand.colors.background.deep]}
         style={styles.backgroundGradient}
       />
+      
       
       <ScrollView 
         style={styles.scrollView}
@@ -767,52 +701,6 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {/* Main Balance Card - temporarily hidden */}
-        {/* <Animated.View 
-          style={[
-            styles.balanceCardContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim1 }]
-            }
-          ]}
-        >
-            <Pressable
-            onPressIn={() => Animated.spring(scaleAnim1, { toValue: 0.98, useNativeDriver: true }).start()}
-              onPressOut={() => Animated.spring(scaleAnim1, { toValue: 1, useNativeDriver: true }).start()}
-            >
-            <Card style={styles.balanceCard}>
-              <View style={styles.balanceHeader}>
-                <View style={styles.balanceIconContainer}>
-                  <View style={styles.balanceIcon}>
-                    <ThemedText style={styles.balanceIconText}>💰</ThemedText>
-                  </View>
-                </View>
-                <View style={styles.balanceHeaderText}>
-              <ThemedText type="heading" style={styles.balanceTitle}>Patrimonio Totale</ThemedText>
-                  <ThemedText type="label" style={styles.balanceSubtitle}>{t('financial_settings')}</ThemedText>
-                </View>
-              </View>
-
-              <View style={styles.balanceContent}>
-                <ThemedText type="title" style={styles.balanceAmount}>
-                  {hideBalances ? '••••• €' : `${(kpis?.totalInvested ?? 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
-                  </ThemedText>
-                
-                <View style={styles.balanceStats}>
-                  <View style={styles.balanceStatItem}>
-                    <View style={styles.balanceStatBadge}>
-                      <ThemedText style={styles.balanceStatIcon}>📈</ThemedText>
-                      <ThemedText type="label" style={styles.balanceStatValue}>+2.4%</ThemedText>
-                    </View>
-                    <ThemedText type="caption" style={styles.balanceStatLabel}>{t('vs_last_month')}</ThemedText>
-                    </View>
-                  </View>
-                </View>
-          </Card>
-            </Pressable>
-          </Animated.View> */}
-
         {/* Financial Overview Cards */}
         <View style={styles.overviewContainer}>
           {/* Monthly Expenses Card */}
@@ -830,6 +718,13 @@ export default function HomeScreen() {
               onPressOut={() => Animated.spring(scaleAnim2, { toValue: 1, useNativeDriver: true }).start()}
             >
               <Card style={styles.overviewCard}>
+                <LinearGradient
+                  colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.overviewCardGradient}
+                  pointerEvents="none"
+                />
                 <View style={styles.overviewCardHeader}>
                   <View style={styles.overviewIconContainer}>
                     <View style={[styles.overviewIcon, styles.expenseIcon]}>
@@ -851,10 +746,10 @@ export default function HomeScreen() {
                     <View style={[styles.overviewBadge, { 
                       borderColor: expenseDelta >= 0 ? UI_CONSTANTS.DANGER_BORDER : UI_CONSTANTS.SUCCESS_BORDER,
                     }]}>
-                      <ThemedText style={[styles.overviewBadgeIcon, { color: expenseDelta >= 0 ? '#ef4444' : UI_CONSTANTS.SUCCESS_TEXT }]}> 
+                      <ThemedText style={[styles.overviewBadgeIcon, { color: expenseDelta >= 0 ? Brand.colors.semantic.danger : UI_CONSTANTS.SUCCESS_TEXT }]}> 
                         {expenseDelta >= 0 ? '↗' : '↘'}
                       </ThemedText>
-                      <ThemedText type="label" style={[styles.overviewBadgeText, { color: expenseDelta >= 0 ? '#ef4444' : UI_CONSTANTS.SUCCESS_TEXT }]}> 
+                      <ThemedText type="label" style={[styles.overviewBadgeText, { color: expenseDelta >= 0 ? Brand.colors.semantic.danger : UI_CONSTANTS.SUCCESS_TEXT }]}> 
                         {expenseDelta >= 0 ? '+' : ''}{expenseDeltaPct.toFixed(1)}%
                       </ThemedText>
                     </View>
@@ -882,7 +777,7 @@ export default function HomeScreen() {
               end={{ x: 0.9, y: 0.9 }}
               style={styles.fabGradient}
             />
-              <ThemedText style={[styles.fabIcon, { color: '#ef4444' }]}>－</ThemedText>
+              <ThemedText style={[styles.fabIcon, { color: Brand.colors.semantic.danger }]}>－</ThemedText>
               <ThemedText style={styles.fabLabel}>{language === 'it' ? 'Spesa' : 'Expense'}</ThemedText>
             </Pressable>
             
@@ -900,7 +795,7 @@ export default function HomeScreen() {
                 end={{ x: 0.9, y: 0.9 }}
                 style={styles.fabGradient}
               />
-              <ThemedText style={[styles.fabIcon, { color: '#10b981' }]}>＋</ThemedText>
+              <ThemedText style={[styles.fabIcon, { color: Brand.colors.semantic.success }]}>＋</ThemedText>
               <ThemedText style={styles.fabLabel}>{language === 'it' ? 'Entrata' : 'Income'}</ThemedText>
           </Pressable>
           </View>
@@ -914,6 +809,13 @@ export default function HomeScreen() {
           }}
         >
           <Card style={styles.recentCard}>
+            <LinearGradient
+              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.recentCardGradient}
+              pointerEvents="none"
+            />
             <View style={styles.recentHeader}>
               <ThemedText style={styles.recentTitle}>
                 {language === 'it' ? 'Transazioni recenti' : 'Recent transactions'}
@@ -974,7 +876,7 @@ export default function HomeScreen() {
                     <View style={styles.recentRight}>
                       <ThemedText style={[
                         styles.recentAmount, 
-                        isIncome ? { color: '#10b981' } : { color: '#ef4444' }
+                        isIncome ? { color: Brand.colors.semantic.success } : { color: Brand.colors.semantic.danger }
                       ]}> 
                         {isIncome ? '+' : '-'}{Math.abs(tx.amount).toLocaleString(language === 'it' ? 'it-IT' : 'en-US', { style: 'currency', currency: 'EUR' })}
                       </ThemedText>
@@ -1015,8 +917,11 @@ export default function HomeScreen() {
         <View style={[styles.modalOverlay, { backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_DARK }]}> 
           <View style={styles.addModalCard}>
             <LinearGradient
-              colors={[ 'rgba(6,182,212,0.10)', 'rgba(139,92,246,0.06)', 'transparent' ]}
+              colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
               style={styles.addModalGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              pointerEvents="none"
             />
             <View style={styles.addModalHeader}>
               <ThemedText style={styles.addModalTitle}>{t('add_transaction')}</ThemedText>
@@ -1034,7 +939,7 @@ export default function HomeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder={t('title') +' '+ t('transaction')}
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Brand.colors.text.tertiary}
                 value={newTitle}
                 onChangeText={setNewTitle}
               />
@@ -1044,7 +949,7 @@ export default function HomeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="0.00"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Brand.colors.text.tertiary}
                 keyboardType="decimal-pad"
                 value={newAmount}
                 onChangeText={setNewAmount}
@@ -1128,7 +1033,7 @@ export default function HomeScreen() {
             <View style={styles.formRow}>
               <ThemedText style={styles.formLabel}>{t('date')}</ThemedText>
               <Pressable style={styles.input} onPress={() => setShowCalendarModal(true)}>
-                <ThemedText style={{ color: '#E8EEF8' }}>{newDate}</ThemedText>
+                <ThemedText style={{ color: Brand.colors.text.primary }}>{newDate}</ThemedText>
               </Pressable>
             </View>
 
@@ -1188,7 +1093,7 @@ export default function HomeScreen() {
                       style={styles.input}
                       keyboardType="number-pad"
                       placeholder="6"
-                      placeholderTextColor="#94a3b8"
+                placeholderTextColor={Brand.colors.text.tertiary}
                       value={recurringOccurrences}
                       onChangeText={setRecurringOccurrences}
                     />
@@ -1434,6 +1339,129 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
+      {/* Category Selection Modal (Recent Transactions) */}
+      <Modal
+        visible={showCategoryModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeCategoryModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Card style={styles.modalCard}>
+              <LinearGradient
+                colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalGradient}
+                pointerEvents="none"
+              />
+              <View style={styles.modalHeader}>
+                <ThemedText style={styles.modalTitle}>
+                  {selectedTransaction?.type === 'income'
+                    ? (language === 'it' ? 'Seleziona categoria entrata' : 'Select income category')
+                    : (language === 'it' ? 'Seleziona categoria' : 'Select category')}
+                </ThemedText>
+                <Pressable onPress={closeCategoryModal} style={styles.closeButton}>
+                  <ThemedText style={styles.closeButtonText}>✕</ThemedText>
+                </Pressable>
+              </View>
+
+              <View style={styles.transactionInfo}>
+                <ThemedText style={styles.transactionInfoMerchant}>
+                  {selectedTransaction?.merchant || selectedTransaction?.description || '—'}
+                </ThemedText>
+                <View style={styles.transactionAmountRow}>
+                  {(() => {
+                    const isIncome = selectedTransaction?.type === 'income'
+                    const amountValue = Math.abs(selectedTransaction?.amount ?? 0)
+                    const amountColor = isIncome ? Brand.colors.semantic.success : Brand.colors.semantic.danger
+                    const amountSign = isIncome ? '+' : '-'
+
+                    return (
+                      <ThemedText
+                        style={[
+                          styles.transactionInfoAmount,
+                          { color: amountColor }
+                        ]}
+                      >
+                        {amountSign}
+                        {amountValue.toLocaleString(language === 'it' ? 'it-IT' : 'en-US', { style: 'currency', currency: 'EUR' })}
+                      </ThemedText>
+                    )
+                  })()}
+                </View>
+                <ThemedText style={styles.transactionInfoNote}>
+                  {(() => {
+                    const isIncome = selectedTransaction?.type === 'income'
+                    const merchant = (selectedTransaction as any)?.merchant || selectedTransaction?.description || ''
+                    const sameMerchantCount = allTransactions.filter(
+                      t => ((t as any).merchant || t.description || '').toLowerCase() === merchant.toLowerCase()
+                        && (isIncome ? t.type === 'income' : t.type === 'expense')
+                    ).length
+
+                    if (language === 'it') {
+                      return sameMerchantCount > 1
+                        ? `La categoria verrà applicata a ${sameMerchantCount} transazioni di questo merchant`
+                        : 'La categoria verrà applicata a questa transazione.'
+                    }
+                    return sameMerchantCount > 1
+                      ? `The category will be applied to ${sameMerchantCount} transactions from this merchant`
+                      : 'The category will be applied to this transaction.'
+                  })()}
+                </ThemedText>
+              </View>
+
+              <ScrollView
+                style={styles.modalScrollView}
+                contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.categoriesGrid}>
+                  {availableCategories.map((c, index) => (
+                    <Animated.View
+                      key={c.id || c.name}
+                      style={[
+                        styles.categoryOption,
+                        {
+                          opacity: fadeAnim,
+                          transform: [{
+                            translateY: slideAnim.interpolate({
+                              inputRange: [0, 30],
+                              outputRange: [0, 30 + (index * 5)]
+                            })
+                          }]
+                        }
+                      ]}
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.categoryOptionButton,
+                          { borderColor: c.color || Brand.colors.glass.heavy }
+                        ]}
+                        onPress={() => handleCategorySelect(c.id || c.name)}
+                      >
+                        <LinearGradient
+                          colors={[c.color ? `${c.color}22` : Brand.colors.glass.heavy, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                          style={styles.categoryOptionGradient}
+                        >
+                          <View style={[styles.categoryOptionIcon, { backgroundColor: c.color ? `${c.color}20` : UI_CONSTANTS.GLASS_BG_MD }]}>
+                            <ThemedText style={styles.categoryOptionIconText}>{c.icon || '🏷️'}</ThemedText>
+                          </View>
+                          <ThemedText style={styles.categoryOptionName} numberOfLines={1}>
+                            {c.name}
+                          </ThemedText>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  ))}
+                </View>
+              </ScrollView>
+            </Card>
+          </View>
+        </View>
+      </Modal>
+
       {/* Add Income Modal */}
       <Modal
         visible={showAddIncomeModal}
@@ -1463,7 +1491,7 @@ export default function HomeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder={language === 'it' ? 'Stipendio, freelance...' : 'Salary, freelance...'}
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Brand.colors.text.tertiary}
                 value={newIncomeDescription}
                 onChangeText={setNewIncomeDescription}
               />
@@ -1473,48 +1501,11 @@ export default function HomeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="0.00"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={Brand.colors.text.tertiary}
                 keyboardType="decimal-pad"
                 value={newIncomeAmount}
                 onChangeText={setNewIncomeAmount}
               />
-            </View>
-            <View style={styles.formRow}>
-              <ThemedText style={styles.formLabel}>{language === 'it' ? 'Fonte' : 'Source'}</ThemedText>
-              <View style={styles.categoryRow}>
-                {[
-                  { key: 'salary', label: language === 'it' ? 'Stipendio' : 'Salary', icon: '💼' },
-                  { key: 'freelance', label: language === 'it' ? 'Freelance' : 'Freelance', icon: '💻' },
-                  { key: 'investment', label: language === 'it' ? 'Investimenti' : 'Investment', icon: '📈' },
-                  { key: 'bonus', label: language === 'it' ? 'Bonus' : 'Bonus', icon: '🎁' },
-                  { key: 'other', label: language === 'it' ? 'Altro' : 'Other', icon: '💰' }
-                ].map((source) => (
-                    <TouchableOpacity
-                    key={source.key}
-                      style={[
-                        styles.categoryChip, 
-                      newIncomeSource === source.key && styles.categoryChipActive,
-                        { 
-                        borderColor: newIncomeSource === source.key ? '#10b981' : UI_CONSTANTS.GLASS_BORDER_MD,
-                        backgroundColor: newIncomeSource === source.key ? 'rgba(16,185,129,0.20)' : undefined
-                        }
-                      ]}
-                    onPress={() => setNewIncomeSource(source.key)}
-                    >
-                      <ThemedText 
-                        style={[
-                          styles.categoryChipText, 
-                        newIncomeSource === source.key && styles.categoryChipTextActive,
-                        newIncomeSource === source.key && { color: '#10b981' }
-                        ]}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                      >
-                      {source.icon} {source.label}
-                      </ThemedText>
-                  </TouchableOpacity>
-                ))}
-              </View>
             </View>
             <View style={styles.formRow}>
               <ThemedText style={styles.formLabel}>{language === 'it' ? 'Categoria' : 'Category'}</ThemedText>
@@ -1531,7 +1522,7 @@ export default function HomeScreen() {
                       styles.categoryChip, 
                       newIncomeCategory === category.key && styles.categoryChipActive,
                       { 
-                        borderColor: newIncomeCategory === category.key ? '#10b981' : UI_CONSTANTS.GLASS_BORDER_MD,
+                        borderColor: newIncomeCategory === category.key ? Brand.colors.semantic.success : UI_CONSTANTS.GLASS_BORDER_MD,
                         backgroundColor: newIncomeCategory === category.key ? 'rgba(16,185,129,0.20)' : undefined
                       }
                     ]}
@@ -1541,7 +1532,7 @@ export default function HomeScreen() {
                       style={[
                         styles.categoryChipText, 
                         newIncomeCategory === category.key && styles.categoryChipTextActive,
-                        newIncomeCategory === category.key && { color: '#10b981' }
+                        newIncomeCategory === category.key && { color: Brand.colors.semantic.success }
                       ]}
                       numberOfLines={1}
                       ellipsizeMode="tail"
@@ -1555,7 +1546,7 @@ export default function HomeScreen() {
             <View style={styles.formRow}>
               <ThemedText style={styles.formLabel}>{t('date')}</ThemedText>
               <Pressable style={styles.input} onPress={() => setShowIncomeCalendarModal(true)}>
-                <ThemedText style={{ color: '#E8EEF8' }}>{newIncomeDate}</ThemedText>
+                <ThemedText style={{ color: Brand.colors.text.primary }}>{newIncomeDate}</ThemedText>
               </Pressable>
             </View>
 
@@ -1617,7 +1608,7 @@ export default function HomeScreen() {
                       style={styles.input}
                       keyboardType="number-pad"
                       placeholder="6"
-                      placeholderTextColor="#94a3b8"
+                placeholderTextColor={Brand.colors.text.tertiary}
                       value={incomeRecurringOccurrences}
                       onChangeText={setIncomeRecurringOccurrences}
                     />
@@ -1749,7 +1740,6 @@ export default function HomeScreen() {
                       items.push({
                         user_id: user.id,
                         amount: amountNum,
-                        source: newIncomeSource,
                         category: newIncomeCategory,
                         currency: 'EUR',
                         date: `${yyyy}-${mm}-${dd}`,
@@ -1766,7 +1756,6 @@ export default function HomeScreen() {
                     items.push({
                       user_id: user.id,
                       amount: amountNum,
-                      source: newIncomeSource,
                       category: newIncomeCategory,
                       currency: 'EUR',
                       date: newIncomeDate,
@@ -1800,7 +1789,6 @@ export default function HomeScreen() {
                   if (logger && logger.info) {
                     logger.info('Income saved successfully', { 
                       amount: amountNum,
-                      source: newIncomeSource,
                       category: newIncomeCategory 
                     }, 'Home')
                   }
@@ -1817,7 +1805,6 @@ export default function HomeScreen() {
                   }
                   
                   setNewIncomeAmount('')
-                  setNewIncomeSource('salary')
                   setNewIncomeCategory('work')
                   setNewIncomeDescription('')
                   setNewIncomeDate(new Date().toISOString().split('T')[0])
@@ -1872,7 +1859,7 @@ export default function HomeScreen() {
               </Pressable>
             </View>
             <View style={{ alignItems: 'center', padding: 16 }}>
-              <ThemedText style={{ color: '#E8EEF8', textAlign: 'center', fontSize: 16 }}>
+              <ThemedText style={{ color: Brand.colors.text.primary, textAlign: 'center', fontSize: 16 }}>
                 {incomeToDelete ? (language === 'it' ? 'Sei sicuro di voler eliminare questa entrata?' : 'Are you sure you want to delete this income?') : (language === 'it' ? 'Sei sicuro di voler eliminare questa spesa?' : 'Are you sure you want to delete this expense?')}
               </ThemedText>
             </View>
@@ -1937,7 +1924,7 @@ export default function HomeScreen() {
                 }} 
                 style={[styles.submitButton, { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}
               >
-                <ThemedText style={[styles.submitButtonText, { color: '#ef4444' }]}>{language === 'it' ? 'Elimina' : 'Delete'}</ThemedText>
+                <ThemedText style={[styles.submitButtonText, { color: Brand.colors.semantic.danger }]}>{language === 'it' ? 'Elimina' : 'Delete'}</ThemedText>
               </Pressable>
             </View>
           </View>
@@ -1948,17 +1935,10 @@ export default function HomeScreen() {
   );
 }
 
-function getGreeting() {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Buongiorno'
-  if (hour < 18) return 'Buon pomeriggio'
-  return 'Buonasera'
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
   },
   backgroundGradient: {
     position: 'absolute',
@@ -1966,6 +1946,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 400,
+    zIndex: 0,
+  },
+  backgroundGlass: {
+    position: 'absolute',
+    borderRadius: 999,
+    opacity: 0.8,
     zIndex: 0,
   },
   scrollView: {
@@ -1981,31 +1967,31 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
   },
   loadingText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#E8EEF8',
+    color: Brand.colors.text.primary,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
     paddingHorizontal: 32,
   },
   errorText: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#ef4444',
+    color: Brand.colors.semantic.danger,
     textAlign: 'center',
     marginBottom: 12,
   },
   errorSubtext: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#9ca3af',
+    color: Brand.colors.text.tertiary,
     textAlign: 'center',
   },
   // Premium Header
@@ -2046,7 +2032,7 @@ const styles = StyleSheet.create({
     borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#06b6d4',
+    shadowColor: Brand.colors.primary.cyan,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -2062,7 +2048,7 @@ const styles = StyleSheet.create({
   profileInitial: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#06b6d4',
+    color: Brand.colors.primary.cyan,
   },
   // Main Balance Card
   balanceCardContainer: {
@@ -2072,9 +2058,19 @@ const styles = StyleSheet.create({
     padding: 28,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.15)',
-    backgroundColor: 'rgba(15, 15, 20, 0.8)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD,
+    backgroundColor: Brand.colors.background.card,
     minHeight: 160,
+  },
+  balanceCardGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    backgroundColor: Brand.colors.background.card,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+    opacity: 0.15,
   },
   balanceHeader: {
     flexDirection: 'row',
@@ -2089,9 +2085,9 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 16,
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2104,7 +2100,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: '#06b6d4',
+    backgroundColor: Brand.colors.primary.cyan,
     borderRadius: 1,
   },
   balanceHeaderText: {
@@ -2124,7 +2120,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2152,9 +2148,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    backgroundColor: UI_CONSTANTS.SUCCESS_BG,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: UI_CONSTANTS.SUCCESS_BORDER,
     borderRadius: 12,
     marginBottom: 4,
   },
@@ -2165,7 +2161,7 @@ const styles = StyleSheet.create({
   balanceStatValue: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#10b981',
+    color: Brand.colors.semantic.success,
   },
   balanceStatLabel: {
     fontSize: 11,
@@ -2180,14 +2176,23 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.1)',
-    backgroundColor: 'rgba(6, 167, 207, 0.05)',
+    borderColor: Brand.colors.glass.heavy,
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     minHeight: 120,
     shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,
     shadowRadius: 0,
     elevation: 0,
+    overflow: 'hidden',
+  },
+  overviewCardGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.19,
   },
   overviewCardHeader: {
     flexDirection: 'row',
@@ -2264,13 +2269,23 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.12)',
-    backgroundColor: 'rgba(6, 167, 207, 0.07)',
+    borderColor: Brand.colors.glass.heavy,
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
     shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,
     shadowRadius: 0,
     elevation: 0,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  recentCardGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.15,
   },
   recentHeader: {
     flexDirection: 'row',
@@ -2423,9 +2438,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 520,
     borderRadius: 20,
-    backgroundColor: 'rgba(15,15,20,0.8)',
+    backgroundColor: Brand.colors.background.card,
     borderWidth: 1,
-    borderColor: 'rgba(6,182,212,0.15)',
+    borderColor: Brand.colors.glass.heavy,
     padding: 20,
     position: 'relative',
     overflow: 'hidden',
@@ -2437,6 +2452,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 0,
+    opacity: 0.15,
   },
   addModalHeader: {
     flexDirection: 'row',
@@ -2695,6 +2711,9 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     position: 'relative',
     overflow: 'hidden',
+    backgroundColor: Brand.colors.background.card,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.heavy,
   },
   modalGradient: {
     position: 'absolute',
@@ -2703,6 +2722,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 0,
+    opacity: 0.15,
   },
   modalScrollView: {
     maxHeight: 400,

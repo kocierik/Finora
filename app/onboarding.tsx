@@ -1,4 +1,4 @@
-import { UI as UI_CONSTANTS } from '@/constants/branding'
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -14,7 +14,7 @@ import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
 import type { NotificationData } from '@/services/notification-service'
 import { checkNotificationPermission, type NotificationPermissionStatus } from '@/services/notification-service'
-import { loadNotifications, saveNotification, sortNotificationsByDate, type StoredNotification } from '@/services/notification-storage'
+import { loadNotifications, saveNotification, sortNotificationsByDate, type StoredNotification } from '@/services/notifications/storage'
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
 const CARD_MAX_WIDTH = 420
@@ -248,7 +248,7 @@ export default function OnboardingScreen() {
             name: 'Default',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#06b6d4'
+            lightColor: Brand.colors.primary.cyan
           })
         } catch {}
       }
@@ -386,7 +386,7 @@ export default function OnboardingScreen() {
   if (loading || checking || (!user && !forceShow)) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#06b6d4" />
+        <ActivityIndicator size="small" color={Brand.colors.primary.cyan} />
       </View>
     )
   }
@@ -520,13 +520,13 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0f'
+    backgroundColor: Brand.colors.background.deep
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a0f'
+    backgroundColor: Brand.colors.background.deep
   },
   card: {
     backgroundColor: UI_CONSTANTS.GLASS_BG_XS,
@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   },
   title: {
-    color: '#E8EEF8',
+    color: Brand.colors.text.primary,
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: 0.2,
@@ -582,7 +582,7 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   },
   subtitle: {
-    color: '#cbd5e1',
+    color: Brand.colors.text.secondary,
     fontSize: 17,
     lineHeight: 25,
     marginBottom: 30,
@@ -597,7 +597,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   previewTitle: {
-    color: '#E8EEF8',
+    color: Brand.colors.text.primary,
     marginBottom: 10,
     fontWeight: '700'
   },
@@ -614,16 +614,17 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: '#06b6d4'
+    backgroundColor: Brand.colors.primary.cyan
   },
   previewItemTitle: {
     fontWeight: '700',
-    color: '#E8EEF8',
+    color: Brand.colors.text.primary,
     marginBottom: 2
   },
   previewItemText: {
     opacity: 0.8,
-    fontSize: 12
+    fontSize: 12,
+    color: Brand.colors.text.secondary
   },
   previewTime: {
     fontSize: 10,
@@ -650,7 +651,7 @@ const styles = StyleSheet.create({
     backgroundColor: UI_CONSTANTS.GLASS_BORDER
   },
   dotActive: {
-    backgroundColor: '#06b6d4'
+    backgroundColor: Brand.colors.primary.cyan
   },
   navRow: {
     flexDirection: 'row',
@@ -668,7 +669,7 @@ const styles = StyleSheet.create({
     backgroundColor: UI_CONSTANTS.GLASS_BG_SM
   },
   backText: {
-    color: '#E8EEF8',
+    color: Brand.colors.text.primary,
     fontWeight: '800',
     letterSpacing: 0.3
   },
@@ -677,7 +678,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     // soft glow
-    shadowColor: '#06b6d4',
+    shadowColor: Brand.colors.primary.cyan,
     shadowOpacity: 0.22,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
@@ -690,7 +691,7 @@ const styles = StyleSheet.create({
     borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER
   },
   nextText: {
-    color: '#E8EEF8',
+    color: Brand.colors.text.primary,
     fontWeight: '800',
     letterSpacing: 0.3
   },
