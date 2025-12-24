@@ -1,7 +1,7 @@
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/Card';
 import { Brand, UI as UI_CONSTANTS } from '@/constants/branding';
-import { DEFAULT_CATEGORIES, translateCategoryName } from '@/constants/categories';
+import { DEFAULT_CATEGORIES, DEFAULT_CATEGORY_COLOR, translateCategoryName } from '@/constants/categories';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/lib/supabase';
@@ -11,6 +11,7 @@ import { fetchInvestments } from '@/services/portfolio';
 import { Expense } from '@/types';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
@@ -31,6 +32,7 @@ function sameMonth(dateStr: string, year: number, monthIndex: number) {
 
 
 export default function HomeScreen() {
+  const router = useRouter()
   const { t, language } = useSettings()
   const { user, loading } = useAuth()
   
@@ -55,6 +57,9 @@ export default function HomeScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [incomes, setIncomes] = useState<any[]>([])
   const [dbCategories, setDbCategories] = useState<{ id: string; name: string; icon: string; color: string; sort_order: number }[]>([])
+  const [bankConnections, setBankConnections] = useState<any[]>([])
+  const [isSyncingBank] = useState(false)
+  // NOTE: left here previously but not used anymore; keep Home lean
   const [kpisState, setKpis] = useState<{ totalInvested: number; totalMarket?: number; monthExpenses: number } | null>(null)
   const kpis = kpisState
   void kpis
@@ -101,6 +106,11 @@ export default function HomeScreen() {
   const [incomeRecurringOccurrences, setIncomeRecurringOccurrences] = useState<string>('6')
   const [incomeRecurringInfinite, setIncomeRecurringInfinite] = useState<boolean>(false)
 
+  const handleConnectBank = async () => {
+    // UX: porta l’utente alla pagina di gestione/collegamento, invece di avviare subito l’OAuth
+    router.push('/bank-accounts')
+  };
+
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(30)).current
@@ -118,7 +128,7 @@ export default function HomeScreen() {
     
     // Note: Expense synchronization is handled in the Expenses tab to avoid duplicates
     
-      const [{ data: inv }, { data: exp }, { data: inc }, { data: profile }, { data: categories }] = await Promise.all([
+      const [{ data: inv }, { data: exp }, { data: inc }, { data: profile }, { data: categories }, { data: conns }] = await Promise.all([
         fetchInvestments(user.id),
         supabase
           .from('expenses')
@@ -140,9 +150,11 @@ export default function HomeScreen() {
           .order('created_at', { ascending: false }),
         supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle(),
         supabase.from('categories').select('*').eq('user_id', user.id).order('sort_order', { ascending: true }),
+        supabase.from('bank_connections').select('*').eq('user_id', user.id),
       ])
       setExpenses(exp || [])
       setIncomes(inc || [])
+      setBankConnections(conns || [])
       
       // Carica il nome del profilo
       if (profile?.display_name) {
@@ -153,39 +165,60 @@ export default function HomeScreen() {
         id: c.id,
         name: c.name,
         icon: c.icon,
-        color: c.color,
+        color: DEFAULT_CATEGORY_COLOR,
         sort_order: c.sort_order,
       }))
       
       // If no categories exist, create default ones
       if (normalizedCats.length === 0) {
-        const DEFAULT_CATEGORIES = [
-          { name: 'Food & Drinks', icon: '🍽️', color: Brand.colors.primary.orange, sort_order: 0 },
-          { name: 'Transport', icon: '🚗', color: Brand.colors.semantic.success, sort_order: 1 },
-          { name: 'Home & Utilities', icon: '🏠', color: Brand.colors.semantic.info, sort_order: 2 },
-          { name: 'Entertainment', icon: '🎬', color: Brand.colors.semantic.danger, sort_order: 3 },
-          { name: 'Health & Personal', icon: '🏥', color: Brand.colors.primary.magenta, sort_order: 4 },
-          { name: 'Miscellaneous', icon: '📦', color: Brand.colors.primary.teal, sort_order: 5 }
-        ]
+        // Verify session is valid before inserting
+        const { data: sessionData } = await supabase.auth.getSession()
+        const authUserId = sessionData?.session?.user?.id
         
-        const { data: newCategories, error: createError } = await supabase
-          .from('categories')
-          .upsert(DEFAULT_CATEGORIES.map(cat => ({
-            ...cat,
-            user_id: user.id
-          })), { onConflict: 'user_id,name' })
-          .select()
+        // Also check what the server sees
+        const { data: serverAuth, error: rpcError } = await supabase.rpc('debug_auth_uid')
+        console.log('🔐 DEBUG - user.id:', user.id)
+        console.log('🔐 DEBUG - client auth.uid:', authUserId)
+        console.log('🔐 DEBUG - server auth.uid:', serverAuth, rpcError?.message)
         
-        if (createError) {
-          console.error('Error creating default categories:', createError)
+        if (!authUserId || authUserId !== user.id) {
+          console.error('Auth mismatch! user.id:', user.id, 'auth.uid:', authUserId)
+          // Don't try to insert if auth is mismatched
         } else {
-          normalizedCats = (newCategories || []).map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            icon: c.icon,
-            color: c.color,
-            sort_order: c.sort_order,
-          }))
+          // Insert categories one by one to avoid batch RLS issues
+          const createdCategories: any[] = []
+          
+          for (let index = 0; index < DEFAULT_CATEGORIES.length; index++) {
+            const cat = DEFAULT_CATEGORIES[index]
+            const { data: newCat, error: catError } = await supabase
+              .from('categories')
+              .insert({
+                name: cat.name,
+                icon: cat.icon,
+                color: DEFAULT_CATEGORY_COLOR,
+                sort_order: index,
+                user_id: user.id
+              })
+              .select()
+              .single()
+            
+            if (catError) {
+              console.error(`Error creating category ${cat.name}:`, catError)
+            } else if (newCat) {
+              createdCategories.push(newCat)
+            }
+          }
+          
+          if (createdCategories.length > 0) {
+            normalizedCats = createdCategories.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              icon: c.icon,
+              color: DEFAULT_CATEGORY_COLOR,
+              sort_order: c.sort_order,
+            }))
+            console.log(`Created ${createdCategories.length} default categories`)
+          }
         }
       }
       
@@ -543,7 +576,7 @@ export default function HomeScreen() {
           description: expense.merchant || 'Expense',
           category: expense.categories?.name || expense.category || 'Other',
           categoryIcon: expense.categories?.icon || '💳',
-          categoryColor: expense.categories?.color || Brand.colors.primary.cyan,
+          categoryColor: DEFAULT_CATEGORY_COLOR,
           date: expense.date,
           created_at: expense.created_at,
           isRecurring: expense.is_recurring,
@@ -576,7 +609,7 @@ export default function HomeScreen() {
         description: expense.merchant || (isIncome ? 'Accredito' : 'Expense'),
         category: expense.categories?.name || expense.category || 'Other',
         categoryIcon: expense.categories?.icon || '💳',
-        categoryColor: expense.categories?.color || Brand.colors.primary.cyan,
+        categoryColor: DEFAULT_CATEGORY_COLOR,
         date: expense.date,
         created_at: expense.created_at,
         isRecurring: expense.is_recurring,
@@ -595,9 +628,7 @@ export default function HomeScreen() {
                    income.source === 'freelance' ? '💻' :
                    income.source === 'investment' ? '📈' :
                    income.source === 'bonus' ? '🎁' : '💰',
-      categoryColor: income.category === 'work' ? Brand.colors.semantic.success :
-                    income.category === 'passive' ? Brand.colors.primary.magenta :
-                    income.category === 'investment' ? Brand.colors.primary.orange : Brand.colors.primary.teal,
+      categoryColor: DEFAULT_CATEGORY_COLOR,
       date: income.date,
       created_at: income.created_at,
       isRecurring: income.is_recurring,
@@ -800,12 +831,88 @@ export default function HomeScreen() {
           </Pressable>
           </View>
         </View>
+
+        {/* 
+          ========================================
+          🚧 BANK SYNC QUICK ACTION - TEMPORARILY DISABLED
+          Waiting for GoCardless integration (free alternative)
+          ========================================
+        
+        <Animated.View 
+          style={[
+            styles.bankSyncContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }]
+            }
+          ]}
+        >
+          <Pressable
+            onPress={handleConnectBank}
+            disabled={isSyncingBank}
+            style={({ pressed }) => [
+              styles.bankSyncCard,
+              pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] }
+            ]}
+          >
+            <LinearGradient
+              colors={bankConnections.length > 0 
+                ? [Brand.colors.primary.cyan + '20', Brand.colors.primary.cyan + '05']
+                : [Brand.colors.primary.orange + '20', Brand.colors.primary.orange + '05']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.bankSyncGradient}
+            />
+            
+            <View style={styles.bankSyncContent}>
+              <View style={[
+                styles.bankSyncIconContainer,
+                { backgroundColor: bankConnections.length > 0 ? Brand.colors.primary.cyan + '30' : Brand.colors.primary.orange + '30' }
+              ]}>
+                {isSyncingBank ? (
+                  <ActivityIndicator size="small" color={Brand.colors.primary.cyan} />
+                ) : (
+                  <ThemedText style={styles.bankSyncIcon}>
+                    {bankConnections.length > 0 ? '🔄' : '🏦'}
+                  </ThemedText>
+                )}
+              </View>
+              
+              <View style={styles.bankSyncTextContainer}>
+                <ThemedText style={styles.bankSyncTitle}>
+                  {bankConnections.length > 0
+                    ? (language === 'it' ? 'Gestisci banca' : 'Manage bank')
+                    : (language === 'it' ? 'Collega banca' : 'Connect bank')
+                  }
+                </ThemedText>
+                <ThemedText style={styles.bankSyncSubtitle}>
+                  {bankConnections.length > 0
+                    ? (language === 'it' 
+                        ? `Hai ${bankConnections.length} ${bankConnections.length === 1 ? 'conto collegato' : 'conti collegati'}`
+                        : `You have ${bankConnections.length} ${bankConnections.length === 1 ? 'account' : 'accounts'} linked`)
+                    : (language === 'it' 
+                        ? 'Traccia le tue spese in tempo reale' 
+                        : 'Track your expenses in real-time')
+                  }
+                </ThemedText>
+              </View>
+              
+              <View style={styles.bankSyncChevron}>
+                <ThemedText style={styles.bankSyncChevronText}>›</ThemedText>
+              </View>
+            </View>
+          </Pressable>
+        </Animated.View>
+        */}
+
+
         {/* Recent Transactions */}
         <Animated.View 
           style={{
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }],
-            marginTop: 8,
+            marginTop: 16,
           }}
         >
           <Card style={styles.recentCard}>
@@ -1310,7 +1417,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* Category Selection Modal (Recent Transactions) */}
+      {/* Category Selection Modal (Recent Transactions) - match Expenses tab UI */}
       <Modal
         visible={showCategoryModal}
         transparent={true}
@@ -1318,20 +1425,19 @@ export default function HomeScreen() {
         onRequestClose={closeCategoryModal}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
+          <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}>
             <Card style={styles.modalCard}>
               <LinearGradient
-                colors={[Brand.colors.primary.teal, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                colors={UI_CONSTANTS.GRADIENT_CYAN_BG_CARD}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.modalGradient}
-                pointerEvents="none"
               />
               <View style={styles.modalHeader}>
                 <ThemedText style={styles.modalTitle}>
                   {selectedTransaction?.type === 'income'
-                    ? (language === 'it' ? 'Seleziona categoria entrata' : 'Select income category')
-                    : (language === 'it' ? 'Seleziona categoria' : 'Select category')}
+                    ? (language === 'it' ? 'Seleziona Categoria Entrata' : 'Select Income Category')
+                    : (language === 'it' ? 'Seleziona Categoria' : 'Select Category')}
                 </ThemedText>
                 <Pressable onPress={closeCategoryModal} style={styles.closeButton}>
                   <ThemedText style={styles.closeButtonText}>✕</ThemedText>
@@ -1340,7 +1446,7 @@ export default function HomeScreen() {
 
               <View style={styles.transactionInfo}>
                 <ThemedText style={styles.transactionInfoMerchant}>
-                  {selectedTransaction?.merchant || selectedTransaction?.description || '—'}
+                  {selectedTransaction?.merchant ?? selectedTransaction?.description ?? '—'}
                 </ThemedText>
                 <View style={styles.transactionAmountRow}>
                   {(() => {
@@ -1363,23 +1469,22 @@ export default function HomeScreen() {
                   })()}
                 </View>
                 <ThemedText style={styles.transactionInfoNote}>
-                  {(() => {
-                    const isIncome = selectedTransaction?.type === 'income'
-                    const merchant = (selectedTransaction as any)?.merchant || selectedTransaction?.description || ''
-                    const sameMerchantCount = allTransactions.filter(
-                      t => ((t as any).merchant || t.description || '').toLowerCase() === merchant.toLowerCase()
-                        && (isIncome ? t.type === 'income' : t.type === 'expense')
-                    ).length
+                  {selectedTransaction?.type === 'income'
+                    ? (language === 'it' ? 'La categoria verrà applicata a questa entrata' : 'Category will be applied to this income')
+                    : (() => {
+                        const isIncome = selectedTransaction?.type === 'income'
+                        const merchant = (selectedTransaction as any)?.merchant || selectedTransaction?.description || ''
+                        const sameMerchantCount = allTransactions.filter(
+                          t => ((t as any).merchant || t.description || '').toLowerCase() === merchant.toLowerCase()
+                            && (isIncome ? t.type === 'income' : t.type === 'expense')
+                        ).length
 
-                    if (language === 'it') {
-                      return sameMerchantCount > 1
-                        ? `La categoria verrà applicata a ${sameMerchantCount} transazioni di questo merchant`
-                        : 'La categoria verrà applicata a questa transazione.'
-                    }
-                    return sameMerchantCount > 1
-                      ? `The category will be applied to ${sameMerchantCount} transactions from this merchant`
-                      : 'The category will be applied to this transaction.'
-                  })()}
+                        if (language === 'it') {
+                          return `La categoria verrà applicata a ${sameMerchantCount} transazioni di questo merchant`
+                        }
+                        return `Category will be applied to ${sameMerchantCount} transactions from this merchant`
+                      })()
+                  }
                 </ThemedText>
               </View>
 
@@ -1408,15 +1513,15 @@ export default function HomeScreen() {
                       <TouchableOpacity
                         style={[
                           styles.categoryOptionButton,
-                          { borderColor: c.color || Brand.colors.glass.heavy }
+                          { borderColor: DEFAULT_CATEGORY_COLOR }
                         ]}
                         onPress={() => handleCategorySelect(c.id || c.name)}
                       >
                         <LinearGradient
-                          colors={[c.color ? `${c.color}22` : Brand.colors.glass.heavy, Brand.colors.glass.heavy, Brand.colors.glass.heavy]}
+                          colors={[`${DEFAULT_CATEGORY_COLOR}15`, `${DEFAULT_CATEGORY_COLOR}08`]}
                           style={styles.categoryOptionGradient}
                         >
-                          <View style={[styles.categoryOptionIcon, { backgroundColor: c.color ? `${c.color}20` : UI_CONSTANTS.GLASS_BG_MD }]}>
+                          <View style={[styles.categoryOptionIcon, { backgroundColor: `${DEFAULT_CATEGORY_COLOR}20` }]}>
                             <ThemedText style={styles.categoryOptionIconText}>{c.icon || '🏷️'}</ThemedText>
                           </View>
                           <ThemedText style={styles.categoryOptionName} numberOfLines={1}>
@@ -1429,7 +1534,7 @@ export default function HomeScreen() {
                 </View>
               </ScrollView>
             </Card>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -1931,7 +2036,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingBottom: 14,
     marginTop: 24,
   },
   loadingContainer: {
@@ -1968,8 +2073,8 @@ const styles = StyleSheet.create({
   // Premium Header
   premiumHeader: {
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 24,
+    paddingTop: 40,
+    paddingBottom: 12,
     zIndex: 10,
   },
   headerContent: {
@@ -2023,7 +2128,81 @@ const styles = StyleSheet.create({
   },
   // Main Balance Card
   balanceCardContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
+  },
+
+  // Bank Sync Banner (CTA)
+  bankSyncContainer: {
+    marginTop: 0,
+    marginBottom: 10,
+  },
+  bankSyncCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD,
+    backgroundColor: Brand.colors.background.card,
+    overflow: 'hidden',
+  },
+  bankSyncGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+    opacity: 1,
+  },
+  bankSyncContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  bankSyncIconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  bankSyncIcon: {
+    fontSize: 16,
+  },
+  bankSyncTextContainer: {
+    flex: 1,
+  },
+  bankSyncTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Brand.colors.text.primary,
+    letterSpacing: -0.2,
+    marginBottom: 1,
+  },
+  bankSyncSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: Brand.colors.text.secondary,
+    opacity: 0.9,
+  },
+  bankSyncChevron: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+  bankSyncChevronText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Brand.colors.text.secondary,
+    marginTop: -1,
   },
   balanceCard: {
     padding: 28,
@@ -2106,7 +2285,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: Brand.colors.text.primary,
     letterSpacing: -1,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   balanceStats: {
     alignItems: 'center',
@@ -2139,7 +2318,7 @@ const styles = StyleSheet.create({
     color: Brand.colors.text.secondary,
   },
   // Overview Cards
-  overviewContainer: { gap: 12, marginBottom: 12, marginTop: 12 },
+  overviewContainer: { gap: 14, marginBottom: 16, marginTop: 12 },
   overviewCardContainer: {
     flex: 1,
   },
@@ -2168,7 +2347,7 @@ const styles = StyleSheet.create({
   overviewCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 14,
   },
   overviewIconContainer: {
     marginRight: 16,
@@ -2209,7 +2388,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     color: Brand.colors.text.primary,
-    marginBottom: 16,
+    marginBottom: 10,
   },
   overviewCardFooter: {
     alignItems: 'center',
@@ -2237,11 +2416,12 @@ const styles = StyleSheet.create({
   },
   // Recent transactions styles
   recentCard: {
-    padding: 12,
+    padding: 14,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: Brand.colors.glass.heavy,
     backgroundColor: UI_CONSTANTS.GLASS_BG,
+    marginBottom: 16,
     shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,

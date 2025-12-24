@@ -3,7 +3,7 @@ import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
 import { DatePickerModal } from '@/components/ui/DatePickerModal'
 import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
-import { DEFAULT_CATEGORIES } from '@/constants/categories'
+import { DEFAULT_CATEGORIES, DEFAULT_CATEGORY_COLOR } from '@/constants/categories'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { supabase } from '@/lib/supabase'
@@ -20,6 +20,12 @@ import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Modal, Pressabl
 import { PanGestureHandler, State } from 'react-native-gesture-handler'
 
 export default function ExpensesScreen() {
+  const CATEGORY_EMOJIS = [
+    '🛒', '🍕', '☕️', '🚗', '🏠', '🛍️', '🎬', '🏥',
+    '💡', '📱', '💻', '🧾', '✈️', '🚆', '🏋️', '🎮',
+    '📚', '🎁', '🐶', '👶', '🍺', '🍣', '🧴', '💊',
+    '⚡️', '💧', '📦'
+  ] as const
   const { locale, currency, t, monthlyBudget, language, categories: configuredCategories } = useSettings()
   const { user, loading } = useAuth()
   
@@ -48,14 +54,14 @@ export default function ExpensesScreen() {
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryEmoji, setNewCategoryEmoji] = useState('📦')
-  const [newCategoryColor, setNewCategoryColor] = useState<string>(Brand.colors.semantic.success)
+  // Colore categoria: rimosso dalla UI (usa default DB)
   const [newCategoryLoading, setNewCategoryLoading] = useState(false)
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false)
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false)
   const [editCategoryId, setEditCategoryId] = useState<string | null>(null)
   const [editCategoryName, setEditCategoryName] = useState('')
   const [editCategoryEmoji, setEditCategoryEmoji] = useState('📦')
-  const [editCategoryColor, setEditCategoryColor] = useState<string>(Brand.colors.semantic.success)
+  // Colore categoria: rimosso dalla UI
   const [editCategoryLoading, setEditCategoryLoading] = useState(false)
   // Categories loaded from DB (categories table)
   const [dbCategories, setDbCategories] = useState<{ id: string; name: string; icon: string; color: string; sort_order: number }[]>([])
@@ -100,7 +106,7 @@ export default function ExpensesScreen() {
           .insert(DEFAULT_CATEGORIES.map((cat, index) => ({
             name: cat.name,
             icon: cat.icon,
-            color: cat.color,
+            color: DEFAULT_CATEGORY_COLOR,
             sort_order: index,
             user_id: user.id
           })))
@@ -115,7 +121,7 @@ export default function ExpensesScreen() {
           id: c.id,
           name: c.name,
           icon: c.icon,
-          color: c.color,
+          color: DEFAULT_CATEGORY_COLOR,
           sort_order: c.sort_order,
         }))
         setDbCategories(normalized)
@@ -124,7 +130,7 @@ export default function ExpensesScreen() {
           id: c.id,
           name: c.name,
           icon: c.icon,
-          color: c.color,
+          color: DEFAULT_CATEGORY_COLOR,
           sort_order: c.sort_order,
         }))
         setDbCategories(normalized)
@@ -477,7 +483,7 @@ export default function ExpensesScreen() {
           description: expense.merchant || 'Expense',
           category: expense.categories?.name || expense.category || 'Other',
           categoryIcon: expense.categories?.icon || '💳',
-      categoryColor: expense.categories?.color || Brand.colors.primary.cyan,
+      categoryColor: DEFAULT_CATEGORY_COLOR,
           date: expense.date,
           created_at: expense.created_at,
           isRecurring: expense.is_recurring,
@@ -510,7 +516,7 @@ export default function ExpensesScreen() {
         description: expense.merchant || (isIncome ? 'Accredito' : 'Expense'),
         category: expense.categories?.name || expense.category || 'Other',
         categoryIcon: expense.categories?.icon || '💳',
-    categoryColor: expense.categories?.color || Brand.colors.primary.cyan,
+    categoryColor: DEFAULT_CATEGORY_COLOR,
         date: expense.date,
         created_at: expense.created_at,
         isRecurring: expense.is_recurring,
@@ -530,9 +536,7 @@ export default function ExpensesScreen() {
                    income.source === 'freelance' ? '💻' :
                    income.source === 'investment' ? '📈' :
                    income.source === 'bonus' ? '🎁' : '💰',
-      categoryColor: income.category === 'work' ? Brand.colors.semantic.success :
-                    income.category === 'passive' ? Brand.colors.primary.magenta :
-                    income.category === 'investment' ? Brand.colors.primary.orange : Brand.colors.semantic.info,
+      categoryColor: DEFAULT_CATEGORY_COLOR,
       date: income.date,
       created_at: income.created_at,
       isRecurring: income.is_recurring,
@@ -867,7 +871,6 @@ export default function ExpensesScreen() {
     setEditCategoryId(category.id)
     setEditCategoryName(category.name)
     setEditCategoryEmoji(category.icon || '📦')
-    setEditCategoryColor(category.color || Brand.colors.semantic.success)
     setShowEditCategoryModal(true)
   }, [])
 
@@ -882,7 +885,8 @@ export default function ExpensesScreen() {
           user_id: user.id,
           name: newCategoryName.trim(),
           icon: newCategoryEmoji.trim() || '📦',
-          color: newCategoryColor,
+          // non inviamo il colore: usa DEFAULT del DB (o fallback lato DB)
+          color: DEFAULT_CATEGORY_COLOR,
           sort_order: sortOrder,
         })
         .select()
@@ -893,14 +897,13 @@ export default function ExpensesScreen() {
 
       setNewCategoryName('')
       setNewCategoryEmoji('📦')
-      setNewCategoryColor(Brand.colors.semantic.success)
       setShowNewCategoryModal(false)
     } catch (e) {
       console.error('[Expenses] ❌ Failed to create category', e)
     } finally {
       setNewCategoryLoading(false)
     }
-  }, [user, newCategoryName, newCategoryEmoji, newCategoryColor, dbCategories.length, loadCategoriesFromDb])
+  }, [user, newCategoryName, newCategoryEmoji, dbCategories.length, loadCategoriesFromDb])
 
   const handleUpdateCategory = useCallback(async () => {
     if (!user || !editCategoryId || !editCategoryName.trim()) return
@@ -911,7 +914,7 @@ export default function ExpensesScreen() {
         .update({
           name: editCategoryName.trim(),
           icon: editCategoryEmoji.trim() || '📦',
-          color: editCategoryColor,
+          // non aggiorniamo il colore (scelta rimossa)
         })
         .eq('user_id', user.id)
         .eq('id', editCategoryId)
@@ -927,7 +930,7 @@ export default function ExpensesScreen() {
     } finally {
       setEditCategoryLoading(false)
     }
-  }, [user, editCategoryId, editCategoryName, editCategoryEmoji, editCategoryColor, loadCategoriesFromDb])
+  }, [user, editCategoryId, editCategoryName, editCategoryEmoji, loadCategoriesFromDb])
 
   const handleDeleteCategory = useCallback(async (categoryId: string) => {
     if (!user) return
@@ -1749,7 +1752,7 @@ export default function ExpensesScreen() {
                           style={styles.categoryGradientOverlay}
                           pointerEvents="none"
                         />
-                      <View style={[styles.categoryIcon, { backgroundColor: `${category.color}20` }]}>
+                    <View style={[styles.categoryIcon, { backgroundColor: `${DEFAULT_CATEGORY_COLOR}20` }]}>
                         <ThemedText style={styles.categoryIconText}>{category.icon}</ThemedText>
                       </View>
                     <ThemedText style={styles.categoryName}>{category.name}</ThemedText>
@@ -1766,12 +1769,12 @@ export default function ExpensesScreen() {
                         € {Math.abs(category.amount).toFixed(2)}
                       </ThemedText>
                       <View style={styles.progressContainer}>
-                        <View style={[styles.progressBar, { backgroundColor: `${category.color}20` }]}>
+                        <View style={[styles.progressBar, { backgroundColor: `${DEFAULT_CATEGORY_COLOR}20` }]}>
                           <Animated.View 
                             style={[
                               styles.progressFill, 
                               { 
-                                backgroundColor: category.color,
+                                backgroundColor: DEFAULT_CATEGORY_COLOR,
                                 width: `${category.percentage}%`
                               }
                             ]} 
@@ -1877,47 +1880,12 @@ export default function ExpensesScreen() {
               <ThemedText style={styles.sectionTitle}>
                 {isTransitioning ? t('loading') : t('recent_transactions')}
               </ThemedText>
-              <View style={styles.headerActions}>
-                <Pressable 
-                  style={styles.resetButton}
-                  onPress={() => setShowResetModal(true)}
-                  disabled={refreshing || isTransitioning}
-                >
-                  <ThemedText style={[
-                    styles.resetButtonText,
-                    (refreshing || isTransitioning) && styles.resetButtonTextDisabled
-                  ]}>
-                    🗑️ Reset
-                  </ThemedText>
-                </Pressable>
-                <Pressable 
-                  style={styles.syncButton}
-                  onPress={syncFromNotifications}
-                  disabled={refreshing || isTransitioning}
-                >
-                  <ThemedText style={[
-                    styles.syncButtonText,
-                    (refreshing || isTransitioning) && styles.syncButtonTextDisabled
-                  ]}>
-                    📱 Sync{pendingExpensesCount > 0 ? ` (${pendingExpensesCount})` : ''}
-                  </ThemedText>
-                </Pressable>
-                <Pressable 
-                  style={styles.refreshButton}
-                  onPress={fetchExpenses}
-                  disabled={refreshing || isTransitioning}
-                >
-                  <ThemedText style={[
-                    styles.refreshButtonText,
-                    (refreshing || isTransitioning) && styles.refreshButtonTextDisabled
-                  ]}>
-                    {refreshing || isTransitioning ? '🔄' : '↻'}
-                  </ThemedText>
-                </Pressable>
-              </View>
-          </View>
             <ThemedText style={styles.sectionSubtitle}>
-              {allMonthTransactions.length} {allMonthTransactions.length !== 1 ? t('transactions') : t('transaction')} • {language === 'it' ? 'Ultimo aggiornamento' : 'Last update'}: {new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+              {allMonthTransactions.length} {allMonthTransactions.length !== 1 ? t('transactions') : t('transaction')}
+            </ThemedText>
+            </View>
+            <ThemedText style={[styles.sectionSubtitle, { fontSize: 11, opacity: 0.8, fontWeight: '400' }]}>
+              {language === 'it' ? '💡 Clicca su una transazione per modificare la categoria' : '💡 Tap a transaction to edit its category'}
             </ThemedText>
           </View>
           
@@ -1951,7 +1919,7 @@ export default function ExpensesScreen() {
                   >
                     {(() => {
                       const isIncome = transaction.type === 'income'
-                      const categoryColor = transaction.categoryColor
+                      const categoryColor = DEFAULT_CATEGORY_COLOR
                       
                       return (
                         <Card variant="subtle" style={styles.transactionCard}>
@@ -2151,15 +2119,15 @@ export default function ExpensesScreen() {
                       <TouchableOpacity
                         style={[
                           styles.categoryOptionButton,
-                          { borderColor: category.color }
+                          { borderColor: DEFAULT_CATEGORY_COLOR }
                         ]}
                         onPress={() => handleCategorySelect((category as any).id || category.name)}
                       >
                         <LinearGradient
-                          colors={[`${category.color}15`, `${category.color}08`]}
+                          colors={[`${DEFAULT_CATEGORY_COLOR}15`, `${DEFAULT_CATEGORY_COLOR}08`]}
                           style={styles.categoryOptionGradient}
                         >
-                          <View style={[styles.categoryOptionIcon, { backgroundColor: `${category.color}20` }]}>
+                          <View style={[styles.categoryOptionIcon, { backgroundColor: `${DEFAULT_CATEGORY_COLOR}20` }]}>
                             <ThemedText style={styles.categoryOptionIconText}>{category.icon}</ThemedText>
                           </View>
                           <ThemedText style={styles.categoryOptionName}>{category.name}</ThemedText>
@@ -2199,31 +2167,35 @@ export default function ExpensesScreen() {
                   <ThemedText style={styles.closeButtonText}>✕</ThemedText>
                 </Pressable>
               </View>
-              <View style={styles.transactionInfo}>
-                <ThemedText style={styles.transactionInfoNote}>
-                  {language === 'it'
-                    ? 'Scegli un\'emoji, un nome e un colore per la nuova categoria.'
-                    : 'Choose an emoji, name and color for the new category.'}
-                </ThemedText>
-              </View>
               <View style={styles.modalScrollContent}>
+                <View style={{ marginBottom: 12 }}>
+                  <View style={styles.emojiPickerHeaderCentered}>
+                    <View style={styles.emojiSelectedCenter}>
+                      <ThemedText style={styles.emojiSelectedCenterText}>{newCategoryEmoji || '📦'}</ThemedText>
+                    </View>
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={true}
+                    persistentScrollbar={true}
+                    contentContainerStyle={styles.emojiScrollContent}
+                  >
+                    {CATEGORY_EMOJIS.map((em) => (
+                      <Pressable
+                        key={em}
+                        onPress={() => setNewCategoryEmoji(em)}
+                        style={({ pressed }) => [
+                          styles.emojiChip,
+                          newCategoryEmoji === em && styles.emojiChipSelected,
+                          pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                        ]}
+                      >
+                        <ThemedText style={styles.emojiChipText}>{em}</ThemedText>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
                 <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                  <TextInput
-                    style={[styles.input, { flex: 1 }]}
-                    value={newCategoryEmoji}
-                    maxLength={2}
-                    onChangeText={(text) => {
-                      const firstGrapheme = Array.from(text)[0] || '';
-                      setNewCategoryEmoji(firstGrapheme);
-                    }}
-                    onBlur={() => {
-                      if (!newCategoryEmoji.trim()) {
-                        setNewCategoryEmoji('📦');
-                      }
-                    }}
-                    placeholder="🛒"
-                    placeholderTextColor={Brand.colors.text.muted}
-                  />
                   <TextInput
                     style={[styles.input, { flex: 3 }]}
                     value={newCategoryName}
@@ -2231,26 +2203,6 @@ export default function ExpensesScreen() {
                     placeholder={language === 'it' ? 'Nome categoria' : 'Category name'}
                     placeholderTextColor={Brand.colors.text.muted}
                   />
-                </View>
-                <View style={styles.colorRow}>
-                  {[
-                    Brand.colors.primary.orange,
-                    Brand.colors.semantic.success,
-                    Brand.colors.semantic.info,
-                    Brand.colors.semantic.danger,
-                    Brand.colors.primary.magenta,
-                    Brand.colors.primary.teal,
-                  ].map((hex) => (
-                    <Pressable
-                      key={hex}
-                      style={[
-                        styles.colorDot,
-                        { backgroundColor: hex },
-                        newCategoryColor === hex && styles.colorDotSelected,
-                      ]}
-                      onPress={() => setNewCategoryColor(hex)}
-                    />
-                  ))}
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
                   <Pressable
@@ -2309,6 +2261,7 @@ export default function ExpensesScreen() {
                         {
                           padding: 6,
                           borderRadius: 8,
+                          marginLeft: 10,
                           backgroundColor: pressed ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)',
                           borderColor: 'rgba(239, 68, 68, 0.3)',
                           borderWidth: 1,
@@ -2325,31 +2278,35 @@ export default function ExpensesScreen() {
                   <ThemedText style={styles.closeButtonText}>✕</ThemedText>
                 </Pressable>
               </View>
-              <View style={styles.transactionInfo}>
-                <ThemedText style={styles.transactionInfoNote}>
-                  {language === 'it'
-                    ? 'Aggiorna emoji, nome e colore della categoria.'
-                    : 'Update emoji, name and color of the category.'}
-                </ThemedText>
-              </View>
               <View style={styles.modalScrollContent}>
+                <View style={{ marginBottom: 12 }}>
+                  <View style={styles.emojiPickerHeaderCentered}>
+                    <View style={styles.emojiSelectedCenter}>
+                      <ThemedText style={styles.emojiSelectedCenterText}>{editCategoryEmoji || '📦'}</ThemedText>
+                    </View>
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={true}
+                    persistentScrollbar={true}
+                    contentContainerStyle={styles.emojiScrollContent}
+                  >
+                    {CATEGORY_EMOJIS.map((em) => (
+                      <Pressable
+                        key={em}
+                        onPress={() => setEditCategoryEmoji(em)}
+                        style={({ pressed }) => [
+                          styles.emojiChip,
+                          editCategoryEmoji === em && styles.emojiChipSelected,
+                          pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                        ]}
+                      >
+                        <ThemedText style={styles.emojiChipText}>{em}</ThemedText>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
                 <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                  <TextInput
-                    style={[styles.input, { flex: 1 }]}
-                    value={editCategoryEmoji}
-                    maxLength={2}
-                    onChangeText={(text) => {
-                      const firstGrapheme = Array.from(text)[0] || '';
-                      setEditCategoryEmoji(firstGrapheme);
-                    }}
-                    onBlur={() => {
-                      if (!editCategoryEmoji.trim()) {
-                        setEditCategoryEmoji('📦');
-                      }
-                    }}
-                    placeholder="🛒"
-                    placeholderTextColor={Brand.colors.text.muted}
-                  />
                   <TextInput
                     style={[styles.input, { flex: 3 }]}
                     value={editCategoryName}
@@ -2357,26 +2314,6 @@ export default function ExpensesScreen() {
                     placeholder={language === 'it' ? 'Nome categoria' : 'Category name'}
                     placeholderTextColor={Brand.colors.text.muted}
                   />
-                </View>
-                <View style={styles.colorRow}>
-                  {[
-                    Brand.colors.primary.orange,
-                    Brand.colors.semantic.success,
-                    Brand.colors.semantic.info,
-                    Brand.colors.semantic.danger,
-                    Brand.colors.primary.magenta,
-                    Brand.colors.primary.teal,
-                  ].map((hex) => (
-                    <Pressable
-                      key={hex}
-                      style={[
-                        styles.colorDot,
-                        { backgroundColor: hex },
-                        editCategoryColor === hex && styles.colorDotSelected,
-                      ]}
-                      onPress={() => setEditCategoryColor(hex)}
-                    />
-                  ))}
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
                   <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -2522,10 +2459,8 @@ export default function ExpensesScreen() {
                   </View>
                 ) : (
                   categoryHistory.map(tx => {
-                    // Trova il colore della categoria selezionata
-                    const categoryColor = tx.categories?.color || dbCategories.find(cat => 
-                      cat.name.toLowerCase() === selectedHistoryCategory?.toLowerCase()
-                    )?.color
+                    // Colore categorie: unico per tutte
+                    const categoryColor = DEFAULT_CATEGORY_COLOR
                     
                     return (
                       <View 
@@ -2534,8 +2469,8 @@ export default function ExpensesScreen() {
                           styles.listItemCard, 
                           { 
                             marginBottom: 10,
-                            backgroundColor: categoryColor ? `${categoryColor}15` : undefined,
-                            borderColor: categoryColor ? `${categoryColor}30` : undefined
+                            backgroundColor: `${categoryColor}15`,
+                            borderColor: `${categoryColor}30`
                           }
                         ]}
                       > 
@@ -2544,7 +2479,7 @@ export default function ExpensesScreen() {
                             <ThemedText 
                               style={[
                                 styles.listItemMerchant,
-                                categoryColor && { color: categoryColor }
+                                { color: categoryColor }
                               ]}
                             >
                               {tx.merchant || '—'}
@@ -2982,8 +2917,7 @@ const styles = StyleSheet.create({
   },
   sectionTitleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     marginBottom: 4,
   },
   sectionTitle: {
@@ -3047,7 +2981,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   sectionSubtitle: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '500',
     color: Brand.colors.text.secondary,
   },
@@ -3139,24 +3073,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: '100%',
   },
-  colorRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 8,
-    justifyContent: 'center',
-  },
-  colorDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Brand.colors.glass.heavy,
-  },
-  colorDotSelected: {
-    borderColor: Brand.colors.text.primary,
-    borderWidth: 2,
-  },
+  // color picker removed
   emptyCategoriesContainer: {
     flex: 1,
     alignItems: 'center',
@@ -3610,6 +3527,82 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: Brand.colors.text.primary,
+  },
+  emojiPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  emojiPickerHeaderCentered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emojiPickerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  emojiPickerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Brand.colors.text.secondary,
+  },
+  emojiSelectedInline: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
+    borderWidth: 1,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
+  },
+  emojiSelectedInlineText: {
+    fontSize: 16,
+  },
+  emojiScrollHint: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Brand.colors.text.tertiary,
+    opacity: 0.9,
+  },
+  emojiSelectedCenter: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
+    borderWidth: 1,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD,
+  },
+  emojiSelectedCenterText: {
+    fontSize: 20,
+  },
+  emojiScrollContent: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingBottom: 10,
+    paddingRight: 4,
+  },
+  emojiChip: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: UI_CONSTANTS.GLASS_BG_MD,
+    borderWidth: 1,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiChipSelected: {
+    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
+    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
+  },
+  emojiChipText: {
+    fontSize: 18,
   },
   transactionDateRow: {
     flexDirection: 'row',

@@ -1,4 +1,7 @@
 import { ThemedText } from '@/components/themed-text'
+import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
+import { Card } from '@/components/ui/Card'
+import { DEFAULT_CATEGORY_COLOR } from '@/constants/categories'
 import { useAuth } from '@/context/AuthContext'
 import { useSettings } from '@/context/SettingsContext'
 import { calculateWrappedData, WrappedData } from '@/services/wrapped-analytics'
@@ -24,7 +27,19 @@ import ViewShot from 'react-native-view-shot'
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
 
 // Animated Counter Component
-const AnimatedCounter = ({ value, duration = 2000, style }: { value: number; duration?: number; style?: any }) => {
+const AnimatedCounter = ({
+  value,
+  duration = 2000,
+  style,
+  currencyCode = 'EUR',
+  locale = 'it-IT',
+}: {
+  value: number
+  duration?: number
+  style?: any
+  currencyCode?: string
+  locale?: string
+}) => {
   const animatedValue = useRef(new Animated.Value(0)).current
   const [displayValue, setDisplayValue] = useState(0)
 
@@ -47,7 +62,7 @@ const AnimatedCounter = ({ value, duration = 2000, style }: { value: number; dur
 
   return (
     <Animated.Text style={style}>
-      €{displayValue.toLocaleString()}
+      {displayValue.toLocaleString(locale, { style: 'currency', currency: currencyCode })}
     </Animated.Text>
   )
 }
@@ -166,7 +181,7 @@ const LoadingDots = () => {
 }
 
 // Floating Particle Component
-const FloatingParticle = ({ delay = 0, color = '#06b6d4' }: { delay?: number; color?: string }) => {
+const FloatingParticle = ({ delay = 0, color = DEFAULT_CATEGORY_COLOR }: { delay?: number; color?: string }) => {
   const floatAnim = useRef(new Animated.Value(0)).current
   const opacityAnim = useRef(new Animated.Value(0)).current
 
@@ -229,12 +244,9 @@ const FloatingParticle = ({ delay = 0, color = '#06b6d4' }: { delay?: number; co
   )
 }
 
-// Default category colors for fallback
-const defaultCategoryColors = ['#00B4D8', '#C084FC', '#06b6d4', '#8B5CF6', '#A855F7', '#D8B4FE']
-
 export default function FinoraWrappedScreen() {
   const { user } = useAuth()
-  const { t, currency } = useSettings()
+  const { language, locale, currency } = useSettings()
   const [currentPage, setCurrentPage] = useState(0)
   const [data, setData] = useState<WrappedData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -350,11 +362,14 @@ export default function FinoraWrappedScreen() {
     if (!data) return
     
     try {
-      const message = `Check out my 2025 Finora Wrapped! 💎\n\nTotal Income: ${currency}${data.totalIncome.toLocaleString()}\nTotal Spent: ${currency}${data.totalExpenses.toLocaleString()}\nSaved: ${currency}${data.savings.toLocaleString()} (${data.savingsRate.toFixed(1)}%)\n\nBuilding my financial story, one smart move at a time 💎\n\n#FinoraWrapped #FinancialJourney`
+      const fmt = (n: number) => n.toLocaleString(locale, { style: 'currency', currency })
+      const message = language === 'it'
+        ? `Ecco il mio Finora Wrapped ${new Date().getFullYear()} 💎\n\nEntrate totali: ${fmt(data.totalIncome)}\nSpese totali: ${fmt(data.totalExpenses)}\nRisparmi: ${fmt(data.savings)} (${data.savingsRate.toFixed(1)}%)\n\nSto costruendo il mio futuro finanziario, una scelta alla volta 💎\n\n#FinoraWrapped`
+        : `Check out my Finora Wrapped ${new Date().getFullYear()} 💎\n\nTotal Income: ${fmt(data.totalIncome)}\nTotal Spent: ${fmt(data.totalExpenses)}\nSaved: ${fmt(data.savings)} (${data.savingsRate.toFixed(1)}%)\n\nBuilding my financial story, one smart move at a time 💎\n\n#FinoraWrapped`
       
       await Share.share({
         message,
-        title: 'My Finora Wrapped 2025'
+        title: `My Finora Wrapped ${new Date().getFullYear()}`
       })
     } catch (error) {
       console.error('Error sharing:', error)
@@ -366,7 +381,7 @@ export default function FinoraWrappedScreen() {
     return (
       <View style={styles.loadingScreen}>
         <ExpoLinearGradient
-          colors={['#0a0a0f', '#1a1a2e', '#16213e', '#0a0a0f']}
+          colors={[Brand.colors.background.deep, Brand.colors.background.card, Brand.colors.background.deep]}
           style={styles.loadingGradientBackground}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -376,7 +391,9 @@ export default function FinoraWrappedScreen() {
             <ThemedText style={styles.loadingIcon}>💎</ThemedText>
           </Animated.View>
           <ThemedText style={styles.loadingTitle}>Finora Wrapped</ThemedText>
-          <ThemedText style={styles.loadingText}>Loading your financial story...</ThemedText>
+          <ThemedText style={styles.loadingText}>
+            {language === 'it' ? 'Prepariamo il tuo riepilogo…' : 'Preparing your recap…'}
+          </ThemedText>
           <LoadingDots />
         </View>
       </View>
@@ -393,7 +410,7 @@ export default function FinoraWrappedScreen() {
         ]}
       >
         <ExpoLinearGradient
-          colors={['#0a0a0f', '#1a1a2e', '#16213e', '#0a0a0f']}
+          colors={[Brand.colors.background.deep, Brand.colors.background.card, Brand.colors.background.deep]}
           style={styles.gradientBackground}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -424,11 +441,11 @@ export default function FinoraWrappedScreen() {
           scrollEventThrottle={16}
           style={styles.scrollView}
         >
-          <IntroPage />
-          <SpendingStoryPage data={data} />
-          <EarningsJourneyPage data={data} />
-          <BalanceEvolutionPage data={data} />
-          <FinalSummaryPage data={data} onShare={handleShare} />
+          <IntroPage language={language} />
+          <SpendingStoryPage data={data} locale={locale} currency={currency} language={language} />
+          <EarningsJourneyPage data={data} locale={locale} currency={currency} language={language} />
+          <BalanceEvolutionPage data={data} locale={locale} currency={currency} language={language} />
+          <FinalSummaryPage data={data} onShare={handleShare} locale={locale} currency={currency} language={language} />
         </ScrollView>
       </Animated.View>
 
@@ -452,21 +469,25 @@ export default function FinoraWrappedScreen() {
 }
 
 // Intro Page Component
-const IntroPage = () => {
+const IntroPage = ({ language }: { language: string }) => {
   return (
     <View style={styles.pageContainer}>
       <View style={styles.introContent}>
       <ThemedText style={{ fontSize: 64, marginBottom: 12, textAlign: 'center', lineHeight: 72 }}>💎</ThemedText>
         <ThemedText style={styles.introTitle}>
-          Your 2025{'\n'}Finora Wrapped
+          {language === 'it' ? `Il tuo ${new Date().getFullYear()}\nFinora Wrapped` : `Your ${new Date().getFullYear()}\nFinora Wrapped`}
         </ThemedText>
         
         <ThemedText style={styles.introSubtitle}>
-          A journey through your spending,{'\n'}saving, and growing year.
+          {language === 'it'
+            ? 'Un viaggio tra spese, risparmi e progresso.'
+            : 'A journey through your spending, saving, and growth.'}
         </ThemedText>
 
         <View style={styles.scrollHint}>
-          <ThemedText style={styles.scrollHintText}>Swipe to explore →</ThemedText>
+          <ThemedText style={styles.scrollHintText}>
+            {language === 'it' ? 'Scorri per iniziare →' : 'Swipe to explore →'}
+          </ThemedText>
         </View>
       </View>
     </View>
@@ -474,12 +495,12 @@ const IntroPage = () => {
 }
 
 // Spending Story Page Component
-const SpendingStoryPage = ({ data }: any) => {
+const SpendingStoryPage = ({ data, locale, currency, language }: any) => {
   return (
     <View style={styles.pageContainer}>
       <View style={styles.pageHeader}>
         <ThemedText style={styles.pageTitle}>
-          You spent smart this year 💳
+          {language === 'it' ? 'Le tue spese nel 2025 💳' : 'You spent this year 💳'}
         </ThemedText>
       </View>
 
@@ -489,99 +510,127 @@ const SpendingStoryPage = ({ data }: any) => {
             value={data.totalExpenses} 
             style={styles.largeNumber}
             duration={2500}
+            currencyCode={currency}
+            locale={locale}
           />
-          <ThemedText style={styles.largeNumberLabel}>total expenses</ThemedText>
+          <ThemedText style={styles.largeNumberLabel}>
+            {language === 'it' ? 'Spese totali' : 'Total expenses'}
+          </ThemedText>
         </View>
 
         <View style={styles.categoryList}>
           {data.categoryData && data.categoryData.length > 0 ? (
             data.categoryData.map((category: { name: string; amount: number; color: string; percentage: number }, index: number) => (
-              <View key={index} style={[styles.categoryCardHorizontal, { borderColor: category.color + '40' }]}>
+              <Card key={index} variant="subtle" style={[styles.categoryCardHorizontal, { borderColor: `${DEFAULT_CATEGORY_COLOR}40` }]}>
                 <View style={styles.categoryCardContent}>
-              <View style={[styles.categoryColor, { backgroundColor: category.color }]} />
-              <ThemedText style={styles.categoryName}>{category.name}</ThemedText>
-              <ThemedText style={styles.categoryAmount}>€{category.amount.toLocaleString()}</ThemedText>
+                  <View style={[styles.categoryColor, { backgroundColor: DEFAULT_CATEGORY_COLOR }]} />
+                  <ThemedText style={styles.categoryName} numberOfLines={1}>{category.name}</ThemedText>
+                  <ThemedText style={styles.categoryAmount} numberOfLines={1}>
+                    {category.amount.toLocaleString(locale, { style: 'currency', currency })}
+                  </ThemedText>
                   <ThemedText style={styles.categoryPercentage}>{category.percentage.toFixed(1)}%</ThemedText>
                   <View style={styles.progressBarContainer}>
                     <View style={[styles.progressBarFill, { 
                       width: `${category.percentage}%`,
-                      backgroundColor: category.color
+                      backgroundColor: DEFAULT_CATEGORY_COLOR
                     }]} />
-            </View>
+                  </View>
                 </View>
-              </View>
+              </Card>
             ))
           ) : (
             <View style={styles.noDataContainer}>
-              <ThemedText style={styles.noDataText}>No expense data available</ThemedText>
-              <ThemedText style={styles.noDataSubtext}>Start tracking your expenses to see insights</ThemedText>
+              <ThemedText style={styles.noDataText}>
+                {language === 'it' ? 'Nessun dato spese' : 'No expense data available'}
+              </ThemedText>
+              <ThemedText style={styles.noDataSubtext}>
+                {language === 'it'
+                  ? 'Inizia a registrare le spese per vedere insight.'
+                  : 'Start tracking your expenses to see insights.'}
+              </ThemedText>
             </View>
           )}
         </View>
 
-        <View style={styles.insightCard}>
+        <Card variant="subtle" style={styles.insightCard}>
           <ThemedText style={styles.insightText}>
-            Most spent on {data.topCategory} ✈️ — good memories count too.
+            {language === 'it'
+              ? `Hai speso di più in ${data.topCategory}.`
+              : `Most spent on ${data.topCategory}.`}
           </ThemedText>
-        </View>
+        </Card>
       </View>
     </View>
   )
 }
 
 // Earnings Journey Page Component
-const EarningsJourneyPage = ({ data }: any) => {
-  const totalIncome = data.monthlyBalances.reduce((sum: number, month: any) => sum + month.income, 0)
-  const monthsWithIncome = data.monthlyBalances.filter((month: any) => month.income > 0)
-  const averageMonthlyIncome = data.monthlyBalances.length > 0 ? totalIncome / data.monthlyBalances.length : 0
+const EarningsJourneyPage = ({ data, locale, currency, language }: any) => {
+  const totalIncome = data.monthlyBalances.reduce((sum: number, month: any) => sum + (month.income || 0), 0)
+  const monthsWithIncome = data.monthlyBalances.filter((month: any) => (month.income || 0) > 0)
+  const averageMonthlyIncome = monthsWithIncome.length > 0
+    ? totalIncome / monthsWithIncome.length
+    : 0
 
   return (
     <View style={styles.pageContainer}>
       <View style={styles.pageHeader}>
         <ThemedText style={styles.pageTitle}>
-          Your earning journey 💼
+          {language === 'it' ? 'Il tuo percorso di entrate 💼' : 'Your earning journey 💼'}
         </ThemedText>
         <ThemedText style={styles.pageSubtitle}>
-          Building wealth, one month at a time
+          {language === 'it' ? 'Costruendo valore, mese dopo mese' : 'Building wealth, one month at a time'}
         </ThemedText>
       </View>
 
       <View style={styles.earningsContent}>
         {/* Income Overview Cards */}
         <View style={styles.earningsOverviewGrid}>
-          <View style={styles.earningsOverviewCard}>
-            <ThemedText style={styles.earningsOverviewLabel} numberOfLines={1} ellipsizeMode="tail">Total Income</ThemedText>
+          <Card variant="subtle" style={styles.earningsOverviewCard}>
+            <ThemedText style={styles.earningsOverviewLabel} numberOfLines={1} ellipsizeMode="tail">
+              {language === 'it' ? 'Entrate totali' : 'Total income'}
+            </ThemedText>
             <AnimatedCounter 
               value={totalIncome} 
               style={styles.earningsOverviewValue}
               duration={2500}
+              currencyCode={currency}
+              locale={locale}
             />
-        </View>
+          </Card>
 
-          <View style={styles.earningsOverviewCard}>
-            <ThemedText style={styles.earningsOverviewLabel} numberOfLines={1} ellipsizeMode="tail">Av. Monthly</ThemedText>
+          <Card variant="subtle" style={styles.earningsOverviewCard}>
+            <ThemedText style={styles.earningsOverviewLabel} numberOfLines={1} ellipsizeMode="tail">
+              {language === 'it' ? 'Media mensile' : 'Avg. monthly'}
+            </ThemedText>
             <AnimatedCounter 
               value={averageMonthlyIncome} 
               style={styles.earningsOverviewValue}
               duration={2500}
+              currencyCode={currency}
+              locale={locale}
             />
-          </View>
+          </Card>
           
-          <View style={styles.earningsOverviewCard}>
-            <ThemedText style={styles.earningsOverviewLabel} numberOfLines={1} ellipsizeMode="tail">Growth Rate</ThemedText>
+          <Card variant="subtle" style={styles.earningsOverviewCard}>
+            <ThemedText style={styles.earningsOverviewLabel} numberOfLines={1} ellipsizeMode="tail">
+              {language === 'it' ? 'Crescita' : 'Growth'}
+            </ThemedText>
             <ThemedText style={[styles.earningsOverviewGrowth, { color: data.incomeGrowth >= 0 ? '#4ade80' : '#f87171' }]}>
               {data.incomeGrowth >= 0 ? '+' : ''}{data.incomeGrowth.toFixed(1)}%
           </ThemedText>
-          </View>
+          </Card>
         </View>
 
         {/* Monthly Income Chart */}
         <View style={styles.monthlyEarningsContainer}>
-          <ThemedText style={styles.monthlyEarningsTitle}>Monthly Income Trend</ThemedText>
+          <ThemedText style={styles.monthlyEarningsTitle}>
+            {language === 'it' ? 'Trend entrate mensili' : 'Monthly income trend'}
+          </ThemedText>
           <View style={styles.monthlyEarningsGrid}>
             {data.monthlyBalances.map((month: any, index: number) => (
-              <View key={month.monthNumber} style={[styles.monthlyEarningsCardCompact, { 
-                borderColor: month.income > 0 ? defaultCategoryColors[index % defaultCategoryColors.length] + '40' : 'rgba(255, 255, 255, 0.1)',
+              <Card key={month.monthNumber} variant="subtle" style={[styles.monthlyEarningsCardCompact, { 
+                borderColor: month.income > 0 ? `${DEFAULT_CATEGORY_COLOR}40` : 'rgba(255, 255, 255, 0.1)',
                 opacity: month.income > 0 ? 1 : 0.6
               }]}>
                 <ThemedText style={styles.monthlyEarningsMonthCompact}>{month.month}</ThemedText>
@@ -589,53 +638,66 @@ const EarningsJourneyPage = ({ data }: any) => {
                   value={month.income} 
                   style={styles.monthlyEarningsAmountCompact}
                   duration={1500}
+                  currencyCode={currency}
+                  locale={locale}
                 />
                 <View style={styles.monthlyEarningsBarCompact}>
                   <View style={[styles.monthlyEarningsBarFillCompact, { 
                     width: month.income > 0 ? `${Math.min((month.income / Math.max(...data.monthlyBalances.map((m: any) => m.income))) * 100, 100)}%` : '0%',
-                    backgroundColor: month.income > 0 ? defaultCategoryColors[index % defaultCategoryColors.length] : 'rgba(255, 255, 255, 0.1)'
+                    backgroundColor: month.income > 0 ? DEFAULT_CATEGORY_COLOR : 'rgba(255, 255, 255, 0.1)'
                   }]} />
               </View>
-              </View>
+              </Card>
             ))}
           </View>
         </View>
 
         {/* Earnings Insight */}
-        <View style={styles.earningsInsight}>
+        <Card variant="subtle" style={styles.earningsInsight}>
           <ThemedText style={styles.earningsInsightText}>
             {monthsWithIncome.length > 0 
-              ? `📊 You have income data for ${monthsWithIncome.length} months this year`
-              : '📊 Start tracking your income to see your earning journey'
+              ? (language === 'it'
+                  ? `📊 Hai entrate registrate per ${monthsWithIncome.length} mesi`
+                  : `📊 You have income data for ${monthsWithIncome.length} months`)
+              : (language === 'it'
+                  ? '📊 Inizia a registrare le entrate per vedere insight'
+                  : '📊 Start tracking your income to see your journey')
             }
           </ThemedText>
-        </View>
+        </Card>
       </View>
     </View>
   )
 }
 
 // Balance Evolution Page Component
-const BalanceEvolutionPage = ({ data }: any) => {
-  const startingBalance = data.monthlyBalances[0]?.balance || 0
-  const currentBalance = data.monthlyBalances[data.monthlyBalances.length - 1]?.balance || 0
+const BalanceEvolutionPage = ({ data, locale, currency, language }: any) => {
+  // Only count months where we have BOTH income and expenses (> 0)
+  const countedMonths = (data.monthlyBalances || []).filter((m: any) => (m?.income || 0) > 0 && (m?.expenses || 0) > 0)
+
+  const startingBalance = countedMonths[0]?.balance || 0
+  const currentBalance = countedMonths[countedMonths.length - 1]?.balance || 0
   const balanceGrowth = startingBalance > 0 ? ((currentBalance - startingBalance) / startingBalance) * 100 : 0
   const totalGrowth = currentBalance - startingBalance
   
-  // Calculate average monthly flow using only months with actual cash flow (non-zero balance)
-  const monthsWithCashFlow = data.monthlyBalances.filter((m: any) => m.balance !== 0)
-  const averageMonthlyFlow = monthsWithCashFlow.length > 0 
-    ? monthsWithCashFlow.reduce((sum: number, month: any) => sum + month.balance, 0) / monthsWithCashFlow.length 
+  const averageMonthlyFlow = countedMonths.length > 0 
+    ? countedMonths.reduce((sum: number, month: any) => sum + (month.balance || 0), 0) / countedMonths.length 
     : 0
+
+  const bestMonth = countedMonths.length > 0
+    ? countedMonths.reduce((max: any, month: any) => (month.balance > max.balance ? month : max))
+    : null
+
+  const maxBalance = countedMonths.length > 0 ? Math.max(...countedMonths.map((m: any) => m.balance || 0)) : 0
 
   return (
     <View style={styles.pageContainer}>
       <View style={styles.pageHeader}>
         <ThemedText style={styles.pageTitle}>
-          Cash Flow Evolution 📈
+          {language === 'it' ? 'Evoluzione cash flow 📈' : 'Cash flow evolution 📈'}
         </ThemedText>
         <ThemedText style={styles.pageSubtitle}>
-          Your monthly income vs expenses journey
+          {language === 'it' ? 'Entrate vs spese, mese dopo mese' : 'Income vs expenses, month by month'}
         </ThemedText>
       </View>
 
@@ -643,63 +705,75 @@ const BalanceEvolutionPage = ({ data }: any) => {
 
         {/* Detailed Cash Flow Stats */}
         <View style={styles.balanceStatsContainer}>
-          <View style={styles.balanceStatCard}>
-            <ThemedText style={styles.balanceStatLabel} numberOfLines={1} ellipsizeMode="tail">Best Cash Flow Month</ThemedText>
+          <Card variant="subtle" style={styles.balanceStatCard}>
+            <ThemedText style={styles.balanceStatLabel} numberOfLines={1} ellipsizeMode="tail">
+              {language === 'it' ? 'Mese migliore' : 'Best month'}
+            </ThemedText>
             <ThemedText style={styles.balanceStatValue}>
-              {data.monthlyBalances.reduce((max: any, month: any) => 
-                month.balance > max.balance ? month : max
-              ).month}
+              {bestMonth?.month || '—'}
             </ThemedText>
             <ThemedText style={styles.balanceStatAmount}>
-              €{Math.max(...data.monthlyBalances.map((m: any) => m.balance)).toLocaleString()}
+              {(bestMonth?.balance || 0).toLocaleString(locale, { style: 'currency', currency })}
             </ThemedText>
-          </View>
+          </Card>
           
-          <View style={styles.balanceStatCard}>
-            <ThemedText style={styles.balanceStatLabel} numberOfLines={1} ellipsizeMode="tail">Av. Monthly Flow</ThemedText>
-            <ThemedText style={styles.balanceStatValue}>
-              €{averageMonthlyFlow.toLocaleString()}
+          <Card variant="subtle" style={styles.balanceStatCard}>
+            <ThemedText style={styles.balanceStatLabel} numberOfLines={1} ellipsizeMode="tail">
+              {language === 'it' ? 'Media mensile' : 'Avg. monthly'}
             </ThemedText>
-          </View>
+            <ThemedText style={styles.balanceStatValue}>
+              {averageMonthlyFlow.toLocaleString(locale, { style: 'currency', currency })}
+            </ThemedText>
+          </Card>
         </View>
 
         {/* Compact Monthly Chart */}
         <View style={styles.balanceChartContainer}>
-          <ThemedText style={styles.balanceChartTitle}>Monthly Cash Flow Trend</ThemedText>
+          <ThemedText style={styles.balanceChartTitle}>
+            {language === 'it' ? 'Trend cash flow mensile' : 'Monthly cash flow trend'}
+          </ThemedText>
           <View style={styles.balanceChartCompact}>
-            {data.monthlyBalances.map((month: any, index: number) => {
-              const maxBalance = Math.max(...data.monthlyBalances.map((m: any) => m.balance))
-              const heightPercentage = maxBalance > 0 ? (month.balance / maxBalance) * 100 : 0
-              
-            return (
-                <View key={month.monthNumber} style={styles.balanceChartItemCompact}>
-                  <View style={styles.balanceChartBarCompact}>
-                    <View style={[styles.balanceChartBarFillCompact, { 
-                      height: `${Math.max(heightPercentage, 8)}%`,
-                      backgroundColor: month.balance !== 0 ? defaultCategoryColors[index % defaultCategoryColors.length] : 'rgba(255, 255, 255, 0.1)',
-                      opacity: month.balance !== 0 ? 1 : 0.6
-                    }]} />
+            {countedMonths.length === 0 ? (
+              <ThemedText style={[styles.noDataSubtext, { textAlign: 'center', width: '100%' }]}>
+                {language === 'it' ? 'Nessun mese con entrate e spese' : 'No months with both income and expenses'}
+              </ThemedText>
+            ) : (
+              countedMonths.map((month: any) => {
+                const heightPercentage = maxBalance > 0 ? ((month.balance || 0) / maxBalance) * 100 : 0
+
+                return (
+                  <View key={month.monthNumber} style={styles.balanceChartItemCompact}>
+                    <View style={styles.balanceChartBarCompact}>
+                      <View style={[styles.balanceChartBarFillCompact, { 
+                        height: `${Math.max(heightPercentage, 8)}%`,
+                        backgroundColor: DEFAULT_CATEGORY_COLOR,
+                        opacity: 1
+                      }]} />
+                    </View>
+                    <ThemedText style={styles.balanceChartMonthCompact}>{month.month}</ThemedText>
                   </View>
-                  <ThemedText style={styles.balanceChartMonthCompact}>{month.month}</ThemedText>
-              </View>
-            )
-          })}
+                )
+              })
+            )}
           </View>
         </View>
 
         {/* Growth Insights */}
-        <View style={styles.balanceInsight}>
+        <Card variant="subtle" style={styles.balanceInsight}>
           <ThemedText style={styles.balanceInsightText}>
-            {totalGrowth >= 0 ? '💰' : '📉'} {totalGrowth >= 0 ? 'You had positive cash flow this year!' : 'Focus on increasing your income or reducing expenses this year.'}
+            {totalGrowth >= 0 ? '💰' : '📉'}{' '}
+            {totalGrowth >= 0
+              ? (language === 'it' ? 'Cash flow positivo: ottimo lavoro!' : 'Positive cash flow: great job!')
+              : (language === 'it' ? 'Obiettivo 2026: aumenta entrate o riduci spese.' : 'Goal: increase income or reduce expenses.')}
           </ThemedText>
-        </View>
+        </Card>
       </View>
     </View>
   )
 }
 
 // Instagram Share Component (identical to final page but without buttons)
-const InstagramShareView = ({ data }: any) => {
+const InstagramShareView = ({ data, locale, currency, language }: any) => {
   const totalIncome = data.monthlyBalances.reduce((sum: number, month: any) => sum + month.income, 0)
   const totalExpenses = data.totalExpenses
   const savings = totalIncome - totalExpenses
@@ -711,7 +785,7 @@ const InstagramShareView = ({ data }: any) => {
   return (
     <View style={styles.instagramContainer}>
       <ExpoLinearGradient
-        colors={['#0a0a0f', '#1a1a2e', '#16213e', '#0a0a0f']}
+        colors={[Brand.colors.background.deep, Brand.colors.background.card, Brand.colors.background.deep]}
         style={StyleSheet.absoluteFillObject}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -719,10 +793,12 @@ const InstagramShareView = ({ data }: any) => {
       
       <View style={styles.instagramPageHeader}>
         <ThemedText style={styles.instagramPageTitle}>
-          🎉 Your Financial Journey
+          {language === 'it' ? '🎉 Il tuo percorso finanziario' : '🎉 Your financial journey'}
         </ThemedText>
         <ThemedText style={styles.instagramPageSubtitle}>
-          Smart moves. Strong progress. Brighter future.
+          {language === 'it'
+            ? 'Scelte smart. Progressi reali. Futuro più sereno.'
+            : 'Smart moves. Strong progress. Brighter future.'}
         </ThemedText>
       </View>
 
@@ -731,21 +807,25 @@ const InstagramShareView = ({ data }: any) => {
         <View style={styles.instagramMainStatsContainer}>
           <View style={styles.instagramMainStatCard}>
             <ThemedText style={styles.instagramMainStatIcon}>💰</ThemedText>
-            <ThemedText style={styles.instagramMainStatLabel}>Total Income</ThemedText>
+            <ThemedText style={styles.instagramMainStatLabel}>{language === 'it' ? 'Entrate' : 'Income'}</ThemedText>
             <AnimatedCounter 
               value={totalIncome} 
               style={styles.instagramMainStatValue}
               duration={2500}
+              currencyCode={currency}
+              locale={locale}
             />
           </View>
           
           <View style={styles.instagramMainStatCard}>
             <ThemedText style={styles.instagramMainStatIcon}>💳</ThemedText>
-            <ThemedText style={styles.instagramMainStatLabel}>Total Spent</ThemedText>
+            <ThemedText style={styles.instagramMainStatLabel}>{language === 'it' ? 'Spese' : 'Spent'}</ThemedText>
             <AnimatedCounter 
               value={totalExpenses} 
               style={styles.instagramMainStatValue}
               duration={2500}
+              currencyCode={currency}
+              locale={locale}
             />
           </View>
         </View>
@@ -753,25 +833,32 @@ const InstagramShareView = ({ data }: any) => {
         {/* Savings Highlight */}
         <View style={styles.instagramSavingsHighlight}>
           <ThemedText style={styles.instagramSavingsIcon}>💎</ThemedText>
-          <ThemedText style={styles.instagramSavingsLabel}>You Saved</ThemedText>
+          <ThemedText style={styles.instagramSavingsLabel}>{language === 'it' ? 'Risparmi' : 'You saved'}</ThemedText>
           <AnimatedCounter 
             value={savings} 
             style={styles.instagramSavingsValue}
             duration={2500}
+            currencyCode={currency}
+            locale={locale}
           />
-          <ThemedText style={styles.instagramSavingsRate}>{savingsRate.toFixed(1)}% of your income</ThemedText>
+          <ThemedText style={styles.instagramSavingsRate}>
+            {language === 'it' ? `${savingsRate.toFixed(1)}% delle entrate` : `${savingsRate.toFixed(1)}% of your income`}
+          </ThemedText>
         </View>
 
         {/* Top Achievement */}
         <View style={styles.instagramTopAchievement}>
           <ThemedText style={styles.instagramAchievementIcon}>🏆</ThemedText>
           <ThemedText style={styles.instagramAchievementText}>
-            Your top spending category was <ThemedText style={styles.instagramAchievementHighlight}>{data.topCategory}</ThemedText>
+            {language === 'it' ? 'Top categoria: ' : 'Top category: '}
+            <ThemedText style={styles.instagramAchievementHighlight}>{data.topCategory}</ThemedText>
           </ThemedText>
           <AnimatedCounter 
             value={topCategoryAmount} 
             style={styles.instagramAchievementAmount}
             duration={2500}
+            currencyCode={currency}
+            locale={locale}
           />
         </View>
 
@@ -787,7 +874,7 @@ const InstagramShareView = ({ data }: any) => {
 }
 
 // Final Summary Page Component
-const FinalSummaryPage = ({ data, onShare }: any) => {
+const FinalSummaryPage = ({ data, onShare, locale, currency, language }: any) => {
   const totalIncome = data.monthlyBalances.reduce((sum: number, month: any) => sum + month.income, 0)
   const totalExpenses = data.totalExpenses
   const savings = totalIncome - totalExpenses
@@ -798,6 +885,12 @@ const FinalSummaryPage = ({ data, onShare }: any) => {
 
   const viewShotRef = useRef<ViewShot | null>(null)
   const [isSharing, setIsSharing] = useState(false)
+
+  const hapticTap = () => {
+    // Simple haptic feedback without extra deps
+    if (Platform.OS === 'ios') Vibration.vibrate(30)
+    else Vibration.vibrate(50)
+  }
 
   const handleInstagramShare = async () => {
     try {
@@ -842,10 +935,10 @@ const FinalSummaryPage = ({ data, onShare }: any) => {
   const handleDownload = async () => {
     try {
       await onShare()
-      alert('Summary downloaded successfully! 📄')
+      Alert.alert(language === 'it' ? 'Fatto' : 'Done', language === 'it' ? 'Riepilogo condiviso.' : 'Summary shared.')
     } catch (error) {
       console.error('Download error:', error)
-      alert('Failed to download summary. Please try again.')
+      Alert.alert(language === 'it' ? 'Errore' : 'Error', language === 'it' ? 'Impossibile condividere. Riprova.' : 'Failed to share. Please try again.')
     }
   }
 
@@ -854,7 +947,7 @@ const FinalSummaryPage = ({ data, onShare }: any) => {
       {/* Hidden Instagram Share View for capturing */}
       <View style={styles.hiddenView}>
         <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.9 }}>
-          <InstagramShareView data={data} />
+          <InstagramShareView data={data} locale={locale} currency={currency} language={language} />
         </ViewShot>
       </View>
 
@@ -862,85 +955,132 @@ const FinalSummaryPage = ({ data, onShare }: any) => {
     <View style={styles.pageContainer}>
       <View style={styles.pageHeader}>
         <ThemedText style={styles.pageTitle}>
-            🎉 Your 2025 Financial Journey
+            {language === 'it' ? `🎉 Il tuo ${new Date().getFullYear()} in Finora` : `🎉 Your ${new Date().getFullYear()} in Finora`}
         </ThemedText>
         <ThemedText style={styles.pageSubtitle}>
-          Smart moves. Strong progress. Brighter future.
+          {language === 'it'
+            ? 'Scelte smart. Progressi reali. Futuro più sereno.'
+            : 'Smart moves. Strong progress. Brighter future.'}
         </ThemedText>
       </View>
 
       <View style={styles.summaryContent}>
           {/* Main Stats - Instagram Ready */}
           <View style={styles.mainStatsContainer}>
-            <View style={styles.mainStatCard}>
+            <Card variant="subtle" style={styles.mainStatCard}>
               <ThemedText style={styles.mainStatIcon}>💰</ThemedText>
-              <ThemedText style={styles.mainStatLabel}>Total Income</ThemedText>
+              <ThemedText style={styles.mainStatLabel}>{language === 'it' ? 'Entrate' : 'Income'}</ThemedText>
               <AnimatedCounter 
                 value={totalIncome} 
                 style={styles.mainStatValue}
                 duration={2500}
+                currencyCode={currency}
+                locale={locale}
               />
-          </View>
+            </Card>
           
-            <View style={styles.mainStatCard}>
+            <Card variant="subtle" style={styles.mainStatCard}>
               <ThemedText style={styles.mainStatIcon}>💳</ThemedText>
-              <ThemedText style={styles.mainStatLabel}>Total Spent</ThemedText>
+              <ThemedText style={styles.mainStatLabel}>{language === 'it' ? 'Spese' : 'Spent'}</ThemedText>
               <AnimatedCounter 
                 value={totalExpenses} 
                 style={styles.mainStatValue}
                 duration={2500}
+                currencyCode={currency}
+                locale={locale}
               />
-            </View>
+            </Card>
           </View>
           
           {/* Savings Highlight */}
-          <View style={styles.savingsHighlight}>
+          <Card variant="subtle" style={styles.savingsHighlight}>
             <ThemedText style={styles.savingsIcon}>💎</ThemedText>
-            <ThemedText style={styles.savingsLabel}>You Saved</ThemedText>
+            <ThemedText style={styles.savingsLabel}>{language === 'it' ? 'Risparmi' : 'You saved'}</ThemedText>
             <AnimatedCounter 
               value={savings} 
               style={styles.savingsValue}
               duration={2500}
+              currencyCode={currency}
+              locale={locale}
             />
-            <ThemedText style={styles.savingsRate}>{savingsRate.toFixed(1)}% of your income</ThemedText>
-          </View>
+            <ThemedText style={styles.savingsRate}>
+              {language === 'it' ? `${savingsRate.toFixed(1)}% delle entrate` : `${savingsRate.toFixed(1)}% of your income`}
+            </ThemedText>
+          </Card>
 
           {/* Top Achievement */}
-          <View style={styles.topAchievement}>
+          <Card variant="subtle" style={styles.topAchievement}>
             <ThemedText style={styles.achievementIcon}>🏆</ThemedText>
             <ThemedText style={styles.achievementText}>
-              Your top spending category was <ThemedText style={styles.achievementHighlight}>{data.topCategory}</ThemedText>
+              {language === 'it' ? 'Top categoria: ' : 'Top category: '}
+              <ThemedText style={styles.achievementHighlight}>{data.topCategory}</ThemedText>
             </ThemedText>
             <AnimatedCounter 
               value={topCategoryAmount} 
               style={styles.achievementAmount}
               duration={2500}
+              currencyCode={currency}
+              locale={locale}
             />
-        </View>
+          </Card>
 
           {/* Action Buttons */}
           <View style={styles.actionButtonsContainer}>
-            <Pressable style={styles.shareButton} onPress={handleInstagramShare} disabled={isSharing}>
+            <Pressable
+              onPress={handleInstagramShare}
+              disabled={isSharing}
+              style={({ pressed }) => [
+                styles.finalCtaButton,
+                styles.finalCtaPrimary,
+                (pressed && !isSharing) && styles.finalCtaPressed,
+                isSharing && { opacity: 0.7 }
+              ]}
+            >
+              <ExpoLinearGradient
+                colors={[`${DEFAULT_CATEGORY_COLOR}55`, `${DEFAULT_CATEGORY_COLOR}22`, 'rgba(255,255,255,0.02)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.finalCtaGradient}
+                pointerEvents="none"
+              />
               {isSharing ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="large" color="#FFFFFF" />
                   <ThemedText style={styles.shareButtonText} numberOfLines={1}>Generating...</ThemedText>
                 </View>
               ) : (
-                 <View>
-                <ThemedText style={styles.shareButtonText} numberOfLines={1}>📤 </ThemedText>
-                <ThemedText style={styles.shareButtonText} numberOfLines={1}>Share on Instagram</ThemedText>
+                <View>
+                  <ThemedText style={styles.shareButtonText} numberOfLines={1}>📤</ThemedText>
+                  <ThemedText style={styles.shareButtonText} numberOfLines={1}>
+                    {language === 'it' ? 'Condividi su Instagram' : 'Share on Instagram'}
+                  </ThemedText>
                 </View>
               )}
-          </Pressable>
+            </Pressable>
           
-            <Pressable style={styles.downloadButton} onPress={handleDownload}>
-            
-            <View>
-            <ThemedText style={styles.downloadButtonText} numberOfLines={1}>💾 </ThemedText>
-            <ThemedText style={styles.downloadButtonText} numberOfLines={1}>Download Summary</ThemedText>
-            </View>
-          </Pressable>
+            <Pressable
+              onPress={handleDownload}
+              onPressIn={hapticTap}
+              style={({ pressed }) => [
+                styles.finalCtaButton,
+                styles.finalCtaSecondary,
+                pressed && styles.finalCtaPressed
+              ]}
+            >
+              <ExpoLinearGradient
+                colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.finalCtaGradient}
+                pointerEvents="none"
+              />
+              <View>
+                <ThemedText style={styles.downloadButtonText} numberOfLines={1}>💾</ThemedText>
+                <ThemedText style={styles.downloadButtonText} numberOfLines={1}>
+                  {language === 'it' ? 'Condividi riepilogo' : 'Share summary'}
+                </ThemedText>
+              </View>
+            </Pressable>
         </View> 
 
           {/* Brand Message */}
@@ -958,7 +1098,7 @@ const FinalSummaryPage = ({ data, onShare }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
   },
   backgroundGradient: {
     position: 'absolute',
@@ -1030,15 +1170,15 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   scrollHint: {
-    backgroundColor: 'rgba(6, 181, 212, 0)',
+    backgroundColor: 'transparent',
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderColor: `${DEFAULT_CATEGORY_COLOR}55`,
   },
   scrollHintText: {
     fontSize: 14,
-    color: '#06b6d4',
+    color: DEFAULT_CATEGORY_COLOR,
     textAlign: 'center',
     fontWeight: '500',
   },
@@ -1392,6 +1532,31 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 12,
   },
+  finalCtaButton: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
+  },
+  finalCtaPrimary: {
+    borderColor: `${DEFAULT_CATEGORY_COLOR}55`,
+  },
+  finalCtaSecondary: {
+    borderColor: UI_CONSTANTS.GLASS_BORDER_MD,
+  },
+  finalCtaGradient: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 14,
+  },
+  finalCtaPressed: {
+    opacity: 0.96,
+    transform: [{ scale: 0.985 }],
+  },
   shareButton: {
     flex: 1,
     backgroundColor: 'rgba(6, 181, 212, 0.14)',
@@ -1445,7 +1610,7 @@ const styles = StyleSheet.create({
   instagramContainer: {
     width: 1080,
     height: 1920,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
     paddingHorizontal: 30, // Increased padding for better spacing
     paddingTop: 40, // Reduced top padding even more to move title higher
     paddingBottom: 30, // Increased bottom padding
@@ -2023,7 +2188,7 @@ const styles = StyleSheet.create({
   },
   loadingScreen: {
     flex: 1,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: Brand.colors.background.deep,
   },
   loadingGradientBackground: {
     position: 'absolute',
@@ -2078,6 +2243,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#06b6d4',
+    backgroundColor: DEFAULT_CATEGORY_COLOR,
   },
 })

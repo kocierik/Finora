@@ -5,14 +5,17 @@ export type CategoryDefinition = {
   color: string
 }
 
-// App default 6 categories (used for initial profile/settings)
+// App default 8 categories
+export const DEFAULT_CATEGORY_COLOR = '#06b6d4' // colore unico per tutte le categorie
 export const DEFAULT_CATEGORIES: CategoryDefinition[] = [
-  { key: 'miscellaneous', name: 'Miscellaneous', icon: '🎁', color: '#EC4899' },
-  { key: 'personal_care', name: 'Personal Care', icon: '🛍️', color: '#8B5CF6' },
-  { key: 'entertainment', name: 'Entertainment', icon: '🎬', color: '#06b6d4' },
-  { key: 'eating_coffe', name: 'Eating / Coffee', icon: '🍕', color: '#EC4899' },
-  { key: 'transport', name: 'Transport', icon: '🚗', color: '#8b5cf6' },
-  { key: 'groceries', name: 'Grocery', icon: '🛒', color: '#f59e0b' },
+  { key: 'groceries', name: 'Spesa', icon: '🛒', color: DEFAULT_CATEGORY_COLOR },
+  { key: 'eating_coffee', name: 'Mangiare / Caffè', icon: '🍕', color: DEFAULT_CATEGORY_COLOR },
+  { key: 'transport', name: 'Trasporti', icon: '🚗', color: DEFAULT_CATEGORY_COLOR },
+  { key: 'home_bills', name: 'Casa & Bollette', icon: '🏠', color: DEFAULT_CATEGORY_COLOR },
+  { key: 'shopping', name: 'Shopping', icon: '🛍️', color: DEFAULT_CATEGORY_COLOR },
+  { key: 'entertainment', name: 'Intrattenimento', icon: '🎬', color: DEFAULT_CATEGORY_COLOR },
+  { key: 'personal_care', name: 'Cura Personale', icon: '🏥', color: DEFAULT_CATEGORY_COLOR },
+  { key: 'miscellaneous', name: 'Varie', icon: '📦', color: DEFAULT_CATEGORY_COLOR },
 ]
 
 export const PREDEFINED_CATEGORIES_MAP: Map<string, CategoryDefinition> = new Map(
@@ -20,15 +23,22 @@ export const PREDEFINED_CATEGORIES_MAP: Map<string, CategoryDefinition> = new Ma
 )
 
 export function translateCategoryName(name: string, language: 'it' | 'en'): string {
+  // Ora che i nomi sono già in italiano di default, non serve più tradurre verso l'italiano
+  // se il nome corrisponde già. Mantengo per compatibilità con vecchi dati.
   if (language !== 'it') return name
   const key = (name || '').toLowerCase()
   switch (key) {
     case 'miscellaneous': return 'Varie'
     case 'personal care': return 'Cura Personale'
     case 'entertainment': return 'Intrattenimento'
-    case 'eating_coffe': return 'Mangiare / Caffè'
+    case 'eating_coffe': 
+    case 'eating / coffee': return 'Mangiare / Caffè'
     case 'transport': return 'Trasporti'
-    case 'groceries': return 'Spesa'
+    case 'groceries': 
+    case 'grocery': return 'Spesa'
+    case 'home & utilities':
+    case 'home & bills': return 'Casa & Bollette'
+    case 'shopping': return 'Shopping'
     default: return name
   }
 }

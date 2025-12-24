@@ -21,6 +21,10 @@ CREATE INDEX IF NOT EXISTS categories_user_id_idx ON public.categories(user_id);
 CREATE INDEX IF NOT EXISTS categories_user_sort_idx ON public.categories(user_id, sort_order);
 CREATE INDEX IF NOT EXISTS expenses_category_id_idx ON public.expenses(category_id);
 
+-- 3b. Add unique constraint for upsert (user_id + name)
+ALTER TABLE public.categories 
+ADD CONSTRAINT categories_user_name_unique UNIQUE (user_id, name);
+
 -- 4. Enable RLS
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 

@@ -27,7 +27,7 @@ export function DatePickerModal({
   selectedMonthOffset, 
   onMonthSelect 
 }: DatePickerModalProps) {
-  const { t, language } = useSettings();
+  const { t } = useSettings();
   const [displayYear, setDisplayYear] = useState(new Date().getFullYear());
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -128,7 +128,6 @@ export function DatePickerModal({
     } else {
       // Show all 12 months for previous years
       for (let i = 0; i < 12; i++) {
-        const date = new Date(displayYear, i, 1);
         const offset = (displayYear - currentYear) * 12 + (i - currentMonth);
         const monthYear = getMonthYear(offset);
         const isSelected = offset === selectedMonthOffset;
@@ -173,7 +172,8 @@ export function DatePickerModal({
           <Pressable onPress={(e) => e.stopPropagation()}>
             <Card style={styles.modalCard}>
               <LinearGradient
-                colors={['rgba(15, 15, 20, 0.95)', 'rgba(20, 20, 25, 0.95)']}
+                // Use a more opaque background so it reads well over the app
+                colors={[Brand.colors.background.elevated, Brand.colors.background.card, Brand.colors.background.deep]}
                 style={styles.modalGradient}
               />
               
@@ -292,6 +292,8 @@ const styles = StyleSheet.create({
     padding: 24,
     position: 'relative',
     overflow: 'hidden',
+    backgroundColor: Brand.colors.background.elevated,
+    borderColor: Brand.colors.glass.heavy,
   },
   modalGradient: {
     position: 'absolute',
@@ -317,9 +319,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -339,9 +341,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -354,7 +356,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   yearButtonTextDisabled: {
-    color: 'rgba(255, 255, 255, 0.3)',
+    color: Brand.colors.text.muted,
   },
   yearText: {
     fontSize: 18,
@@ -375,17 +377,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginVertical: 2,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_XS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_XS,
   },
   monthOptionSelected: {
     backgroundColor: 'rgba(6, 182, 212, 0.12)',
-    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderColor: 'rgba(6, 182, 212, 0.30)',
   },
   monthOptionDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_XS,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_XS,
     opacity: 0.4,
   },
   monthOptionContent: {
@@ -398,7 +400,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   monthOptionTextSelected: {
-    color: '#06b6d4',
+    color: Brand.colors.primary.cyan,
   },
   monthOptionYear: {
     fontSize: 13,
@@ -406,13 +408,13 @@ const styles = StyleSheet.create({
     color: Brand.colors.text.secondary,
   },
   monthOptionYearSelected: {
-    color: 'rgba(6, 182, 212, 0.8)',
+    color: 'rgba(6, 182, 212, 0.85)',
   },
   monthOptionTextDisabled: {
-    color: 'rgba(255, 255, 255, 0.3)',
+    color: Brand.colors.text.muted,
   },
   monthOptionYearDisabled: {
-    color: 'rgba(255, 255, 255, 0.2)',
+    color: Brand.colors.text.muted,
   },
   currentMonthIndicator: {
     position: 'absolute',
@@ -426,20 +428,20 @@ const styles = StyleSheet.create({
   currentMonthText: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#06b6d4',
+    color: Brand.colors.primary.cyan,
   },
   selectedIndicator: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#06b6d4',
+    backgroundColor: Brand.colors.primary.cyan,
     justifyContent: 'center',
     alignItems: 'center',
   },
   selectedIcon: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#000',
+    color: Brand.colors.background.deep,
   },
   quickActions: {
     flexDirection: 'row',
@@ -452,9 +454,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
     alignItems: 'center',
   },
   quickActionText: {

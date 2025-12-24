@@ -1,5 +1,5 @@
 import { UI as UI_CONSTANTS } from '@/constants/branding'
-import { DEFAULT_CATEGORIES, PREDEFINED_CATEGORIES_MAP, translateCategoryName } from '@/constants/categories'
+import { DEFAULT_CATEGORIES, DEFAULT_CATEGORY_COLOR, PREDEFINED_CATEGORIES_MAP, translateCategoryName } from '@/constants/categories'
 import { useSettings } from '@/context/SettingsContext'
 import { Expense } from '@/types'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -25,7 +25,7 @@ type CategoryBase = {
   icon: string;
 }
 
-const categories = DEFAULT_CATEGORIES.map(c => ({ name: c.name, color: c.color, icon: c.icon }))
+const categories = DEFAULT_CATEGORIES.map(c => ({ name: c.name, color: DEFAULT_CATEGORY_COLOR, icon: c.icon }))
 
 export function ExpensesPie({ items, selectedYear, selectedMonth }: { 
   items: Expense[], 
@@ -137,7 +137,7 @@ export function ExpensesPie({ items, selectedYear, selectedMonth }: {
   const userCategories = new Map(
     (configuredCategories || []).map(c => [
       (c.name || '').toLowerCase(),
-      { name: c.name, icon: c.icon, color: c.color }
+      { name: c.name, icon: c.icon, color: DEFAULT_CATEGORY_COLOR }
     ])
   )
 

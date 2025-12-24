@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 export type BankConfig = {
@@ -113,41 +114,118 @@ export const AVAILABLE_BANKS: BankConfig[] = [
     icon: '🏦',
     packageNames: ['com.bper.mobile'],
     keywords: ['bper']
+  },
+  {
+    id: 'mediolanum',
+    name: 'Banca Mediolanum',
+    icon: '🏦',
+    packageNames: ['com.mediolanum.android.fullbanca', 'com.mediolanum.android.mobile', 'it.mediolanum.mobile'],
+    keywords: ['mediolanum']
   }
 ]
 
 const STORAGE_KEY = '@finora:monitored_banks'
 
 /**
- * Carica le banche monitorate dallo storage
+ * Carica le banche monitorate dal database (con fallback su AsyncStorage per offline)
  * Default: solo Google Wallet abilitato
  */
 export async function loadMonitoredBanks(): Promise<string[]> {
   try {
+    // Prima prova a caricare da Supabase
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (user) {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('monitored_banks')
+        .eq('id', user.id)
+        .maybeSingle()
+      
+      if (!error && profile?.monitored_banks) {
+        const bankIds = profile.monitored_banks as string[]
+        // Valida che siano IDs validi
+        const validIds = AVAILABLE_BANKS.map(b => b.id)
+        const validBankIds = bankIds.filter((id: string) => validIds.includes(id))
+        
+        // Salva anche in AsyncStorage per accesso offline/headless
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(validBankIds))
+        
+        console.log('[BankPreferences] ✅ Loaded from Supabase:', validBankIds)
+        return validBankIds.length > 0 ? validBankIds : ['google_wallet']
+      }
+    }
+    
+    // Fallback: carica da AsyncStorage (per offline o headless task)
     const stored = await AsyncStorage.getItem(STORAGE_KEY)
     if (stored) {
       const parsed = JSON.parse(stored)
-      // Valida che siano IDs validi
       const validIds = AVAILABLE_BANKS.map(b => b.id)
       return parsed.filter((id: string) => validIds.includes(id))
     }
+    
     // Default: solo Google Wallet
     return ['google_wallet']
   } catch (error) {
     console.log('[BankPreferences] ❌ Error loading monitored banks:', error)
+    
+    // Fallback finale: prova AsyncStorage
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        const validIds = AVAILABLE_BANKS.map(b => b.id)
+        return parsed.filter((id: string) => validIds.includes(id))
+      }
+    } catch {}
+    
     return ['google_wallet']
   }
 }
 
 /**
- * Salva le banche monitorate nello storage
+ * Salva le banche monitorate nel database e in AsyncStorage
  */
 export async function saveMonitoredBanks(bankIds: string[]): Promise<void> {
   try {
     // Valida che siano IDs validi
     const validIds = AVAILABLE_BANKS.map(b => b.id)
     const validBankIds = bankIds.filter(id => validIds.includes(id))
+    
+    // Salva in AsyncStorage (per accesso offline/headless)
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(validBankIds))
+    
+    // Salva in Supabase
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (user) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ monitored_banks: validBankIds })
+        .eq('id', user.id)
+      
+      if (error) {
+        // Se il profilo non esiste, crealo
+        if (error.code === 'PGRST116') {
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert({ 
+              id: user.id, 
+              monitored_banks: validBankIds 
+            })
+          
+          if (insertError) {
+            console.log('[BankPreferences] ❌ Error creating profile:', insertError)
+          } else {
+            console.log('[BankPreferences] ✅ Created profile with monitored banks')
+          }
+        } else {
+          console.log('[BankPreferences] ❌ Error updating Supabase:', error)
+        }
+      } else {
+        console.log('[BankPreferences] ✅ Saved to Supabase:', validBankIds)
+      }
+    }
   } catch (error) {
     console.log('[BankPreferences] ❌ Error saving monitored banks:', error)
     throw error

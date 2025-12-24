@@ -132,6 +132,10 @@ const headlessNotificationListener = async ({ notification }) => {
       bper: {
         packageNames: ['com.bper.mobile'],
         keywords: ['bper']
+      },
+      mediolanum: {
+        packageNames: ['com.mediolanum.android.fullbanca', 'com.mediolanum.android.mobile', 'it.mediolanum.mobile'],
+        keywords: ['mediolanum']
       }
     }
     

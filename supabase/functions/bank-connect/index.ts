@@ -54,12 +54,25 @@ serve(async (req) => {
     const aspspsData = await aspspsRes.json();
     
     const body = await req.json().catch(() => ({}));
-    let bank_id = body.bank_id || 'Nordea'; 
+    const bank_id = body.bank_id
+    const country = String(body.country || 'IT').toUpperCase()
 
-    // Se non è in lista, forza Nordea che sappiamo esistere
+    if (!bank_id) {
+      return new Response(JSON.stringify({ error: 'Missing bank_id' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Validate bank exists (optional but helpful)
     if (aspspsData.aspsps) {
       const exists = aspspsData.aspsps.some((b: any) => b.name === bank_id);
-      if (!exists) bank_id = 'Nordea';
+      if (!exists) {
+        return new Response(JSON.stringify({ error: `Unknown bank: ${bank_id}` }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     const redirectUri = `https://${projectId}.supabase.co/functions/v1/bank-callback`
@@ -67,7 +80,7 @@ serve(async (req) => {
     const requestBody = {
       aspsp: {
         name: bank_id,
-        country: "FI"
+        country
       },
       redirect_url: redirectUri,
       state: user.id,

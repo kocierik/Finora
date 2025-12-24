@@ -391,6 +391,10 @@ export default function ProfileScreen() {
               </View>
               <ThemedText style={styles.actionArrow}>→</ThemedText>
             </Pressable>
+            {/* 
+              🚧 BANK ACCOUNTS - TEMPORARILY DISABLED
+              Waiting for GoCardless integration
+            
             <Pressable 
               style={styles.actionItem}
               onPress={() => router.push('/bank-accounts')}
@@ -404,6 +408,7 @@ export default function ProfileScreen() {
               </View>
               <ThemedText style={styles.actionArrow}>→</ThemedText>
             </Pressable>
+            */}
             <Pressable 
               style={styles.actionItem}
               onPress={() => router.push('/monitored-banks')}

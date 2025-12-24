@@ -12,11 +12,11 @@ export interface BankConnection {
 /**
  * Inizializza il processo di collegamento bancario
  */
-export async function initiateBankConnection(bankId?: string) {
+export async function initiateBankConnection(bankId: string, country: string = 'IT') {
   try {
     // 1. Chiama la Edge Function per ottenere l'URL di autorizzazione
     const { data, error } = await supabase.functions.invoke('bank-connect', {
-      body: { bank_id: bankId || 'Nordea' } 
+      body: { bank_id: bankId, country } 
     });
 
     if (error) throw error;
@@ -45,6 +45,14 @@ export async function initiateBankConnection(bankId?: string) {
     console.error('[BankingService] ❌ Errore in initiateBankConnection:', error);
     throw error;
   }
+}
+
+export async function listBanks(country: string = 'IT'): Promise<Array<{ name: string; country: string }>> {
+  const { data, error } = await supabase.functions.invoke('bank-aspsps', {
+    body: { country }
+  })
+  if (error) throw error
+  return data?.aspsps || []
 }
 
 /**

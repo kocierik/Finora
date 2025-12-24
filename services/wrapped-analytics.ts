@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { DEFAULT_CATEGORY_COLOR } from '@/constants/categories'
 
 export interface WrappedData {
   totalExpenses: number
@@ -50,8 +51,8 @@ export async function calculateWrappedData(userId: string): Promise<WrappedData>
       return getDefaultWrappedData()
     }
 
-    // Calculate total expenses
-    const totalExpenses = expenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0
+    // Calculate total expenses (defensive: treat as absolute)
+    const totalExpenses = expenses?.reduce((sum, expense) => sum + Math.abs(expense.amount || 0), 0) || 0
 
     // Try to fetch categories table for names and colors
     const { data: categories, error: categoriesError } = await supabase
@@ -70,19 +71,16 @@ export async function calculateWrappedData(userId: string): Promise<WrappedData>
     // Calculate category data using category_id
     const categoryMap = new Map<string, { amount: number; color: string; name: string }>()
     
-    // Default colors for categories
-    const defaultColors = ['#00B4D8', '#C084FC', '#06b6d4', '#8B5CF6', '#A855F7', '#D8B4FE', '#F59E0B', '#EF4444', '#10B981', '#6366F1']
-    
     expenses?.forEach(expense => {
       if (expense.category_id) {
         const categoryId = expense.category_id
         const categoryInfo = categoryLookup.get(categoryId)
         const existing = categoryMap.get(categoryId) || { 
           amount: 0, 
-          color: categoryInfo?.color || defaultColors[categoryMap.size % defaultColors.length], 
+          color: DEFAULT_CATEGORY_COLOR, 
           name: categoryInfo?.name || `Category ${categoryId}` // Use real name or fallback
         }
-        existing.amount += expense.amount
+        existing.amount += Math.abs(expense.amount || 0)
         categoryMap.set(categoryId, existing)
       }
     })

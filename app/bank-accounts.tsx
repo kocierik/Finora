@@ -2,18 +2,23 @@ import { ThemedText } from '@/components/themed-text'
 import { Card } from '@/components/ui/Card'
 import { Brand, UI as UI_CONSTANTS } from '@/constants/branding'
 import { useSettings } from '@/context/SettingsContext'
-import { BankConnection, disconnectBank, getBankConnections, initiateBankConnection, syncBankTransactions } from '@/services/banking'
+import { BankConnection, disconnectBank, getBankConnections, initiateBankConnection, listBanks, syncBankTransactions } from '@/services/banking'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 export default function BankAccountsScreen() {
-  const { language, t } = useSettings()
+  const { language } = useSettings()
   const [connections, setConnections] = useState<BankConnection[]>([])
   const [loading, setLoading] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [showBankPicker, setShowBankPicker] = useState(false)
+  const [banksLoading, setBanksLoading] = useState(false)
+  const [banks, setBanks] = useState<Array<{ name: string; country: string }>>([])
+  const [bankSearch, setBankSearch] = useState('')
+  const [selectedCountry] = useState<'IT'>('IT')
 
   useEffect(() => {
     loadConnections()
@@ -31,10 +36,27 @@ export default function BankAccountsScreen() {
     }
   }
 
-  const handleConnectBank = async () => {
+  const openBankPicker = async () => {
+    try {
+      setShowBankPicker(true)
+      setBanksLoading(true)
+      const list = await listBanks(selectedCountry)
+      setBanks(list)
+    } catch (error: any) {
+      Alert.alert(
+        language === 'it' ? 'Errore' : 'Error',
+        error?.message || (language === 'it' ? 'Impossibile caricare la lista banche' : 'Failed to load bank list')
+      )
+      setShowBankPicker(false)
+    } finally {
+      setBanksLoading(false)
+    }
+  }
+
+  const handleConnectBank = async (bankName: string) => {
     try {
       setConnecting(true)
-      const result = await initiateBankConnection()
+      const result = await initiateBankConnection(bankName, selectedCountry)
       if (result.success) {
         Alert.alert(
           language === 'it' ? 'Successo' : 'Success',
@@ -188,11 +210,34 @@ export default function BankAccountsScreen() {
         )}
       </ScrollView>
 
-      {/* Connect Button */}
+      {/* 
+        ========================================
+        🚧 BANK CONNECTION UI - TEMPORARILY DISABLED
+        Waiting for GoCardless integration (free alternative)
+        ========================================
+      */}
+      
+      {/* Coming Soon Banner */}
+      <View style={styles.fixedButtonContainer}>
+        <View style={styles.comingSoonBanner}>
+          <ThemedText style={styles.comingSoonEmoji}>🏦</ThemedText>
+          <ThemedText style={styles.comingSoonTitle}>
+            {language === 'it' ? 'Collegamento banca in arrivo!' : 'Bank connection coming soon!'}
+          </ThemedText>
+          <ThemedText style={styles.comingSoonText}>
+            {language === 'it' 
+              ? 'Stiamo integrando GoCardless per permetterti di collegare gratuitamente i tuoi conti italiani.' 
+              : 'We are integrating GoCardless to let you connect your Italian accounts for free.'}
+          </ThemedText>
+        </View>
+      </View>
+
+      {/* 
+      -- COMMENTED OUT: Connect Button --
       <View style={styles.fixedButtonContainer}>
         <Pressable 
           style={[styles.connectButton, connecting && styles.disabledButton]}
-          onPress={handleConnectBank}
+          onPress={openBankPicker}
           disabled={connecting}
         >
           {connecting ? (
@@ -209,6 +254,76 @@ export default function BankAccountsScreen() {
             : 'Secure and encrypted. Your data remains private.'}
         </ThemedText>
       </View>
+      */}
+
+      {/* 
+      -- COMMENTED OUT: Bank picker modal --
+      <Modal
+        visible={showBankPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowBankPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Card style={styles.bankPickerCard}>
+            <LinearGradient
+              colors={UI_CONSTANTS.GRADIENT_CYAN_BG_CARD}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.bankPickerGradient}
+              pointerEvents="none"
+            />
+            <View style={styles.bankPickerHeader}>
+              <ThemedText style={styles.bankPickerTitle}>
+                {language === 'it' ? 'Scegli la tua banca' : 'Choose your bank'}
+              </ThemedText>
+              <Pressable onPress={() => setShowBankPicker(false)} style={styles.pickerCloseButton}>
+                <ThemedText style={styles.pickerCloseButtonText}>✕</ThemedText>
+              </Pressable>
+            </View>
+
+            <View style={styles.bankSearchWrap}>
+              <TextInput
+                value={bankSearch}
+                onChangeText={setBankSearch}
+                placeholder={language === 'it' ? 'Cerca banca…' : 'Search bank…'}
+                placeholderTextColor={Brand.colors.text.muted}
+                style={styles.bankSearchInput}
+              />
+            </View>
+
+            {banksLoading ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <ActivityIndicator color={Brand.colors.primary.cyan} />
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+                {banks
+                  .filter((b) => b.name?.toLowerCase().includes(bankSearch.trim().toLowerCase()))
+                  .slice(0, 200)
+                  .map((b) => (
+                    <Pressable
+                      key={`${b.country}-${b.name}`}
+                      onPress={async () => {
+                        setShowBankPicker(false)
+                        setBankSearch('')
+                        await handleConnectBank(b.name)
+                      }}
+                      style={({ pressed }) => [
+                        styles.bankRow,
+                        pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] }
+                      ]}
+                    >
+                      <ThemedText style={styles.bankRowText}>{b.name}</ThemedText>
+                      <ThemedText style={styles.bankRowChevron}>›</ThemedText>
+                    </Pressable>
+                  ))}
+              </ScrollView>
+            )}
+          </Card>
+        </View>
+      </Modal>
+      */}
     </View>
   )
 }
@@ -368,6 +483,87 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: UI_CONSTANTS.GLASS_BORDER,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_MEDIUM,
+    padding: 16,
+    justifyContent: 'center',
+  },
+  bankPickerCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: UI_CONSTANTS.GLASS_BG,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.heavy,
+    padding: 16,
+  },
+  bankPickerGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  bankPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  pickerCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
+    borderWidth: 1,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerCloseButtonText: {
+    color: Brand.colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  bankPickerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Brand.colors.text.primary,
+  },
+  bankSearchWrap: {
+    marginBottom: 10,
+  },
+  bankSearchInput: {
+    height: 44,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    backgroundColor: UI_CONSTANTS.GLASS_BG_SM,
+    borderWidth: 1,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_SM,
+    color: Brand.colors.text.primary,
+  },
+  bankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: UI_CONSTANTS.GLASS_BG_XS,
+    borderWidth: 1,
+    borderColor: UI_CONSTANTS.GLASS_BORDER_XS,
+    marginBottom: 8,
+  },
+  bankRowText: {
+    flex: 1,
+    color: Brand.colors.text.primary,
+    fontWeight: '600',
+  },
+  bankRowChevron: {
+    color: Brand.colors.text.tertiary,
+    fontSize: 22,
+    marginLeft: 10,
+  },
   connectButton: {
     backgroundColor: Brand.colors.primary.cyan,
     borderRadius: 12,
@@ -387,5 +583,31 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
     opacity: 0.5,
+  },
+  // Coming soon banner styles
+  comingSoonBanner: {
+    backgroundColor: Brand.colors.primary.cyan + '15',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Brand.colors.primary.cyan + '30',
+    padding: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  comingSoonEmoji: {
+    fontSize: 32,
+    marginBottom: 4,
+  },
+  comingSoonTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Brand.colors.primary.cyan,
+    textAlign: 'center',
+  },
+  comingSoonText: {
+    fontSize: 13,
+    opacity: 0.7,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 })
