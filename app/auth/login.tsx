@@ -5,7 +5,7 @@ import { useSettings } from '@/context/SettingsContext'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { Animated, Dimensions, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { Animated, Dimensions, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 
 const { width, height } = Dimensions.get('window')
 
@@ -105,7 +105,11 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
       {/* Background Gradients */}
       <LinearGradient
         colors={[
@@ -118,7 +122,9 @@ export default function LoginScreen() {
       
 
       <Animated.View style={[styles.floatingElement, styles.shieldIcon, { opacity: glowAnim }]}>
-        <ThemedText style={styles.floatingIcon}>🛡️</ThemedText>
+        <View style={styles.iconCircle}>
+          <ThemedText style={styles.floatingIcon}>🛡️</ThemedText>
+        </View>
       </Animated.View>
 
       {/* Header */}
@@ -143,6 +149,7 @@ export default function LoginScreen() {
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <Animated.View 
           style={[
@@ -257,7 +264,7 @@ export default function LoginScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   )
 }
 
@@ -275,158 +282,206 @@ const styles = StyleSheet.create({
   },
   floatingElement: {
     position: 'absolute',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    zIndex: 0,
+  },
+  shieldIcon: {
+    top: height * 0.08,
+    right: -30,
+  },
+  iconCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(6, 182, 212, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.2)',
-  },
-  shieldIcon: {
-    top: height * 0.2,
-    left: width * 0.75
+    borderColor: 'rgba(6, 182, 212, 0.1)',
   },
   floatingIcon: {
-    fontSize: 24,
-  },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 32,
-    paddingBottom: 40,
-  },
-  backButton: {
-    padding: 8,
-    marginBottom: 24,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 24,
-    fontWeight: '400',
-    color: Brand.colors.text.primary,
+    fontSize: 50,
+    opacity: 0.6,
+    lineHeight: 60, // Assicura che l'emoji abbia spazio verticale
     textAlign: 'center',
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: Brand.colors.text.primary,
-    marginBottom: 8,
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 80 : 60,
+    paddingHorizontal: 28,
+    paddingBottom: 20,
   },
-  subtitle: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: Brand.colors.text.secondary,
-  },
-  form: {
-    paddingHorizontal: 32,
-  },
-  inputContainer: {
-    marginBottom: 24,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Brand.colors.text.primary,
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Brand.colors.glass.light,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
     borderWidth: 1,
     borderColor: Brand.colors.glass.medium,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+  },
+  backButtonText: {
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 20,
+    color: Brand.colors.text.primary,
+  },
+  title: {
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 40,
+    fontWeight: '900',
+    color: Brand.colors.text.primary,
+    letterSpacing: -1,
+    lineHeight: 44,
+  },
+  subtitle: {
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 17,
+    fontWeight: '400',
+    color: Brand.colors.text.secondary,
+    marginTop: 12,
+    lineHeight: 24,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 40,
+  },
+  form: {
+    paddingHorizontal: 28,
+    marginTop: 20,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Brand.colors.text.tertiary,
+    marginBottom: 10,
+    marginLeft: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  inputWrapper: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Brand.colors.glass.medium,
+    paddingHorizontal: 20,
+    paddingVertical: Platform.OS === 'ios' ? 18 : 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
   },
   inputError: {
-    borderColor: Brand.colors.semantic.danger,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
   },
   input: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 16,
-    fontWeight: '400',
+    fontWeight: '500',
     color: Brand.colors.text.primary,
   },
   errorText: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 12,
     color: Brand.colors.semantic.danger,
-    marginTop: 4,
+    marginTop: 6,
+    marginLeft: 4,
+    fontWeight: '600',
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginBottom: 32,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginBottom: 30,
   },
   forgotPasswordText: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: Brand.colors.primary.cyan,
   },
   generalErrorContainer: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.3)',
   },
   generalErrorText: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 14,
-    color: Brand.colors.semantic.danger,
+    color: '#ff8080',
     textAlign: 'center',
+    fontWeight: '600',
   },
   loginButton: {
-    borderRadius: 12,
+    borderRadius: 18,
     overflow: 'hidden',
+    height: 60,
+    shadowColor: Brand.colors.primary.cyan,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
     marginBottom: 24,
-    shadowColor: Brand.colors.glow.cyan,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
   },
   loginButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   buttonGradient: {
-    paddingVertical: 16,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   loginButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 18,
+    fontWeight: '800',
     color: Brand.colors.background.deep,
+    letterSpacing: 0.5,
   },
   signupContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 10,
   },
   signupText: {
-    fontSize: 14,
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 15,
     color: Brand.colors.text.secondary,
   },
   signupLink: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 15,
+    fontWeight: '800',
     color: Brand.colors.primary.cyan,
+    marginLeft: 6,
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: UI_CONSTANTS.MODAL_OVERLAY_MEDIUM,
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
   },
   modalCard: {
     width: '100%',
-    maxWidth: 420,
-    borderRadius: 20,
-    backgroundColor: 'rgba(15,15,20,0.85)',
+    maxWidth: 400,
+    borderRadius: 28,
+    backgroundColor: '#1a1a2e',
     borderWidth: 1,
-    borderColor: 'rgba(6,182,212,0.2)',
-    padding: 20,
+    borderColor: 'rgba(255,255,255,0.1)',
+    padding: 28,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -436,49 +491,46 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    opacity: 0.5,
   },
   modalHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 22,
+    fontWeight: '900',
     color: Brand.colors.text.primary,
   },
   modalClose: {
-    fontSize: 18,
-    color: Brand.colors.text.secondary,
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 24,
+    color: Brand.colors.text.tertiary,
   },
   modalBody: {
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   modalMessage: {
-    fontSize: 14,
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 16,
     color: Brand.colors.text.secondary,
-    lineHeight: 20,
+    lineHeight: 24,
   },
   modalAction: {
-    marginTop: 14,
-    alignSelf: 'flex-end',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: UI_CONSTANTS.ACCENT_CYAN_BG,
-    borderWidth: 1,
-    borderColor: UI_CONSTANTS.ACCENT_CYAN_BORDER,
+    marginTop: 24,
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: Brand.colors.primary.cyan,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalActionText: {
-    color: Brand.colors.text.primary,
-    fontWeight: '700',
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 40,
+    fontFamily: Brand.typography.fonts.primary,
+    color: Brand.colors.background.deep,
+    fontWeight: '800',
+    fontSize: 16,
   },
 })

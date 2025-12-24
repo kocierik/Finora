@@ -393,6 +393,19 @@ export default function ProfileScreen() {
             </Pressable>
             <Pressable 
               style={styles.actionItem}
+              onPress={() => router.push('/bank-accounts')}
+            >
+              <View style={styles.actionIcon}>
+                <ThemedText style={styles.actionIconText}>🏦</ThemedText>
+              </View>
+              <View style={styles.actionContent}>
+                <ThemedText style={styles.actionLabel}>{language === 'it' ? 'Conti Bancari' : 'Bank Accounts'}</ThemedText>
+                <ThemedText style={styles.actionDescription}>{language === 'it' ? 'Sincronizzazione automatica tramite Open Banking' : 'Automatic sync via Open Banking'}</ThemedText>
+              </View>
+              <ThemedText style={styles.actionArrow}>→</ThemedText>
+            </Pressable>
+            <Pressable 
+              style={styles.actionItem}
               onPress={() => router.push('/monitored-banks')}
             >
               <View style={styles.actionIcon}>

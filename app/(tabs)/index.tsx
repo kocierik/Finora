@@ -170,10 +170,10 @@ export default function HomeScreen() {
         
         const { data: newCategories, error: createError } = await supabase
           .from('categories')
-          .insert(DEFAULT_CATEGORIES.map(cat => ({
+          .upsert(DEFAULT_CATEGORIES.map(cat => ({
             ...cat,
             user_id: user.id
-          })))
+          })), { onConflict: 'user_id,name' })
           .select()
         
         if (createError) {

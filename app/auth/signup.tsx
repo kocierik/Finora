@@ -5,7 +5,7 @@ import { useSettings } from '@/context/SettingsContext'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { Animated, Dimensions, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { Animated, Dimensions, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 
 const { width, height } = Dimensions.get('window')
 
@@ -109,7 +109,11 @@ export default function SignupScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
       {/* Background Gradients */}
       <LinearGradient
         colors={[
@@ -122,7 +126,9 @@ export default function SignupScreen() {
       
       
       <Animated.View style={[styles.floatingElement, styles.rocketIcon, { opacity: glowAnim }]}>
-        <ThemedText style={styles.floatingIcon}>🚀</ThemedText>
+        <View style={styles.iconCircle}>
+          <ThemedText style={styles.floatingIcon}>🚀</ThemedText>
+        </View>
       </Animated.View>
 
       {/* Header */}
@@ -147,6 +153,7 @@ export default function SignupScreen() {
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <Animated.View 
           style={[
@@ -276,7 +283,7 @@ export default function SignupScreen() {
         </View>
         </Animated.View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   )
 }
 
@@ -294,49 +301,64 @@ const styles = StyleSheet.create({
   },
   floatingElement: {
     position: 'absolute',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: UI_CONSTANTS.MAGENTA_BG,
+    zIndex: 0,
+  },
+  rocketIcon: {
+    top: height * 0.06,
+    right: -30,
+  },
+  iconCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(217, 70, 239, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: UI_CONSTANTS.MAGENTA_BORDER,
-  },
-
-  rocketIcon: {
-    top: height * 0.14,
-    left: width * 0.75,
+    borderColor: 'rgba(217, 70, 239, 0.1)',
   },
   floatingIcon: {
-    fontSize: 24,
-  },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 32,
-    paddingBottom: 40,
-  },
-  backButton: {
-    padding: 8,
-    marginBottom: 24,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 24,
-    fontWeight: '400',
-    color: Brand.colors.text.primary,
+    fontSize: 50,
+    opacity: 0.6,
+    lineHeight: 60, // Assicura che l'emoji abbia spazio verticale
     textAlign: 'center',
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 80 : 60,
+    paddingHorizontal: 28,
+    paddingBottom: 20,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Brand.colors.glass.light,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: Brand.colors.glass.medium,
+  },
+  backButtonText: {
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 20,
     color: Brand.colors.text.primary,
-    marginBottom: 8,
+  },
+  title: {
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 40,
+    fontWeight: '900',
+    color: Brand.colors.text.primary,
+    letterSpacing: -1,
+    lineHeight: 44,
   },
   subtitle: {
-    fontSize: 16,
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 17,
     fontWeight: '400',
     color: Brand.colors.text.secondary,
+    marginTop: 12,
+    lineHeight: 24,
   },
   scrollContainer: {
     flex: 1,
@@ -346,126 +368,146 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   form: {
-    paddingHorizontal: 32,
+    paddingHorizontal: 28,
+    marginTop: 20,
   },
   inputContainer: {
     marginBottom: 20,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Brand.colors.text.primary,
-    marginBottom: 8,
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Brand.colors.text.tertiary,
+    marginBottom: 10,
+    marginLeft: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   inputWrapper: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
+    borderWidth: 1.5,
     borderColor: Brand.colors.glass.medium,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: Platform.OS === 'ios' ? 18 : 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
   },
   inputError: {
-    borderColor: Brand.colors.semantic.danger,
-    backgroundColor: UI_CONSTANTS.DANGER_BG,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
   },
   input: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 16,
-    fontWeight: '400',
+    fontWeight: '500',
     color: Brand.colors.text.primary,
   },
   errorText: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 12,
     color: Brand.colors.semantic.danger,
-    marginTop: 4,
+    marginTop: 6,
+    marginLeft: 4,
+    fontWeight: '600',
   },
   termsContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 24,
-    gap: 12,
+    alignItems: 'center',
+    marginBottom: 30,
+    gap: 14,
+    paddingHorizontal: 4,
   },
   checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 8,
     borderWidth: 2,
     borderColor: Brand.colors.glass.medium,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
   },
   checkboxChecked: {
-    borderColor: Brand.colors.primary.cyan,
-    backgroundColor: Brand.colors.primary.cyan,
+    borderColor: Brand.colors.primary.magenta,
+    backgroundColor: Brand.colors.primary.magenta,
   },
   checkmark: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 14,
+    fontWeight: '900',
     color: Brand.colors.background.deep,
   },
   termsTextContainer: {
     flex: 1,
   },
   termsText: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 14,
     color: Brand.colors.text.secondary,
     lineHeight: 20,
   },
-  termsLink: {
-    color: Brand.colors.primary.cyan,
-    fontWeight: '600',
-  },
   generalErrorContainer: {
-    backgroundColor: UI_CONSTANTS.DANGER_BG,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
     borderWidth: 1,
-    borderColor: UI_CONSTANTS.DANGER_BORDER,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
   },
   generalErrorText: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 14,
-    color: Brand.colors.semantic.danger,
+    color: '#ff8080',
     textAlign: 'center',
+    fontWeight: '600',
   },
   signupButton: {
-    borderRadius: 12,
+    borderRadius: 18,
     overflow: 'hidden',
+    height: 60,
+    shadowColor: Brand.colors.primary.magenta,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
     marginBottom: 24,
-    shadowColor: Brand.colors.glow.magenta,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
   },
   signupButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   buttonGradient: {
-    paddingVertical: 16,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   signupButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 18,
+    fontWeight: '800',
     color: Brand.colors.background.deep,
+    letterSpacing: 0.5,
   },
   loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 32,
+    marginTop: 10,
   },
   loginText: {
-    fontSize: 14,
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 15,
     color: Brand.colors.text.secondary,
   },
   loginLink: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Brand.typography.fonts.primary,
+    fontSize: 15,
+    fontWeight: '800',
     color: Brand.colors.primary.cyan,
+    marginLeft: 6,
   },
 })

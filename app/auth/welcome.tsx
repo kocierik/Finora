@@ -188,6 +188,7 @@ const styles = StyleSheet.create({
     right: width * 0.12,
   },
   floatingIcon: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 22,
   },
   content: {
@@ -209,6 +210,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   appName: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 56,
     fontWeight: '900',
     color: Brand.colors.text.primary,
@@ -218,6 +220,7 @@ const styles = StyleSheet.create({
     lineHeight: 64,
   },
   tagline: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 20,
     fontWeight: '400',
     color: Brand.colors.text.secondary,
@@ -246,6 +249,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buttonText: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 18,
     fontWeight: '700',
     color: Brand.colors.background.deep,
@@ -265,6 +269,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
   },
   signupButtonText: {
+    fontFamily: Brand.typography.fonts.primary,
     fontSize: 18,
     fontWeight: '600',
     color: Brand.colors.text.primary,
